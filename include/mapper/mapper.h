@@ -46,7 +46,7 @@ typedef void mapper_signal_handler(mapper_signal msig,
 
 /*! Set or remove the default value of a signal.
  *  \param sig      The signal to operate on.
- *  \param default_value  Must be the same type and length as the signal,
+ *  \param default_value  Must be the same type as the signal,
  *                        or 0 to remove the default value. */
 void msig_set_default_value(mapper_signal sig, void *default_value);
 
