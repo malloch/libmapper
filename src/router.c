@@ -215,6 +215,25 @@ mapper_connection mapper_router_add_connection(mapper_router router,
     return connection;
 }
 
+void mapper_router_reset_connection(mapper_router router,
+                                    mapper_connection connection)
+{
+    lo_message m;
+    if (!router->addr)
+        return;
+
+    m = lo_message_new();
+    if (!m)
+        return;
+
+    char string[1024];
+    strncpy(string, connection->props.dest_name, 1000);
+    strncat(string, "/reset", 24);
+
+    lo_send_message(router->addr, string, m);
+    lo_message_free(m);
+}
+
 int mapper_router_remove_connection(mapper_router router, 
                                     mapper_connection connection)
 {

@@ -267,6 +267,8 @@ typedef enum {
     AT_DESTTYPE,
     AT_SRCLENGTH,
     AT_DESTLENGTH,
+    AT_DEFAULT,
+    AT_RESET,
     AT_EXTRA,
     N_AT_PARAMS
 } mapper_msg_param_t;

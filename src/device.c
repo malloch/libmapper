@@ -136,22 +136,35 @@ static int handler_signal(const char *path, const char *types,
     return 0;
 }
 
-static int handler_default(const char *path, const char *types,
-                           lo_arg **argv, int argc, lo_message msg,
-                           void *user_data)
+static int handler_reset(const char *path, const char *types,
+                        lo_arg **argv, int argc, lo_message msg,
+                        void *user_data)
 {
     mapper_signal sig = (mapper_signal) user_data;
     mapper_device md = sig->device;
+    int i;
 
     if (!md) {
         trace("error, sig->device==0\n");
         return 0;
     }
 
-    if (!sig->props.has_default_value)
+    if (!sig->props.default_value) {
+        // TODO: perhaps we should make value NULL
         return 0;
+    }
 
-    memcpy(sig->value, sig->default_value, msig_vector_bytes(sig));
+    if (sig->props.type == 'f') {
+        float *value = (float *)sig->value;
+        for (i=0; i<sig->props.length; i++)
+            value[i] = sig->props.default_value->f;
+    }
+    else if (sig->props.type == 'i') {
+        int *value = (int *)sig->value;
+        for (i=0; i<sig->props.length; i++) {
+            value[i] = sig->props.default_value->i32;
+        }
+    }
     sig->props.has_value = 1;
 
     if (sig->handler)
@@ -243,18 +256,18 @@ mapper_signal mdev_add_input(mapper_device md, const char *name, int length,
                              sig->props.name,
                              "N",
                              handler_signal, (void *) (sig));
-        int len = strlen(sig->props.name) + 9;
+        int len = strlen(sig->props.name) + 7;
         signal_get = (char*) realloc(signal_get, len);
         snprintf(signal_get, len, "%s%s", sig->props.name, "/get");
         lo_server_add_method(md->server, 
                              signal_get, 
                              NULL, 
                              handler_query, (void *) (sig));
-        snprintf(signal_get, len, "%s%s", sig->props.name, "/default");
+        snprintf(signal_get, len, "%s%s", sig->props.name, "/reset");
         lo_server_add_method(md->server, 
                              signal_get, 
-                             NULL, 
-                             handler_default, (void *) (sig));
+                             "", 
+                             handler_reset, (void *) (sig));
         free(type_string);
         free(signal_get);
     }
@@ -644,18 +657,18 @@ void mdev_start_server(mapper_device md)
                                  md->inputs[i]->props.name,
                                  "N",
                                  handler_signal, (void *) (md->inputs[i]));
-            int len = (int) strlen(md->inputs[i]->props.name) + 9;
+            int len = (int) strlen(md->inputs[i]->props.name) + 7;
             signal_get = (char*) realloc(signal_get, len);
             snprintf(signal_get, len, "%s%s", md->inputs[i]->props.name, "/get");
             lo_server_add_method(md->server, 
                                  signal_get, 
                                  NULL, 
                                  handler_query, (void *) (md->inputs[i]));
-            snprintf(signal_get, len, "%s%s", md->inputs[i]->props.name, "/default");
+            snprintf(signal_get, len, "%s%s", md->inputs[i]->props.name, "/reset");
             lo_server_add_method(md->server, 
                                  signal_get, 
-                                 NULL, 
-                                 handler_default, (void *) (md->inputs[i]));
+                                 "", 
+                                 handler_reset, (void *) (md->inputs[i]));
         }
         free(type);
         free(signal_get);

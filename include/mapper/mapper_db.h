@@ -144,9 +144,6 @@ typedef struct _mapper_db_signal
     /*! Flag to indicate whether signal has a value */
 	int has_value;
 
-    /*! Flag to indicate whether signal has a value */
-	int has_default_value;
-
     /*! The type of this signal, specified as an OSC type
      *  character. */
     char type;
@@ -163,6 +160,9 @@ typedef struct _mapper_db_signal
 
     /*! The unit of this signal, or NULL for N/A. */
     const char *unit;
+
+    /*! The default value of this signal, or NULL for no default. */
+    mapper_signal_value_t *default_value;
 
     /*! The minimum of this signal, or NULL for no minimum. */
     mapper_signal_value_t *minimum;

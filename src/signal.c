@@ -24,8 +24,7 @@ mapper_signal msig_new(const char *name, int length, char type,
     mapper_db_signal_init(&sig->props, is_output, type, length, name, unit);
     sig->value = calloc(1, msig_vector_bytes(sig));
     sig->props.has_value = 0;
-    sig->default_value = 0;
-    sig->props.has_default_value = 0;
+    sig->props.default_value = 0;
     sig->handler = handler;
     sig->props.user_data = user_data;
     sig->props.hidden = 0;
@@ -65,16 +64,18 @@ void msig_remove_property(mapper_signal sig, const char *property)
 void msig_set_default_value(mapper_signal sig, void *default_value)
 {
     if (default_value) {
-        if (!sig->props.has_default_value) {
-            sig->default_value = malloc(msig_vector_bytes(sig));
-            sig->props.has_default_value = 1;
-        }
-        memcpy(sig->default_value, default_value, msig_vector_bytes(sig));
+        if (!sig->props.default_value)
+            sig->props.default_value = (mapper_signal_value_t *)
+                malloc(sizeof(mapper_signal_value_t));
+        if (sig->props.type == 'f')
+            sig->props.default_value->f = *(float*)default_value;
+        else if (sig->props.type == 'i')
+            sig->props.default_value->i32 = *(int*)default_value;
     }
     else {
-        if (sig->props.has_default_value)
-            free(sig->default_value);
-        sig->props.has_default_value = 0;
+        if (sig->props.default_value)
+            free(sig->props.default_value);
+        sig->props.default_value = 0;
     }
 }
 

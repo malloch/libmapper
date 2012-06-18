@@ -21,9 +21,6 @@ struct _mapper_signal
     /*! The current value of this signal. */
     void *value;
 
-    /*! The default value of this signal. */
-    void *default_value;
-
     /*! The timetag associated with the current value of this
      *  signal. */
     mapper_timetag_t value_tt;
@@ -116,6 +113,9 @@ mapper_connection mapper_router_add_connection(mapper_router router,
                                                const char *dest_name,
                                                char dest_type,
                                                int dest_length);
+
+void mapper_router_reset_connection(mapper_router router,
+                                    mapper_connection connection);
 
 int mapper_router_remove_connection(mapper_router router,
                                     mapper_connection connection);

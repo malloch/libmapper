@@ -30,6 +30,8 @@ const char* mapper_msg_param_strings[] =
     "@destType",   /* AT_DESTTYPE */
     "@srcLength",  /* AT_SRCLENGTH */
     "@destLength", /* AT_DESTLENGTH */
+    "@default",    /* AT_DEFAULT */
+    "@reset",      /* AT_RESET */
     "",            /* AT_EXTRA (special case, does not represent a
                     * specific property name) */
 };
@@ -286,6 +288,10 @@ void mapper_msg_prepare_varargs(lo_message m, va_list aq)
         case AT_MAX:
             sig = va_arg(aq, mapper_signal);
             mval_add_to_message(m, sig, sig->props.maximum);
+            break;
+        case AT_DEFAULT:
+            sig = va_arg(aq, mapper_signal);
+            mval_add_to_message(m, sig, sig->props.default_value);
             break;
         case AT_MODE:
             i = va_arg(aq, int);

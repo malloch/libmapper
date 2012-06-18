@@ -114,7 +114,7 @@ static struct handler_method_assoc device_handlers[] = {
     {"/connect",                NULL,       handler_signal_connect},
     {"/connectTo",              NULL,       handler_signal_connectTo},
     {"/connection/modify",      NULL,       handler_signal_connection_modify},
-    {"/disconnect",             "ss",       handler_signal_disconnect},
+    {"/disconnect",             NULL,       handler_signal_disconnect},
     {"/logout",                 NULL,       handler_logout},
 };
 const int N_DEVICE_HANDLERS =
@@ -924,6 +924,7 @@ static int handler_id_n_signals_input_get(const char *path,
                 AT_TYPE, sig->props.type,
                 AT_LENGTH, sig->props.length,
                 sig->props.unit ? AT_UNITS : -1, sig,
+                sig->props.default_value ? AT_DEFAULT : -1, sig,
                 sig->props.minimum ? AT_MIN : -1, sig,
                 sig->props.maximum ? AT_MAX : -1, sig,
                 AT_EXTRA, sig->props.extra);
@@ -1894,6 +1895,7 @@ static int handler_signal_disconnect(const char *path, const char *types,
     mapper_admin admin = (mapper_admin) user_data;
     mapper_device md = admin->device;
     mapper_signal output;
+    int reset = 0;
         
     const char *src_name, *src_signal_name;
     
@@ -1931,7 +1933,18 @@ static int handler_signal_disconnect(const char *path, const char *types,
               mapper_admin_name(admin), &argv[0]->s, &argv[1]->s);
         return 0;
     }
-    
+
+    // Check if there are any extra arguments.
+    if (argc > 2) {
+        mapper_message_t params;
+        if (!mapper_msg_parse_params(&params, path, &types[2],
+                                     argc-2, &argv[2])) {
+            mapper_msg_get_param_if_int(&params, AT_RESET, &reset);
+            if (reset)
+                mapper_router_reset_connection(router, m);
+        }
+    }
+
     /* The connection is removed. */
     if (mapper_router_remove_connection(router, m)) {
         return 0;
