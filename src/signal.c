@@ -24,6 +24,8 @@ mapper_signal msig_new(const char *name, int length, char type,
     mapper_db_signal_init(&sig->props, is_output, type, length, name, unit);
     sig->value = calloc(1, msig_vector_bytes(sig));
     sig->props.has_value = 0;
+    sig->default_value = 0;
+    sig->props.has_default_value = 0;
     sig->handler = handler;
     sig->props.user_data = user_data;
     sig->props.hidden = 0;
@@ -58,6 +60,22 @@ void msig_set_property(mapper_signal sig, const char *property,
 void msig_remove_property(mapper_signal sig, const char *property)
 {
     table_remove_key(sig->props.extra, property, 1);
+}
+
+void msig_set_default_value(mapper_signal sig, void *default_value)
+{
+    if (default_value) {
+        if (!sig->props.has_default_value) {
+            sig->default_value = malloc(msig_vector_bytes(sig));
+            sig->props.has_default_value = 1;
+        }
+        memcpy(sig->default_value, default_value, msig_vector_bytes(sig));
+    }
+    else {
+        if (sig->props.has_default_value)
+            free(sig->default_value);
+        sig->props.has_default_value = 0;
+    }
 }
 
 void msig_set_minimum(mapper_signal sig, void *minimum)
