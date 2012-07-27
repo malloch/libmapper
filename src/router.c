@@ -225,7 +225,7 @@ void mapper_router_reset_connection(mapper_router router,
                                     mapper_connection connection)
 {
     lo_message m;
-    if (!router->addr)
+    if (!router->props.addr)
         return;
 
     m = lo_message_new();
@@ -236,7 +236,7 @@ void mapper_router_reset_connection(mapper_router router,
     strncpy(string, connection->props.dest_name, 1000);
     strncat(string, "/reset", 24);
 
-    lo_send_message(router->addr, string, m);
+    lo_send_message(router->props.addr, string, m);
     lo_message_free(m);
 }
 
