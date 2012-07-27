@@ -107,8 +107,7 @@ static struct handler_method_assoc device_handlers[] = {
     {"%s/info/get",             "",         handler_who},
     {"%s/links/get",            "",         handler_device_links_get},
     {"/link",                   NULL,       handler_device_link},
-    {"/linkTo",                 "sssi",     handler_device_linkTo},
-    {"/linkTo",                 "sssssi",   handler_device_linkTo},
+    {"/linkTo",                 NULL,       handler_device_linkTo},
     {"/unlink",                 "ss",       handler_device_unlink},
     {"%s/connections/get",      NULL,       handler_device_connections_get},
     {"/connect",                NULL,       handler_signal_connect},
@@ -723,37 +722,55 @@ void _real_mapper_admin_send_osc_with_params(const char *file, int line,
     lo_message_free(m);
 }
 
+static void mapper_admin_send_linked(mapper_admin admin,
+                                     mapper_router router)
+{
+    // Send /linked message
+    lo_message m = lo_message_new();
+    if (!m) {
+        trace("couldn't allocate lo_message\n");
+    }
+
+    lo_message_add_string(m, mdev_name(router->device));
+    lo_message_add_string(m, router->props.dest_name);
+
+    mapper_link_prepare_osc_message(m, router);
+
+    lo_send_message(admin->admin_addr, "/linked", m);
+    lo_message_free(m);
+}
+
 static void mapper_admin_send_connected(mapper_admin admin,
                                         mapper_router router,
-                                        mapper_connection m,
+                                        mapper_connection c,
                                         int index)
 {
     // Send /connected message
-    lo_message mess = lo_message_new();
-    if (!mess) {
+    lo_message m = lo_message_new();
+    if (!m) {
         trace("couldn't allocate lo_message\n");
     }
 
     char src_name[1024], dest_name[1024];
 
     snprintf(src_name, 1024, "%s%s",
-             mdev_name(router->device), m->props.src_name);
+             mdev_name(router->device), c->props.src_name);
 
     snprintf(dest_name, 1024, "%s%s",
-             router->dest_name, m->props.dest_name);
+             router->props.dest_name, c->props.dest_name);
 
-    lo_message_add_string(mess, src_name);
-    lo_message_add_string(mess, dest_name);
+    lo_message_add_string(m, src_name);
+    lo_message_add_string(m, dest_name);
 
     if (index != -1) {
-        lo_message_add_string(mess, "@ID");
-        lo_message_add_int32(mess, index);
+        lo_message_add_string(m, "@ID");
+        lo_message_add_int32(m, index);
     }
 
-    mapper_connection_prepare_osc_message(mess, m);
+    mapper_connection_prepare_osc_message(m, c);
 
-    lo_send_message(admin->admin_addr, "/connected", mess);
-    lo_message_free(mess);
+    lo_send_message(admin->admin_addr, "/connected", m);
+    lo_message_free(m);
 }
 
 /**********************************/
@@ -1413,10 +1430,11 @@ static int handler_device_linkTo(const char *path, const char *types,
         return 0;
     }
     mdev_add_router(md, router);
+    if (argc > 4)
+        mapper_router_set_from_message(router, &params);
 
     // Announce the result.
-    mapper_admin_send_osc(admin, "/linked", "ss",
-                          mapper_admin_name(admin), dest_name);
+    mapper_admin_send_linked(admin, router);
 
     trace("new router to %s -> host: %s, port: %d\n",
           dest_name, host, port);
@@ -1472,8 +1490,7 @@ static int handler_device_links_get(const char *path, const char *types,
 
     /*Search through linked devices */
     while (router != NULL) {
-        mapper_admin_send_osc(admin, "/linked", "ss", mapper_admin_name(admin),
-                              router->dest_name);
+        mapper_admin_send_linked(admin, router);
         router = router->next;
     }
 
