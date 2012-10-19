@@ -327,7 +327,7 @@ mapper_signal mdev_add_input(mapper_device dev, const char *name,
                              int length, char type, const char *unit,
                              void *minimum, void *maximum,
                              mapper_signal_handler *handler,
-                             void *user_data);
+                             int priority, void *user_data);
 
 /*! Add an output signal to a mapper device.  Values and strings
  *  pointed to by this call will be copied.

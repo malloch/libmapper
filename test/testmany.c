@@ -120,7 +120,7 @@ int setup_destinations() {
 
 			sprintf( str, "/insig%d", j );
 			mdev_add_input(dest_device_list[i], str, 1, 'f',
-                           0, &mn, &mx, 0, 0);
+                           0, &mn, &mx, 0, 0, 0);
 
 		}
 

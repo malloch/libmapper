@@ -107,7 +107,7 @@ int setup_destination()
     printf("destination created.\n");
 
     recvsig = mdev_add_input(destination, "/insig", 1, 'f',
-                             0, 0, 0, insig_handler, 0);
+                             0, 0, 0, insig_handler, 0, 0);
     if (!recvsig)
         goto error;
     msig_reserve_instances(recvsig, 9);

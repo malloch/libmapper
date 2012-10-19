@@ -93,7 +93,7 @@ int setup_destination()
     float mn=0, mx=1;
 
     recvsig = mdev_add_input(destination, "/insig", 1, 'f',
-                             0, &mn, &mx, insig_handler, 0);
+                             0, &mn, &mx, insig_handler, 0, 0);
     if (!recvsig)
         goto error;
     msig_reserve_instances(recvsig, 4);

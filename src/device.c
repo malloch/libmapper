@@ -372,7 +372,8 @@ static int handler_query_response(const char *path, const char *types,
 mapper_signal mdev_add_input(mapper_device md, const char *name, int length,
                              char type, const char *unit,
                              void *minimum, void *maximum,
-                             mapper_signal_handler *handler, void *user_data)
+                             mapper_signal_handler *handler, int priority,
+                             void *user_data)
 {
     if (mdev_get_input_by_name(md, name, 0))
         return 0;
@@ -399,38 +400,47 @@ mapper_signal mdev_add_input(mapper_device md, const char *name, int length,
         type_string[0] = type_string[1] = 'i';
         memset(type_string + 2, sig->props.type, sig->props.length);
         type_string[sig->props.length + 2] = 0;
-        lo_server_add_method(md->server,
-                             sig->props.name,
-                             type_string + 2,
-                             handler_signal, (void *) (sig));
-        lo_server_add_method(md->server,
-                             sig->props.name,
-                             "b",
-                             handler_signal, (void *) (sig));
-        lo_server_add_method(md->server,
-                             sig->props.name,
-                             "N",
-                             handler_signal, (void *) (sig));
-        lo_server_add_method(md->server,
-                             sig->props.name,
-                             type_string,
-                             handler_signal_instance, (void *) (sig));
-        lo_server_add_method(md->server,
-                             sig->props.name,
-                             "iib",
-                             handler_signal_instance, (void *) (sig));
-        lo_server_add_method(md->server,
-                             sig->props.name,
-                             "iiT",
-                             handler_signal_instance, (void *) (sig));
-        lo_server_add_method(md->server,
-                             sig->props.name,
-                             "iiF",
-                             handler_signal_instance, (void *) (sig));
-        lo_server_add_method(md->server,
-                             sig->props.name,
-                             "iiN",
-                             handler_signal_instance, (void *) (sig));
+        lo_method m;
+        m = lo_server_add_method(md->server,
+                                 sig->props.name,
+                                 type_string + 2,
+                                 handler_signal, (void *) (sig));
+        lo_method_set_priority(m, priority);
+        m = lo_server_add_method(md->server,
+                                 sig->props.name,
+                                 "b",
+                                 handler_signal, (void *) (sig));
+        lo_method_set_priority(m, priority);
+        m = lo_server_add_method(md->server,
+                                 sig->props.name,
+                                 "N",
+                                 handler_signal, (void *) (sig));
+        lo_method_set_priority(m, priority);
+        m = lo_server_add_method(md->server,
+                                 sig->props.name,
+                                 type_string,
+                                 handler_signal_instance, (void *) (sig));
+        lo_method_set_priority(m, priority);
+        m = lo_server_add_method(md->server,
+                                 sig->props.name,
+                                 "iib",
+                                 handler_signal_instance, (void *) (sig));
+        lo_method_set_priority(m, priority);
+        m = lo_server_add_method(md->server,
+                                 sig->props.name,
+                                 "iiT",
+                                 handler_signal_instance, (void *) (sig));
+        lo_method_set_priority(m, priority);
+        m = lo_server_add_method(md->server,
+                                 sig->props.name,
+                                 "iiF",
+                                 handler_signal_instance, (void *) (sig));
+        lo_method_set_priority(m, priority);
+        m = lo_server_add_method(md->server,
+                                 sig->props.name,
+                                 "iiN",
+                                 handler_signal_instance, (void *) (sig));
+        lo_method_set_priority(m, priority);
         int len = strlen(sig->props.name) + 5;
         signal_get = (char*) realloc(signal_get, len);
         snprintf(signal_get, len, "%s%s", sig->props.name, "/get");

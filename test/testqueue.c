@@ -80,9 +80,9 @@ int setup_destination()
     float mn=0, mx=1;
 
     recvsig = mdev_add_input(destination, "/insig", 1, 'f', 0,
-                             &mn, &mx, insig_handler, 0);
+                             &mn, &mx, insig_handler, 0, 0);
 	recvsig1= mdev_add_input(destination, "/insig1", 1, 'f', 0,
-                             &mn, &mx, insig_handler, 0);
+                             &mn, &mx, insig_handler, 0, 0);
 
     printf("Input signal /insig registered.\n");
     printf("Number of inputs: %d\n", mdev_num_inputs(destination));

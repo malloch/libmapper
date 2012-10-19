@@ -34,7 +34,7 @@ int test_recv()
 
     float mn=0, mx=1;
     mapper_signal sig = 
-        mdev_add_input(md, "/mapped1", 1, 'f', 0, &mn, &mx, handler, 0);
+        mdev_add_input(md, "/mapped1", 1, 'f', 0, &mn, &mx, handler, 0, 0);
 
     printf("Input signal /mapped1 registered.\n");
 

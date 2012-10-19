@@ -102,7 +102,7 @@ int setup_destination()
     for (int i = 0; i < 4; i++) {
         snprintf(sig_name, 10, "%s%i", "/insig_", i);
         recvsig[i] = mdev_add_input(destination, sig_name, 1, 
-                                    'f', 0, &mn, &mx, insig_handler, 0);
+                                    'f', 0, &mn, &mx, insig_handler, 0, 0);
     }
 
     printf("Input signal /insig registered.\n");

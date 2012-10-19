@@ -94,20 +94,20 @@ int setup_destination()
     float mn=0, mx=1;
 
     recvsig_1 = mdev_add_input(destination, "/insig_1", 1, 'f',
-                               0, &mn, &mx, insig_handler, 0);
+                               0, &mn, &mx, insig_handler, 0, 0);
     recvsig_2 = mdev_add_input(destination, "/insig_2", 1, 'f',
-                               0, &mn, &mx, insig_handler, 0);
+                               0, &mn, &mx, insig_handler, 0, 0);
     recvsig_3 = mdev_add_input(destination, "/insig_3", 3, 'f',
-                               0, &mn, &mx, insig_handler, 0);
+                               0, &mn, &mx, insig_handler, 0, 0);
     recvsig_4 = mdev_add_input(destination, "/insig_4", 1, 'f',
-                               0, &mn, &mx, insig_handler, 0);
+                               0, &mn, &mx, insig_handler, 0, 0);
 
     printf("Input signal /insig registered.\n");
 
     // Make sure we can add and remove inputs and inputs within crashing.
     mdev_remove_input(destination,
                       mdev_add_input(destination, "/insig_5", 1,
-                                     'f', 0, &mn, &mx, 0, 0));
+                                     'f', 0, &mn, &mx, 0, 0, 0));
 
     printf("Number of inputs: %d\n", mdev_num_inputs(destination));
 

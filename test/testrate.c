@@ -94,7 +94,7 @@ int setup_destination()
     float mn=0, mx=1;
 
     recvsig = mdev_add_input(destination, "/insig", 1, 'f',
-                               0, &mn, &mx, insig_handler, 0);
+                               0, &mn, &mx, insig_handler, 0, 0);
 
     // This signal is expected to be updated at 100 Hz
     msig_set_rate(recvsig, 100);
