@@ -26,7 +26,8 @@ static void msig_free_instance(mapper_signal sig,
 mapper_signal msig_new(const char *name, int length, char type,
                        int is_output, const char *unit,
                        void *minimum, void *maximum,
-                       mapper_signal_handler *handler, void *user_data)
+                       mapper_signal_handler *handler,
+                       int priority, void *user_data)
 {
     if (length < 1) return 0;
     if (!name) return 0;
@@ -38,6 +39,7 @@ mapper_signal msig_new(const char *name, int length, char type,
 
     mapper_db_signal_init(&sig->props, is_output, type, length, name, unit);
     sig->handler = handler;
+    sig->priority = priority;
     sig->instance_management_handler = 0;
     sig->props.num_instances = 0;
     sig->props.user_data = user_data;

@@ -34,6 +34,10 @@ struct _mapper_signal
      *  changes. */
     mapper_signal_handler *handler;
 
+    /*! Priority given to the message handler if multiple signals
+     *  have the same timestamp. */
+    int priority;
+
     /*! An optional function to be called when the signal instance management
      *  events occur. */
     mapper_signal_instance_management_handler *instance_management_handler;
@@ -240,20 +244,24 @@ void mapper_router_send_queue(mapper_router router, mapper_timetag_t tt);
  *  only if they are not registered with a device.
  *  For minimum, maximum, and value, if type='f', should be float*, or
  *  if type='i', then should be int*.
- *  \param name The name of the signal, starting with '/'.
- *  \param length The length of the signal vector, or 1 for a scalar.
- *  \param type The type fo the signal value.
+ *  \param name      The name of the signal, starting with '/'.
+ *  \param length    The length of the signal vector, or 1 for a scalar.
+ *  \param type      The type fo the signal value.
  *  \param is_output The direction of the signal, 1 for output, 0 for input.
- *  \param unit The unit of the signal, or 0 for none.
- *  \param minimum Pointer to a minimum value, or 0 for none.
- *  \param maximum Pointer to a maximum value, or 0 for none.
- *  \param handler Function to be called when the value of the
- *                 signal is updated.
+ *  \param unit      The unit of the signal, or 0 for none.
+ *  \param minimum   Pointer to a minimum value, or 0 for none.
+ *  \param maximum   Pointer to a maximum value, or 0 for none.
+ *  \param handler   Function to be called when the value of the
+ *                   signal is updated.
+ *  \param priority  Priority given to the message handler if multiple
+ *                   signals have the same timestamp, with higher priorities
+ *                   called first.
  *  \param user_data User context pointer to be passed to handler. */
 mapper_signal msig_new(const char *name, int length, char type,
                        int is_output, const char *unit,
                        void *minimum, void *maximum,
-                       mapper_signal_handler *handler, void *user_data);
+                       mapper_signal_handler *handler, int priority,
+                       void *user_data);
 
 /*! Free memory used by a mapper_signal. Call this only for signals
  *  that are not registered with a device. Registered signals will be

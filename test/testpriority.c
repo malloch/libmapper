@@ -18,15 +18,13 @@ mapper_signal recvsig1 = 0;
 mapper_signal sendsig2 = 0;
 mapper_signal recvsig2 = 0;
 
-
-int port = 9000;
-
+int result = 0;
 int sent = 0;
 int received = 0;
 
 int setup_source()
 {
-    source = mdev_new("testsend", port, 0);
+    source = mdev_new("testsend", 0, 0);
     if (!source)
         goto error;
     printf("source created.\n");
@@ -66,13 +64,23 @@ void insig_handler(mapper_signal sig, mapper_db_signal props,
 {
     if (value) {
         printf("handler: Got %s %f\n", props->name, (*(float*)value));
+        switch ((long int)props->user_data) {
+            case 0:
+                result += 1;
+                break;
+            case 1:
+                result *= 10;
+                break;
+            default:
+                break;
+        }
     }
     received++;
 }
 
 int setup_destination()
 {
-    destination = mdev_new("testrecv", port, 0);
+    destination = mdev_new("testrecv", 0, 0);
     if (!destination)
         goto error;
     printf("destination created.\n");
@@ -80,9 +88,9 @@ int setup_destination()
     float mn=0, mx=1;
 
     recvsig1 = mdev_add_input(destination, "/1", 1, 'f', 0,
-                              &mn, &mx, insig_handler, 1, 0);
+                              &mn, &mx, insig_handler, 1, (void *)0);
 	recvsig2 = mdev_add_input(destination, "/2", 1, 'f', 0,
-                              &mn, &mx, insig_handler, 0, 0);
+                              &mn, &mx, insig_handler, 0, (void *)1);
 
     printf("Input signal /insig registered.\n");
     printf("Number of inputs: %d\n", mdev_num_inputs(destination));
@@ -107,10 +115,8 @@ int setup_router()
     const char *host = "localhost";
     router = mapper_router_new(source, host, destination->admin->port,
                                mdev_name(destination), 1);
-    /* router = mapper_router_new(source, "127.0.0.1", 9001, */
-    /*                            mdev_name(destination), 0); */
     mdev_add_router(source, router);
-    printf("Router to %s:%d added.\n", host, port);
+    printf("Router to %s:%d added.\n", host, destination->admin->port);
 
     char signame_in1[1024];
     if (!msig_full_name(recvsig1, signame_in1, 1024)) {
@@ -178,9 +184,10 @@ void loop()
         mdev_timetag_now(source, &now);
         mdev_start_queue(source, now);
 		mdev_poll(source, 0);
-        printf("Updating signal %s to %f\n",
-                sendsig1->props.name, j);
-        if (i < 5) {
+        int order = rand() % 2;
+        printf("Updating sig %i, then sig %i to %f\n",
+               2-order, 1+order, j);
+        if (order) {
             msig_update(sendsig1, &j, 0, now);
             msig_update(sendsig2, &j, 0, now);
         }
@@ -197,8 +204,6 @@ void loop()
 }
 int main()
 {
-    int result = 0;
-
     if (setup_destination()) {
         printf("Error initializing destination.\n");
         result = 1;
@@ -227,6 +232,13 @@ int main()
                sent, sent == 1 ? "" : "s", received);
         result = 1;
     }
+
+    if (result != 1111111111) {
+        printf("Messages not dispatched in the correct order.\n");
+        result = 1;
+    }
+    else
+        result = 0;
 
   done:
     cleanup_destination();
