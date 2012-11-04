@@ -21,7 +21,7 @@ uint32_t last_update;
 int ready = 0;
 int done = 0;
 int counter = 0;
-int numDevices = 5;
+int numDevices = 1;
 
 /*! Creation of devices. */
 int setup_devices()
@@ -63,28 +63,13 @@ void loop()
         if (system_time.sec != last_update) {
             last_update = system_time.sec;
             if (ready) {
-                // calculate standard deviation
-                double mean = 0.0, min = 0.0, max = 0.0;
-                for (i=0; i<numDevices; i++) {
-                    double offset = devices[i]->admin->clock.offset;
-                    mean += offset;
-                    if (min == 0.0 || offset < min)
-                        min = offset;
-                    if (max == 0.0 || offset > max)
-                        max = offset;
-                }
-                mean /= numDevices;
-                double difference_aggregate = 0;
-                for (i=0; i<numDevices; i++) {
-                    difference_aggregate += powf(devices[i]->admin->clock.offset - mean, 2);
-                }
                 printf("\n%i  ||", counter++);
                 // print device clock offsets
                 for (i=0; i<numDevices; i++) {
-                    printf("  %f  |", devices[i]->admin->clock.offset);
+                    printf("  %f  |  %f  |  %f  |  %f  |", devices[i]->admin->clock.offset,
+                           devices[i]->admin->clock.latency, devices[i]->admin->clock.jitter,
+                           devices[i]->admin->clock.confidence);
                 }
-                printf("|  %f  |  ", max - min);
-                printf("%f", sqrtf(difference_aggregate / numDevices));
             }
             else {
                 int count = 0;
@@ -98,7 +83,7 @@ void loop()
                         // Give each device clock a random starting offset
                         devices[i]->admin->clock.offset = (rand() % 100) - 50;
                     }
-                    printf("  RANGE    |  STD DEV");
+                    printf(" latency   |  jitter   |  confidence");
                     ready = 1;
                 }
             }

@@ -88,12 +88,6 @@ typedef struct _mapper_admin_allocated_t {
 } mapper_admin_allocated_t;
 
 /*! Clock and timing information. */
-typedef struct _mapper_sync_timetag_t {
-    int device_id;
-    int message_id;
-    lo_timetag timetag;
-} mapper_sync_timetag_t;
-
 typedef struct _mapper_clock_t {
     int wait_time;
     double rate;
@@ -101,11 +95,9 @@ typedef struct _mapper_clock_t {
     float confidence;
     mapper_timetag_t now;
     uint32_t next_ping;
-    int local_index;
     double latency;
     double jitter;
-    mapper_sync_timetag_t local[10];
-    mapper_sync_timetag_t remote;
+    mapper_timetag_t ping;
 } mapper_clock_t;
 
 /*! A structure that keeps information about a device. */
