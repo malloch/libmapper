@@ -101,8 +101,9 @@ typedef struct _mapper_clock_t {
     float confidence;
     mapper_timetag_t now;
     uint32_t next_ping;
-    int message_id;
     int local_index;
+    double latency;
+    double jitter;
     mapper_sync_timetag_t local[10];
     mapper_sync_timetag_t remote;
 } mapper_clock_t;

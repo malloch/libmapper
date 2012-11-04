@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <math.h>
 #include <stdarg.h>
 #include <sys/time.h>
 #include <zlib.h>
@@ -522,27 +523,26 @@ int mapper_admin_poll(mapper_admin admin)
         mapper_clock_t *clock = &admin->clock;
         mdev_timetag_now(admin->device, &clock->now);
         if (clock->now.sec >= clock->next_ping) {
-            lo_bundle b = lo_bundle_new(clock->now);
             lo_message m = lo_message_new();
             if (m) {
-                lo_message_add_int32(m, mdev_id(admin->device));
-                lo_message_add_int32(m, clock->message_id);
+                lo_message_add_int32(m, admin->name_hash);
+                lo_message_add_int32(m, clock->local_index);
                 lo_message_add_float(m, clock->confidence);
                 lo_message_add_int32(m, clock->remote.device_id);
                 lo_message_add_int32(m, clock->remote.message_id);
+                mdev_timetag_now(admin->device, &clock->now);
                 lo_message_add_double(m, clock->remote.device_id ?
                                       mapper_timetag_difference(clock->now,
                                                                 clock->remote.timetag) : 0);
+                lo_bundle b = lo_bundle_new(clock->now);
                 lo_bundle_add_message(b, "/sync", m);
                 lo_send_bundle(admin->admin_addr, b);
-                clock->local[clock->local_index].message_id = clock->message_id;
+                lo_bundle_free_messages(b);
                 clock->local[clock->local_index].timetag.sec = clock->now.sec;
                 clock->local[clock->local_index].timetag.frac = clock->now.frac;
                 clock->local_index = (clock->local_index + 1) % 10;
-                clock->message_id = (clock->message_id + 1) % 10;
                 clock->next_ping = clock->now.sec + (rand() % 10);
             }
-            lo_bundle_free_messages(b);
         }
     }
     return count;
@@ -2029,44 +2029,59 @@ static int handler_sync(const char *path,
     mapper_device md = admin->device;
     mapper_clock_t *clock = &admin->clock;
 
-    int device_id = argv[0]->i;
-    // if I sent this message, ignore it
-    if (device_id == 0 || device_id == mdev_id(md))
-        return 0;
-
-    int message_id = argv[1]->i;
-
     // get current time
     mapper_timetag_t now;
     mdev_timetag_now(md, &now);
 
-    // store remote timetag
-    clock->remote.device_id = device_id;
-    clock->remote.message_id = message_id;
-    clock->remote.timetag.sec = now.sec;
-    clock->remote.timetag.frac = now.frac;
+    int device_id = argv[0]->i;
+    int message_id = argv[1]->i;
+
+    if (device_id == 0)
+        return 0;
+
+    // if I sent this message, use the received time to update latency stats
+    if (device_id == admin->name_hash) {
+        if (message_id >= 10)
+            return 0;
+        double latency = mapper_timetag_difference(now, clock->local[message_id].timetag);
+        clock->latency *= 0.9;
+        clock->latency += latency * 0.1;
+        clock->jitter *= 0.9;
+        clock->jitter += fabs(latency - clock->latency) * 0.1;
+        return 0;
+    }
 
     lo_timetag then = lo_message_get_timestamp(msg);
     float confidence = argv[2]->f;
 
-    // if remote timetag is in the future, adjust to remote time
-    double diff = mapper_timetag_difference(then, now);
-    mdev_clock_adjust(md, diff, confidence, 0);
+//    if (device_id > admin->name_hash) {
+        // store remote timetag
+        clock->remote.device_id = device_id;
+        clock->remote.message_id = message_id;
+        clock->remote.timetag.sec = now.sec;
+        clock->remote.timetag.frac = now.frac;
+//    }
+//    else {
+        // only listen to upstream /sync messages
+        double diff = mapper_timetag_difference(then, now);
+        // look at the second part of the message
+        device_id = argv[3]->i;
+        if (device_id == admin->name_hash) {
+            message_id = argv[4]->i;
+            if (message_id >= 10)
+                return 0;
 
-    // look at the second part of the message
-    device_id = argv[3]->i;
-    if (device_id != mdev_id(md))
-        return 0;
-
-    message_id = argv[4]->i;
-    if (message_id >= 10)
-        return 0;
-
-    // Calculate latency on exchanged /sync messages
-    double latency = (mapper_timetag_difference(now, clock->local[message_id].timetag)
-                      - argv[5]->d) * 0.5;
-    if (latency > 0 && latency < 100)
-        mdev_clock_adjust(md, diff + latency, confidence, 1);
+            // Calculate latency on exchanged /sync messages
+            double latency = (mapper_timetag_difference(now, clock->local[message_id].timetag)
+                              - argv[5]->d) * 0.5;
+            if (latency > 0.0 && latency < 0.2)
+                mdev_clock_adjust(md, diff + latency, confidence, 1);
+            else
+                mdev_clock_adjust(md, diff, confidence, 0);
+        }
+        else
+            mdev_clock_adjust(md, diff, confidence, 0);
+//    }
 
     return 0;
 }
