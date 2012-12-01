@@ -66,9 +66,11 @@ void loop()
                 printf("\n%i  ||", counter++);
                 // print device clock offsets
                 for (i=0; i<numDevices; i++) {
-                    printf("  %f  |  %f  |  %f  |  %f  |", devices[i]->admin->clock.offset,
+                    printf("  %f  |  %f  |  %f  |  %f  |  %f  |  %f  |", devices[i]->admin->clock.offset,
                            devices[i]->admin->clock.latency, devices[i]->admin->clock.jitter,
-                           devices[i]->admin->clock.confidence);
+                           devices[i]->admin->clock.confidence,
+                           devices[i]->admin->clock.remote_diff,
+                           devices[i]->admin->clock.remote_jitter);
                 }
             }
             else {

@@ -97,6 +97,8 @@ typedef struct _mapper_clock_t {
     uint32_t next_ping;
     double latency;
     double jitter;
+    double remote_diff;
+    double remote_jitter;
     mapper_timetag_t ping;
 } mapper_clock_t;
 

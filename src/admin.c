@@ -2034,15 +2034,19 @@ static int handler_sync(const char *path,
     if (device_id == admin->name_hash) {
         double change = mapper_timetag_difference(clock->ping, then);
         double latency = mapper_timetag_difference(now, then) + change;
+        double jitter = fabs(latency - clock->latency);
+        printf("got self message with latency %f\n", latency);
         if (clock->latency == 0.0) {
             clock->latency = latency;
             clock->confidence = 0.1;
         }
         else {
-            clock->latency *= 0.5;
-            clock->latency += latency * 0.5;
-            clock->jitter *= 0.9;
-            clock->jitter += fabs(latency - clock->latency) * 0.1;
+            if (jitter > clock->jitter)
+                clock->jitter = jitter;
+            else
+                clock->jitter *= 0.9;
+            clock->latency *= 0.9;
+            clock->latency += latency * 0.1;
         }
         return 0;
     }
@@ -2054,16 +2058,24 @@ static int handler_sync(const char *path,
         double latency = (argv[2]->d + clock->latency) * 0.5;
         double compensated = diff + latency;
         printf("compenstated diff = %f\n", compensated);
-        double jitter = argv[3]->d + clock->jitter;
-        if (fabs(compensated) < jitter) {
-            printf("diff < jitter, reducing impact\n");
-            compensated *= 0.1;
+        double jitter = fabs(clock->remote_diff - diff);
+        double variation = fabs(diff - clock->remote_diff);
+        if (variation > clock->remote_jitter) {
+            printf("excess variation detected, ignoring!\n");
+            compensated = 0.0;
         }
-        else if (compensated < 0.0)
-            compensated += jitter;
         else
-            compensated -= jitter;
-
+            compensated /= (clock->remote_jitter / variation);
+        if (clock->remote_diff == 0.0) {
+            clock->remote_diff = diff;
+            clock->remote_jitter = fabs(diff);
+        }
+        else {
+            clock->remote_diff *= 0.9;
+            clock->remote_diff += diff * 0.1;
+            clock->remote_jitter *= 0.9;
+            clock->remote_jitter += jitter * 0.1;
+        }
         mdev_clock_adjust(md, compensated);
     }
 
