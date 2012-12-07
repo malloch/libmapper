@@ -41,7 +41,6 @@ void mdev_clock_adjust(mapper_device dev,
     double adjustment = new_offset - clock->offset;
 
     // adjust stored timetag
-    mapper_timetag_add_seconds(&clock->ping, adjustment);
     clock->remote_diff += adjustment;
     clock->confidence *= adjustment < 0.001 ? 1.1 : 0.99;
     if (clock->confidence > 0.9) {
