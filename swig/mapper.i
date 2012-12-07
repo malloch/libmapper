@@ -118,14 +118,14 @@
                         int ecode = SWIG_AsVal_int(v, &k);
                         if (SWIG_IsOK(ecode)) {
                             p.props.clip_max = k;
-                            p.flags |= CONNECTION_CLIPMAX;
+                            p.flags |= CONNECTION_CLIP_MAX;
                         }
                     }
                     else if (strcmp(s, "clip_min")==0) {
                         int ecode = SWIG_AsVal_int(v, &k);
                         if (SWIG_IsOK(ecode)) {
                             p.props.clip_min = k;
-                            p.flags |= CONNECTION_CLIPMIN;
+                            p.flags |= CONNECTION_CLIP_MIN;
                         }
                     }
                     else if (strcmp(s, "range")==0) {
@@ -611,6 +611,7 @@ typedef enum _mapper_mode_type {
     MO_LINEAR,       //!< Linear scaling
     MO_EXPRESSION,   //!< Expression
     MO_CALIBRATE,    //!< Calibrate to source signal
+    MO_REVERSE,      //!< Update source on dest change
     N_MAPPER_MODE_TYPES
 } mapper_mode_type;
 
@@ -638,11 +639,11 @@ typedef struct _db {} db;
 typedef struct _admin {} admin;
 
 %extend device {
-    _device(const char *name, int port=0, admin *DISOWN=0) {
+    device(const char *name, int port=9000, admin *DISOWN=0) {
         device *d = (device *)mdev_new(name, port, (mapper_admin) DISOWN);
         return d;
     }
-    ~_device() {
+    ~device() {
         mdev_free((mapper_device)$self);
     }
     int poll(int timeout=0) {
@@ -920,7 +921,7 @@ typedef struct _admin {} admin;
     void set_allocation_mode(mapper_instance_allocation_type mode) {
         msig_set_instance_allocation_mode((mapper_signal)$self, mode);
     }
-    void set_query_callback(PyObject *PyFunc=0) {
+    void set_callback(PyObject *PyFunc=0) {
         mapper_signal_handler *h = 0;
         mapper_signal msig = (mapper_signal)$self;
         if (PyFunc && !msig->props.user_data) {
@@ -928,11 +929,9 @@ typedef struct _admin {} admin;
             Py_XINCREF(PyFunc);
         }
         else if (!PyFunc && msig->props.user_data) {
-            if (msig->props.user_data) {
-                Py_XDECREF((PyObject*)msig->props.user_data);
-            }
+            Py_XDECREF((PyObject*)msig->props.user_data);
         }
-        return msig_set_query_callback((mapper_signal)$self, h, PyFunc);
+        return msig_set_callback((mapper_signal)$self, h, PyFunc);
     }
     int query_remotes() {
         return msig_query_remotes((mapper_signal)$self, MAPPER_TIMETAG_NOW);
@@ -1046,11 +1045,11 @@ typedef struct _admin {} admin;
 }
 
 %extend monitor {
-    _monitor(admin *DISOWN=0, int enable_autorequest=1) {
+    monitor(admin *DISOWN=0, int enable_autorequest=1) {
         return (monitor *)mapper_monitor_new((mapper_admin) DISOWN,
                                              enable_autorequest);
     }
-    ~_monitor() {
+    ~monitor() {
         mapper_monitor_free((mapper_monitor)$self);
     }
     int poll(int timeout=0) {
@@ -1315,10 +1314,10 @@ typedef struct _admin {} admin;
 }
 
 %extend admin {
-    _admin(const char *iface=0, const char *ip=0, int port=7570) {
+    admin(const char *iface=0, const char *ip=0, int port=7570) {
         return (admin *)mapper_admin_new(iface, ip, port);
     }
-    ~_admin() {
+    ~admin() {
         mapper_admin_free((mapper_admin)$self);
     }
 }

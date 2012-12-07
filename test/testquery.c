@@ -45,12 +45,12 @@ int setup_source()
         goto error;
     printf("source created.\n");
 
-    float mn=0, mx=10;
+    int mn=0, mx=10;
 
     for (int i = 0; i < 4; i++) {
         snprintf(sig_name, 20, "%s%i", "/outsig_", i);
         sendsig[i] = mdev_add_output(source, sig_name, 1, 'i', 0, &mn, &mx);
-        msig_set_query_callback(sendsig[i], query_response_handler, 0);
+        msig_set_callback(sendsig[i], query_response_handler, 0);
     }
 
     printf("Output signals registered.\n");
@@ -58,7 +58,7 @@ int setup_source()
 
     return 0;
 
-  error:
+error:
     return 1;
 }
 
@@ -98,10 +98,10 @@ int setup_destination()
     printf("destination created.\n");
 
     float mn=0, mx=1;
-        
+
     for (int i = 0; i < 4; i++) {
         snprintf(sig_name, 10, "%s%i", "/insig_", i);
-        recvsig[i] = mdev_add_input(destination, sig_name, 1, 
+        recvsig[i] = mdev_add_input(destination, sig_name, 1,
                                     'f', 0, &mn, &mx, insig_handler, 0);
     }
 
@@ -110,7 +110,7 @@ int setup_destination()
 
     return 0;
 
-  error:
+error:
     return 1;
 }
 
@@ -139,7 +139,7 @@ void wait_local_devices()
 void loop()
 {
     printf("-------------------- GO ! --------------------\n");
-    int i = 0, j = 0, count;
+    int i = 10, j = 0, count;
 
     if (automate) {
         char source_name[1024], destination_name[1024];
@@ -171,10 +171,9 @@ void loop()
             count = msig_query_remotes(sendsig[j], MAPPER_TIMETAG_NOW);
             printf("Sent %i queries for sendsig[%i]\n", count, j);
         }
-        mdev_poll(destination, 100);
-        mdev_poll(source, 0);
-        i++;
-        usleep(500 * 1000);
+        mdev_poll(destination, 200);
+        mdev_poll(source, 200);
+        i--;
     }
 }
 
@@ -205,7 +204,7 @@ int main()
 
     loop();
 
-  done:
+done:
     cleanup_destination();
     cleanup_source();
     return result;

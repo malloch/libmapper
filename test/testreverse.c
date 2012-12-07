@@ -1,4 +1,3 @@
-
 #include "../src/mapper_internal.h"
 #include <mapper/mapper.h>
 #include <stdio.h>
@@ -16,31 +15,47 @@ int automate = 1;
 
 mapper_device source = 0;
 mapper_device destination = 0;
-mapper_signal sendsig = 0;
-mapper_signal recvsig = 0;
-
-int port = 9000;
+mapper_signal sendsig;
+mapper_signal recvsig;
 
 int sent = 0;
 int received = 0;
 int done = 0;
 
+void insig_handler(mapper_signal sig, mapper_db_signal props,
+                   int instance_id, void *value, int count,
+                   mapper_timetag_t *timetag)
+{
+    if (value) {
+        if (props->type == 'f')
+            printf("--> %s got %f\n", props->is_output ?
+                   "source" : "destination", (*(float*)value));
+        else if (props->type == 'i')
+            printf("--> %s got %i\n", props->is_output ?
+                   "source" : "destination", (*(int*)value));
+    }
+    else {
+        printf("--> %s got NIL\n", props->is_output ?
+               "source" : "destination");
+    }
+    received++;
+}
+
 /*! Creation of a local source. */
 int setup_source()
 {
-    source = mdev_new("testsend", port, 0);
+    source = mdev_new("testquery-send", 0, 0);
     if (!source)
         goto error;
     printf("source created.\n");
 
     float mn=0, mx=10;
 
-    sendsig = mdev_add_output(source, "/outsig", 1, 'f', "Hz", &mn, &mx);
+    sendsig = mdev_add_output(source, "/outsig", 1, 'i', 0, &mn, &mx);
+    msig_set_callback(sendsig, insig_handler, 0);
 
-    // This signal will be updated at 100 Hz
-    msig_set_rate(sendsig, 100);
-
-    printf("Output signal /outsig registered.\n");
+    printf("Output signals registered.\n");
+    printf("Number of outputs: %d\n", mdev_num_outputs(source));
 
     return 0;
 
@@ -51,12 +66,6 @@ int setup_source()
 void cleanup_source()
 {
     if (source) {
-        if (source->routers) {
-            printf("Removing router.. ");
-            fflush(stdout);
-            mdev_remove_router(source, source->routers);
-            printf("ok\n");
-        }
         printf("Freeing source.. ");
         fflush(stdout);
         mdev_free(source);
@@ -64,41 +73,21 @@ void cleanup_source()
     }
 }
 
-void insig_handler(mapper_signal sig, mapper_db_signal props,
-                   int instance_id, void *value, int count,
-                   mapper_timetag_t *timetag)
-{
-    if (value) {
-        printf("--> destination %s got %i message vector\n[",
-               props->name, count);
-        float *v = value;
-        for (int i = 0; i < count; i++) {
-            for (int j = 0; j < props->length; j++) {
-                printf(" %.1f ", v[i*props->length+j]);
-            }
-        }
-        printf("]\n");
-    }
-    received++;
-}
-
 /*! Creation of a local destination. */
 int setup_destination()
 {
-    destination = mdev_new("testrecv", port, 0);
+    destination = mdev_new("testquery-recv", 0, 0);
     if (!destination)
         goto error;
     printf("destination created.\n");
 
     float mn=0, mx=1;
 
-    recvsig = mdev_add_input(destination, "/insig", 1, 'f',
-                               0, &mn, &mx, insig_handler, 0);
-
-    // This signal is expected to be updated at 100 Hz
-    msig_set_rate(recvsig, 100);
+    recvsig = mdev_add_input(destination, "/insig", 1,
+                             'f', 0, &mn, &mx, insig_handler, 0);
 
     printf("Input signal /insig registered.\n");
+    printf("Number of inputs: %d\n", mdev_num_inputs(destination));
 
     return 0;
 
@@ -128,6 +117,7 @@ void wait_local_devices()
 
 void loop()
 {
+    printf("-------------------- GO ! --------------------\n");
     int i = 0;
 
     if (automate) {
@@ -144,25 +134,17 @@ void loop()
         msig_full_name(sendsig, source_name, 1024);
         msig_full_name(recvsig, destination_name, 1024);
 
-        lo_send(a, "/connect", "ss", source_name, destination_name);
+        lo_send(a, "/connect", "ssss", source_name, destination_name,
+                "@mode", "reverse");
 
         lo_address_free(a);
     }
 
-    float phasor[10];
-    for (i=0; i<10; i++)
-        phasor[i] = i;
-
     while (i >= 0 && !done) {
-        mdev_poll(source, 0);
-
-        // 10 times a second, we provide 10 samples, making a
-        // periodically-sampled signal of 100 Hz.
-        printf("Sending [%g..%g]...\n", phasor[0], phasor[9]);
-
-        msig_update(sendsig, phasor, 10, MAPPER_TIMETAG_NOW);
-        int r = mdev_poll(destination, 100);
-        printf("Destination got %d message%s.\n", r, r==1?"":"s");
+        msig_update_float(recvsig, ((i % 10) * 1.0f));
+        printf("\ndestination value updated to %f -->\n", (i % 10) * 1.0f);
+        mdev_poll(destination, 1);
+        mdev_poll(source, 100);
         i++;
     }
 }
