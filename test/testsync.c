@@ -14,77 +14,60 @@
 #define usleep(x) Sleep(x/1000)
 #endif
 
-mapper_device devices[5] = {0, 0, 0, 0, 0};
-lo_timetag system_time;
-mapper_timetag_t device_times[5];
+mapper_device device = 0;
+mapper_timetag_t device_time;
 uint32_t last_update;
 int ready = 0;
 int done = 0;
 int counter = 0;
-int numDevices = 1;
 
-/*! Creation of devices. */
-int setup_devices()
+int setup_device()
 {
-    int i;
-    for (i=0; i<numDevices; i++) {
-        devices[i] = mdev_new("testsync", 0, 0);
-        if (!devices[i])
-            goto error;
-    }
+    device = mdev_new("testsync", 0, 0);
+    if (!device)
+        goto error;
     return 0;
 
   error:
     return 1;
 }
 
-void cleanup_devices()
+void cleanup_device()
 {
-    int i;
-    for (i=0; i<numDevices; i++) {
-        if (devices[i]) {
-            printf("\nFreeing device %i... ", i);
-            fflush(stdout);
-            mdev_free(devices[i]);
-            printf("ok");
-        }
+    if (device) {
+        printf("\nFreeing device... ");
+        fflush(stdout);
+        mdev_free(device);
+        printf("ok");
     }
 }
 
 void loop()
 {
     int i = 0;
-    printf("Loading devices...\n");
+    printf("Loading device...\n");
 
     while (i >= 0 && !done) {
-        for (i=0; i<numDevices; i++)
-            mdev_poll(devices[i], 1);
-        lo_timetag_now(&system_time);
-        if (system_time.sec != last_update) {
-            last_update = system_time.sec;
+        mdev_poll(device, 1);
+        mdev_timetag_now(device, &device_time);
+        if (device_time.sec != last_update) {
+            last_update = device_time.sec;
             if (ready) {
                 printf("\n%i  ||", counter++);
-                // print device clock offsets
-                for (i=0; i<numDevices; i++) {
-                    printf("  %f  |  %f  |  %f  |  %f  |  %f  |  %f  |", devices[i]->admin->clock.offset,
-                           devices[i]->admin->clock.latency, devices[i]->admin->clock.jitter,
-                           devices[i]->admin->clock.confidence,
-                           devices[i]->admin->clock.remote_diff,
-                           devices[i]->admin->clock.remote_jitter);
-                }
+                // print device clock offset
+                printf("  %f  |  %f  |  %f  |  %f  |  %f  |  %f  |",
+                       device->admin->clock.offset,
+                       device->admin->clock.latency,
+                       device->admin->clock.jitter,
+                       device->admin->clock.confidence,
+                       device->admin->clock.remote_diff,
+                       device->admin->clock.remote_jitter);
             }
             else {
-                int count = 0;
-                for (i=0; i<numDevices; i++) {
-                    count += mdev_ready(devices[i]);
-                }
-                if (count >= numDevices) {
-                    printf("   || ");
-                    for (i=0; i<numDevices; i++) {
-                        printf("%s | ", mdev_name(devices[i]));
-                        // Give each device clock a random starting offset
-                        devices[i]->admin->clock.offset = (rand() % 100) - 50;
-                    }
+                if (mdev_ready(device)) {
+                    printf("   || %s | ", mdev_name(device));
+                    // Give device clock a random starting offset
+                    device->admin->clock.offset = (rand() % 100) - 50;
                     printf(" latency   |  jitter   |  confidence");
                     ready = 1;
                 }
@@ -104,7 +87,7 @@ int main()
 
     signal(SIGINT, ctrlc);
 
-    if (setup_devices()) {
+    if (setup_device()) {
         printf("Error initializing devices.\n");
         result = 1;
         goto done;
@@ -113,6 +96,6 @@ int main()
     loop();
 
   done:
-    cleanup_devices();
+    cleanup_device();
     return result;
 }
