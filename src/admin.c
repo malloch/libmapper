@@ -439,7 +439,7 @@ void mapper_admin_add_device(mapper_admin admin, mapper_device dev,
         admin->registered = 0;
         admin->device = dev;
         admin->device->flags = 0;
-        mdev_clock_init(admin->device);
+        mapper_clock_init(&admin->clock);
 
         /* Seed the random number generator. */
         seed_srand();
@@ -535,11 +535,11 @@ int mapper_admin_poll(mapper_admin admin)
         }
         // Send out clock sync messages occasionally
         mapper_clock_t *clock = &admin->clock;
-        mdev_timetag_now(admin->device, &clock->now);
+        mapper_clock_now(*clock, &clock->now);
         if (clock->now.sec >= clock->next_ping) {
             lo_message m = lo_message_new();
             if (m) {
-                mdev_timetag_now(admin->device, &clock->ping);
+                mapper_clock_now(*clock, &clock->ping);
                 lo_message_add_int32(m, admin->name_hash);
                 lo_message_add_timetag(m, clock->ping);
                 lo_message_add_double(m, clock->latency);
@@ -2337,7 +2337,7 @@ static int handler_sync(const char *path,
 
     // get current time
     mapper_timetag_t now;
-    mdev_timetag_now(md, &now);
+    mapper_clock_now(*clock, &now);
 
     int device_id = argv[0]->i;
     if (device_id == 0)
@@ -2395,7 +2395,7 @@ static int handler_sync(const char *path,
             clock->remote_jitter *= 0.9;
             clock->remote_jitter += jitter * 0.1;
         }
-        mdev_clock_adjust(md, compensated);
+        mapper_clock_adjust(&admin->clock, compensated, 0.0);
     }
 
     return 0;

@@ -13,26 +13,24 @@
 
 static double multiplier = 1.0/((double)(1LL<<32));
 
-void mdev_clock_init(mapper_device dev)
+void mapper_clock_init(mapper_clock_t *clock)
 {
-    mapper_clock_t *clock = &dev->admin->clock;
     clock->rate = 1.0;
     clock->offset = 0.0;
     clock->latency = 0.0;
     clock->jitter = 0.0;
     clock->confidence = 0.001;
 
-    mdev_timetag_now(dev, &clock->ping);
+    mapper_clock_now(*clock, &clock->now);
     clock->next_ping = clock->now.sec;
 }
 
-void mdev_clock_adjust(mapper_device dev,
-                       double seconds)
+void mapper_clock_adjust(mapper_clock_t *clock,
+                         double difference,
+                         float confidence)
 {
-    mapper_clock_t *clock = &dev->admin->clock;
-
     double weight = 1.0 - clock->confidence;
-    double new_offset = clock->offset + seconds * weight;
+    double new_offset = clock->offset + difference * weight;
 
     // try inserting pull from system clock
     //new_offset *= 0.9999;
@@ -48,15 +46,13 @@ void mdev_clock_adjust(mapper_device dev,
     clock->offset = new_offset;
 }
 
-void mdev_timetag_now(mapper_device dev,
+void mapper_clock_now(mapper_clock_t clock,
                       mapper_timetag_t *timetag)
 {
-    if (!dev)
-        return;
     // first get current time from system clock
     // adjust using rate and offset from mapping network sync
     lo_timetag_now((lo_timetag*)timetag);
-    mapper_timetag_add_seconds(timetag, dev->admin->clock.offset);
+    mapper_timetag_add_seconds(timetag, clock.offset);
 }
 
 double mapper_timetag_difference(mapper_timetag_t a, mapper_timetag_t b)
