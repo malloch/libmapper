@@ -548,7 +548,7 @@ int mapper_admin_poll(mapper_admin admin)
                 lo_send_message(admin->admin_addr, "/sync", m);
                 lo_message_free(m);
             }
-            clock->next_ping = clock->now.sec + (rand() % 10);
+            clock->next_ping = clock->now.sec + 5 + (rand() % 5);
         }
     }
     return count;
@@ -2362,6 +2362,14 @@ static int handler_sync(const char *path,
             clock->latency += latency * 0.1;
         }
         return 0;
+    }
+
+    /* check if we have a local reference to the remote device,
+     * and update latency record if we do. */
+    mapper_link link = 0;
+    if ((link = mapper_router_find_by_dest_name_hash(md->routers, device_id)) ||
+        (link = mapper_receiver_find_by_src_name_hash(md->receivers, device_id))) {
+        link->props.latency = argv[2]->d;
     }
 
     // only listen to upstream /sync messages

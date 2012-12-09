@@ -23,7 +23,7 @@ void mdev_clock_init(mapper_device dev)
     clock->confidence = 0.001;
 
     mdev_timetag_now(dev, &clock->ping);
-    clock->next_ping = clock->now.sec + 20;
+    clock->next_ping = clock->now.sec;
 }
 
 void mdev_clock_adjust(mapper_device dev,

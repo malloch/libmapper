@@ -248,6 +248,10 @@ mapper_router mapper_router_find_by_dest_address(mapper_router routers,
 mapper_router mapper_router_find_by_dest_name(mapper_router routers,
                                               const char *dest_name);
 
+/*! Find a router by hash of destination device name in a linked list of routers. */
+mapper_router mapper_router_find_by_dest_name_hash(mapper_router routers,
+                                                   uint32_t hash);
+
 int mapper_router_add_scope(mapper_router router, const char *scope);
 
 void mapper_router_remove_scope(mapper_router router, const char *scope);
@@ -300,6 +304,10 @@ mapper_receiver mapper_receiver_find_by_src_address(mapper_receiver receivers,
 /*! Find a receiver by source device name in a linked list of receivers. */
 mapper_receiver mapper_receiver_find_by_src_name(mapper_receiver receivers,
                                                  const char *src_name);
+
+/*! Find a receiver by hash of source device name in a linked list of receivers. */
+mapper_receiver mapper_receiver_find_by_src_name_hash(mapper_receiver receivers,
+                                                      uint32_t hash);
 
 int mapper_receiver_add_scope(mapper_receiver receiver, const char *scope);
 

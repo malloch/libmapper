@@ -23,11 +23,12 @@ mapper_router mapper_router_new(mapper_device device, const char *host,
     sprintf(str, "%d", port);
     router->props.dest_addr = lo_address_new(host, str);
     router->props.dest_name = strdup(name);
+    router->props.dest_name_hash = crc32(0L, (const Bytef *)name, strlen(name));
     if (default_scope) {
         router->props.num_scopes = 1;
         router->props.scope_names = (char **) malloc(sizeof(char *));
         router->props.scope_names[0] = strdup(mdev_name(device));
-        router->props.scope_hashes = (int *) malloc(sizeof(int));
+        router->props.scope_hashes = (uint32_t *) malloc(sizeof(uint32_t));
         router->props.scope_hashes[0] = mdev_id(device);
     }
     else {
@@ -587,7 +588,7 @@ int mapper_router_add_scope(mapper_router router, const char *scope)
     i = ++props->num_scopes;
     props->scope_names = realloc(props->scope_names, i * sizeof(char *));
     props->scope_names[i-1] = strdup(scope);
-    props->scope_hashes = realloc(props->scope_hashes, i * sizeof(int));
+    props->scope_hashes = realloc(props->scope_hashes, i * sizeof(uint32_t));
     props->scope_hashes[i-1] = hash;
     return 0;
 }
@@ -613,7 +614,7 @@ void mapper_router_remove_scope(mapper_router router, const char *scope)
             props->scope_names = realloc(props->scope_names,
                                          props->num_scopes * sizeof(char *));
             props->scope_hashes = realloc(props->scope_hashes,
-                                          props->num_scopes * sizeof(int));
+                                          props->num_scopes * sizeof(uint32_t));
             return;
         }
     }
@@ -657,6 +658,17 @@ mapper_router mapper_router_find_by_dest_name(mapper_router router,
 
     while (router) {
         if (strncmp(router->props.dest_name, dest_name, n)==0)
+            return router;
+        router = router->next;
+    }
+    return 0;
+}
+
+mapper_router mapper_router_find_by_dest_name_hash(mapper_router router,
+                                                   uint32_t hash)
+{
+    while (router) {
+        if (router->props.dest_name_hash == hash)
             return router;
         router = router->next;
     }

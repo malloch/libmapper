@@ -18,11 +18,12 @@ mapper_receiver mapper_receiver_new(mapper_device device, const char *host,
     sprintf(str, "%d", port);
     r->props.src_addr = lo_address_new(host, str);
     r->props.src_name = strdup(name);
+    r->props.src_name_hash = crc32(0L, (const Bytef *)name, strlen(name));
     if (default_scope) {
         r->props.num_scopes = 1;
         r->props.scope_names = (char **) malloc(sizeof(char *));
         r->props.scope_names[0] = strdup(name);
-        r->props.scope_hashes = (int *) malloc(sizeof(int));
+        r->props.scope_hashes = (uint32_t *) malloc(sizeof(uint32_t));
         r->props.scope_hashes[0] = crc32(0L, (const Bytef *)name, strlen(name));;
     }
     else {
@@ -448,7 +449,7 @@ int mapper_receiver_add_scope(mapper_receiver r, const char *scope)
     i = ++props->num_scopes;
     props->scope_names = realloc(props->scope_names, i * sizeof(char *));
     props->scope_names[i-1] = strdup(scope);
-    props->scope_hashes = realloc(props->scope_hashes, i * sizeof(int));
+    props->scope_hashes = realloc(props->scope_hashes, i * sizeof(uint32_t));
     props->scope_hashes[i-1] = hash;
     return 0;
 }
@@ -475,7 +476,7 @@ void mapper_receiver_remove_scope(mapper_receiver receiver, const char *scope)
             props->scope_names = realloc(props->scope_names,
                                          props->num_scopes * sizeof(char *));
             props->scope_hashes = realloc(props->scope_hashes,
-                                          props->num_scopes * sizeof(int));
+                                          props->num_scopes * sizeof(uint32_t));
             return;
         }
     }
@@ -559,6 +560,17 @@ mapper_receiver mapper_receiver_find_by_src_name(mapper_receiver r,
         if (strncmp(r->props.src_name, src_name, n)==0)
             return r;
         r = r->next;
+    }
+    return 0;
+}
+
+mapper_receiver mapper_receiver_find_by_src_name_hash(mapper_receiver receiver,
+                                                      uint32_t hash)
+{
+    while (receiver) {
+        if (receiver->props.src_name_hash == hash)
+            return receiver;
+        receiver = receiver->next;
     }
     return 0;
 }
