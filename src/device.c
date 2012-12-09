@@ -739,6 +739,8 @@ int mdev_poll(mapper_device md, int block_ms)
     int admin_count = mapper_admin_poll(md->admin);
     int count = 0;
 
+    double next_beat = mapper_clock_check_metronomes(&md->admin->clock);
+
     if (md->server) {
 
         /* If a timeout is specified, loop until the time is up. */
@@ -748,10 +750,14 @@ int mdev_poll(mapper_device md, int block_ms)
             int left_ms = block_ms;
             while (left_ms > 0)
             {
+                if (next_beat > 0. && next_beat < left_ms)
+                    left_ms = next_beat;
                 if (lo_server_recv_noblock(md->admin->admin_server, 0))
                     admin_count++;
                 else if (lo_server_recv_noblock(md->server, left_ms))
                     count++;
+                if (next_beat > 0. && next_beat < block_ms)
+                    next_beat = mapper_clock_check_metronomes(&md->admin->clock);
                 double elapsed = get_current_time() - then;
                 left_ms = block_ms - (int)(elapsed*1000);
             }
@@ -774,8 +780,12 @@ int mdev_poll(mapper_device md, int block_ms)
         int left_ms = block_ms;
         while (left_ms > 0)
         {
+            if (next_beat > 0. && next_beat < left_ms)
+                left_ms = next_beat;
             if (lo_server_recv_noblock(md->admin->admin_server, left_ms))
                 admin_count++;
+            if (next_beat > 0. && next_beat < block_ms)
+                next_beat = mapper_clock_check_metronomes(&md->admin->clock);
             double elapsed = get_current_time() - then;
             left_ms = block_ms - (int)(elapsed*1000);
         }
@@ -1214,10 +1224,30 @@ void mdev_remove_property(mapper_device dev, const char *property)
 
 void mdev_timetag_now(mapper_device dev, mapper_timetag_t *timetag)
 {
-    mapper_clock_now(dev->admin->clock, timetag);
+    mapper_clock_now(&dev->admin->clock, timetag);
 }
 
 lo_server mdev_get_lo_server(mapper_device md)
 {
     return md->server;
+}
+
+mapper_metronome mdev_add_metronome(mapper_device dev,
+                                    mapper_timetag_t start,
+                                    double BPM,
+                                    unsigned int count,
+                                    mapper_metronome_handler h,
+                                    void *user_data)
+{
+    if (!dev)
+        return 0;
+    return mapper_clock_add_metronome(&dev->admin->clock, start,
+                                      BPM, count, h, user_data);
+}
+
+void mdev_remove_metronome(mapper_device dev, mapper_metronome m)
+{
+    if (!dev)
+        return;
+    mapper_clock_remove_metronome(&dev->admin->clock, m);
 }

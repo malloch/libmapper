@@ -77,6 +77,21 @@ typedef struct _mapper_signal_instance
     struct _mapper_signal_instance *next;
 } *mapper_signal_instance;
 
+/**** Metronomes ****/
+
+typedef struct _mapper_metronome {
+    char *name;                         //!< Name of this metronome.
+    mapper_timetag_t start;             //!< Metronome starting time (absolute).
+    double bpm;                         //!< Beats per minute.
+    double spb;                         //!< Seconds per beat.
+    int count;                          //!< Beats per bar.
+    mapper_timetag_t next_beat;         //!< Time at which next beat occurs.
+    mapper_metronome_handler *handler;  /*!< Handler to call when a beat
+                                         *   occurs. */
+    void *user_data;
+    struct _mapper_metronome *next;     //!< Next metronome in the list
+} mapper_metronome_t;
+
 // Mapper internal functions
 
 /**** Admin ****/
@@ -713,15 +728,29 @@ void mapper_msg_add_osc_value_table(lo_message m, table t);
 /**** Clock synchronization ****/
 
 /*! Initialize a mapper_clock. */
-void mapper_clock_init(mapper_clock_t *clock);
+void mapper_clock_init(mapper_clock clock);
 
 /*! Adjust the internal clock synchonization. */
-void mapper_clock_adjust(mapper_clock_t *clock,
+void mapper_clock_adjust(mapper_clock clock,
                          double difference,
                          float confidence);
 
 /*! Get the current time from a mapper_clock. */
-void mapper_clock_now(mapper_clock_t clock, mapper_timetag_t *timetag);
+void mapper_clock_now(mapper_clock clock, mapper_timetag_t *timetag);
+
+/*! Add a metronome to the clock. */
+mapper_metronome mapper_clock_add_metronome(mapper_clock clock,
+                                            mapper_timetag_t start,
+                                            double bpm,
+                                            unsigned int count,
+                                            mapper_metronome_handler h,
+                                            void *user_data);
+
+/*! Remove a metronome from the clock. */
+void mapper_clock_remove_metronome(mapper_clock clock,
+                                   mapper_metronome m);
+
+double mapper_clock_check_metronomes(mapper_clock clock);
 
 /**** Debug macros ****/
 

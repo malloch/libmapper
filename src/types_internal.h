@@ -26,6 +26,7 @@
 struct _mapper_signal;
 struct _mapper_admin;
 typedef struct _mapper_expr *mapper_expr;
+struct _mapper_metronome;
 
 /* Forward declarations for this file. */
 
@@ -89,7 +90,6 @@ typedef struct _mapper_admin_allocated_t {
 
 /*! Clock and timing information. */
 typedef struct _mapper_clock_t {
-    int wait_time;
     double rate;
     double offset;
     float confidence;
@@ -100,7 +100,8 @@ typedef struct _mapper_clock_t {
     double remote_diff;
     double remote_jitter;
     mapper_timetag_t ping;
-} mapper_clock_t;
+    struct _mapper_metronome *metronomes;
+} mapper_clock_t, *mapper_clock;
 
 /*! A structure that keeps information about a device. */
 typedef struct _mapper_admin {

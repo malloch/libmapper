@@ -35,6 +35,8 @@ libmapper concepts.
 struct _mapper_signal;
 typedef struct _mapper_signal *mapper_signal;
 struct _mapper_connection;
+struct _mapper_metronome;
+typedef struct _mapper_metronome *mapper_metronome;
 
 /*! The set of possible actions on an instance, used to register callbacks
  *  to inform them of what is happening. */
@@ -1254,6 +1256,23 @@ void mapper_monitor_disconnect(mapper_monitor mon,
  *  \param timetag  A previously allocated timetag to initialize. */
 void mdev_timetag_now(mapper_device dev,
                       mapper_timetag_t *tt);
+
+/*! A metronome handler function can be called whenever a beat occurs. */
+typedef void mapper_metronome_handler(mapper_metronome m,
+                                      unsigned int bar,
+                                      unsigned int beat,
+                                      void *user_data);
+
+/*! Add a metronome to the device. */
+mapper_metronome mdev_add_metronome(mapper_device dev,
+                                    mapper_timetag_t start,
+                                    double BPM,
+                                    unsigned int count,
+                                    mapper_metronome_handler h,
+                                    void *user_data);
+
+/*! Remove a metronome from the device. */
+void mdev_remove_metronome(mapper_device dev, mapper_metronome m);
 
 /*! Return the difference in seconds between two mapper_timetags.
  *  \param a    The minuend.

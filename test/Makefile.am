@@ -8,8 +8,8 @@ TEST_LDADD = $(top_builddir)/src/libmapper-@MAJOR_VERSION@.la $(liblo_LIBS)
 endif
 
 noinst_PROGRAMS = test testadmin testdb testexpression testinstance \
-				  testlinear testmany testmonitor testparams testparser \
-				  testprops testqueue testquery testrate testrecv \
+				  testlinear testmany testmetronome testmonitor testparams \
+				  testparser testprops testqueue testquery testrate testrecv \
 				  testreverse testsend testspeed testsync testvector
 
 test_CFLAGS = $(TEST_CFLAGS)
@@ -39,6 +39,10 @@ testlinear_LDADD = $(TEST_LDADD)
 testmany_CFLAGS = $(TEST_CFLAGS)
 testmany_SOURCES = testmany.c
 testmany_LDADD = $(TEST_LDADD)
+
+testmetronome_CFLAGS = $(TEST_CFLAGS)
+testmetronome_SOURCES = testmetronome.c
+testmetronome_LDADD = $(TEST_LDADD)
 
 testmonitor_CFLAGS = $(TEST_CFLAGS)
 testmonitor_SOURCES = testmonitor.c

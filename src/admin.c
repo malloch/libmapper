@@ -535,11 +535,11 @@ int mapper_admin_poll(mapper_admin admin)
         }
         // Send out clock sync messages occasionally
         mapper_clock_t *clock = &admin->clock;
-        mapper_clock_now(*clock, &clock->now);
+        mapper_clock_now(clock, &clock->now);
         if (clock->now.sec >= clock->next_ping) {
             lo_message m = lo_message_new();
             if (m) {
-                mapper_clock_now(*clock, &clock->ping);
+                mapper_clock_now(clock, &clock->ping);
                 lo_message_add_int32(m, admin->name_hash);
                 lo_message_add_timetag(m, clock->ping);
                 lo_message_add_double(m, clock->latency);
@@ -2337,7 +2337,7 @@ static int handler_sync(const char *path,
 
     // get current time
     mapper_timetag_t now;
-    mapper_clock_now(*clock, &now);
+    mapper_clock_now(clock, &now);
 
     int device_id = argv[0]->i;
     if (device_id == 0)
