@@ -21,12 +21,22 @@ int ready = 0;
 int done = 0;
 int counter = 0;
 
+void insig_handler(mapper_signal sig, mapper_db_signal props,
+                   int instance_id, void *value, int count,
+                   mapper_timetag_t *timetag)
+{
+    ;
+}
+
 int setup_device()
 {
     device = mdev_new("testsync", 0, 0);
     if (!device)
         goto error;
     return 0;
+
+    mdev_add_input(device, "/insig", 1, 'f', 0,
+                   0, 0, insig_handler, 0);
 
   error:
     return 1;
@@ -48,7 +58,7 @@ void loop()
     printf("Loading device...\n");
 
     while (i >= 0 && !done) {
-        mdev_poll(device, 1);
+        mdev_poll(device, 10);
         mdev_timetag_now(device, &device_time);
         if (device_time.sec != last_update) {
             last_update = device_time.sec;

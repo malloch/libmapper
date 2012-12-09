@@ -130,7 +130,7 @@ static struct handler_method_assoc device_handlers[] = {
     {"/disconnect",             "ss",       handler_signal_disconnect},
     {"/disconnected",           "ss",       handler_signal_disconnected},
     {"/logout",                 NULL,       handler_logout},
-    {"/sync",                   "itdd",   handler_sync},
+    {"/sync",                   "itddf",    handler_sync},
 };
 const int N_DEVICE_HANDLERS =
     sizeof(device_handlers)/sizeof(device_handlers[0]);
@@ -544,6 +544,7 @@ int mapper_admin_poll(mapper_admin admin)
                 lo_message_add_timetag(m, clock->ping);
                 lo_message_add_double(m, clock->latency);
                 lo_message_add_double(m, clock->jitter);
+                lo_message_add_float(m, clock->confidence);
                 lo_send_message(admin->admin_addr, "/sync", m);
                 lo_message_free(m);
             }
@@ -2349,16 +2350,14 @@ static int handler_sync(const char *path,
         double change = mapper_timetag_difference(clock->ping, then);
         double latency = mapper_timetag_difference(now, then) + change;
         double jitter = fabs(latency - clock->latency);
-        printf("got self message with latency %f\n", latency);
         if (clock->latency == 0.0) {
             clock->latency = latency;
             clock->confidence = 0.1;
+            clock->jitter = 0.001;
         }
         else {
-            if (jitter > clock->jitter)
-                clock->jitter = jitter;
-            else
-                clock->jitter *= 0.9;
+            clock->jitter *= 0.9;
+            clock->jitter += jitter * 0.1;
             clock->latency *= 0.9;
             clock->latency += latency * 0.1;
         }
@@ -2368,21 +2367,19 @@ static int handler_sync(const char *path,
     // only listen to upstream /sync messages
     if (device_id < admin->name_hash) {
         double diff = mapper_timetag_difference(then, now);
-        printf("\ngot upstream /sync message, diff = %f\n", diff);
         double latency = (argv[2]->d + clock->latency) * 0.5;
         double compensated = diff + latency;
-        printf("compenstated diff = %f\n", compensated);
         double jitter = fabs(clock->remote_diff - diff);
         double variation = fabs(diff - clock->remote_diff);
         if (variation > clock->remote_jitter) {
-            printf("excess variation detected, ignoring!\n");
             compensated = 0.0;
         }
-        else
-            compensated /= (clock->remote_jitter / variation);
+        else {
+            // TODO: use relative confidence values to adjust updates!
+        }
         if (clock->remote_diff == 0.0) {
             clock->remote_diff = diff;
-            clock->remote_jitter = fabs(diff);
+            clock->remote_jitter = 0.001;
         }
         else {
             clock->remote_diff *= 0.9;

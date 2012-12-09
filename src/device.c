@@ -748,7 +748,9 @@ int mdev_poll(mapper_device md, int block_ms)
             int left_ms = block_ms;
             while (left_ms > 0)
             {
-                if (lo_server_recv_noblock(md->server, left_ms))
+                if (lo_server_recv_noblock(md->admin->admin_server, 0))
+                    admin_count++;
+                else if (lo_server_recv_noblock(md->server, left_ms))
                     count++;
                 double elapsed = get_current_time() - then;
                 left_ms = block_ms - (int)(elapsed*1000);
@@ -767,11 +769,16 @@ int mdev_poll(mapper_device md, int block_ms)
             count++;
     }
     else if (block_ms) {
-#ifdef WIN32
-        Sleep(block_ms);
-#else
-        usleep(block_ms * 1000);
-#endif
+        // wait on admin server instead
+        double then = get_current_time();
+        int left_ms = block_ms;
+        while (left_ms > 0)
+        {
+            if (lo_server_recv_noblock(md->admin->admin_server, left_ms))
+                admin_count++;
+            double elapsed = get_current_time() - then;
+            left_ms = block_ms - (int)(elapsed*1000);
+        }
     }
 
     return admin_count + count;

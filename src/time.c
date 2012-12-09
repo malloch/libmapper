@@ -29,7 +29,6 @@ void mdev_clock_init(mapper_device dev)
 void mdev_clock_adjust(mapper_device dev,
                        double seconds)
 {
-    printf("mdev_clock_adjust: %f\n", seconds);
     mapper_clock_t *clock = &dev->admin->clock;
 
     double weight = 1.0 - clock->confidence;
@@ -41,7 +40,7 @@ void mdev_clock_adjust(mapper_device dev,
     double adjustment = new_offset - clock->offset;
 
     // adjust stored timetag
-    clock->remote_diff += adjustment;
+    clock->remote_diff -= adjustment;
     clock->confidence *= adjustment < 0.001 ? 1.1 : 0.99;
     if (clock->confidence > 0.9) {
         clock->confidence = 0.9;
