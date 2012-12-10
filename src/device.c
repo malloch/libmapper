@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <math.h>
 #include <stdarg.h>
 #include <unistd.h>
 #include <assert.h>
@@ -1318,8 +1319,8 @@ void mdev_set_metronome_bpm(mapper_device dev, mapper_metronome m,
     if (!dev || !m)
         return;
 
+    mapper_clock_now(&dev->admin->clock, &dev->admin->clock.now);
     if (revise_start) {
-        mapper_clock_now(&dev->admin->clock, &dev->admin->clock.now);
         if (m->bpm <= 0.) {
             if (bpm > 0.) {
                 m->start.sec = dev->admin->clock.now.sec;
@@ -1352,11 +1353,29 @@ void mdev_set_metronome_count(mapper_device dev, mapper_metronome m,
     if (!dev || !m || !count)
         return;
 
-    // Copy new start timetag
+    mapper_clock_now(&dev->admin->clock, &dev->admin->clock.now);
+    if (revise_start && m->bpm > 0.) {
+        // calculate elapsed time
+        double elapsed = mapper_timetag_difference(dev->admin->clock.now, m->start);
+
+        // convert to elapsed beats at current bpm
+        elapsed /= m->spb;
+
+        // convert to elapsed bars at old count
+        double bars = floor(elapsed / m->count);
+
+        // elapsed beat-time in bar
+        elapsed = fmod(elapsed, m->count) * m->spb;
+
+        // convert to elapsed time at current bpm
+        elapsed += bars * count * m->spb;
+        mapper_timetag_cpy(&m->start, dev->admin->clock.now);
+        mapper_timetag_add_seconds(&m->start, elapsed * -1.);
+    }
     m->count = count;
     mapper_clock_init_metronome(&dev->admin->clock, m);
 
-    msig_update_int(m->start_out, (int) m->count);
+    msig_update_int(m->count_out, (int) m->count);
 }
 
 void mdev_remove_metronome(mapper_device dev, mapper_metronome m)

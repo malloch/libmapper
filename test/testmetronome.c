@@ -29,17 +29,15 @@ void handler(mapper_metronome m, unsigned int bar,
         printf("\n%i --> %i", bar, beat);
         fflush(stdout);
         current_bar = bar;
+        counter++;
     }
     else {
         printf(" %i", beat);
         fflush(stdout);
     }
-    switch (bar) {
-        case 20:
-            mdev_set_metronome_bpm(device, m, 240., 1);
-            break;
-        default:
-            break;
+    if ((counter % 10 == 9) && beat == 2) {
+     //   mdev_set_metronome_bpm(device, m, 240., 1);
+        mdev_set_metronome_count(device, m, rand() % 9 + 1, 1);
     }
 }
 
@@ -49,9 +47,7 @@ int setup_device()
     if (!device)
         goto error;
 
-    device->admin->clock.offset = (rand() % 20) - 10;
-
-    mapper_timetag_t tt;
+    mapper_timetag_t tt = {10000000,0};
     mdev_timetag_now(device, &tt);
     mapper_timetag_add_seconds(&tt, 5.);
     mdev_add_metronome(device, "/foo", tt, 120, 4, handler, 0);

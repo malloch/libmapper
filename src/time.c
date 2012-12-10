@@ -88,25 +88,28 @@ void mapper_timetag_set_from_double(mapper_timetag_t *tt, double value)
     tt->frac = (uint32_t) (((double)value) * (double)(1LL<<32));
 }
 
+void mapper_timetag_cpy(mapper_timetag_t *ttl, mapper_timetag_t ttr)
+{
+    ttl->sec = ttr.sec;
+    ttl->frac = ttr.frac;
+}
+
 void mapper_clock_init_metronome(mapper_clock clock, mapper_metronome m)
 {
-    mapper_clock_now(clock, &clock->now);
     if (memcmp(&m->start, &MAPPER_TIMETAG_NOW, sizeof(mapper_timetag_t))==0) {
-        m->start.sec = clock->now.sec;
-        m->start.frac = clock->now.frac;
+        mapper_timetag_cpy(&m->start, clock->now);
     }
     if (m->bpm > 0.) {
         m->spb = 60. / m->bpm;
         double elapsed = mapper_timetag_difference(clock->now, m->start);
         if (elapsed < 0.) {
-            m->next_beat.sec = m->start.sec;
-            m->next_beat.frac = m->start.frac;
+            mapper_timetag_cpy(&m->next_beat, m->start);
         }
         else {
-            m->next_beat.sec = clock->now.sec;
-            m->next_beat.frac = clock->now.frac;
+            mapper_timetag_cpy(&m->next_beat, clock->now);
             mapper_timetag_add_seconds(&m->next_beat,
                                        m->spb - fmod(elapsed, m->spb));
+  //          printf("scheduled next beat in %f seconds\n", m->spb - fmod(elapsed, m->spb));
         }
     }
     else
@@ -127,8 +130,7 @@ mapper_metronome mapper_clock_add_metronome(mapper_clock clock,
 
     mapper_metronome m = (mapper_metronome) malloc(sizeof(mapper_metronome_t));
     m->name = strdup(name);
-    m->start.sec = start.sec;
-    m->start.frac = start.frac;
+    mapper_timetag_cpy(&m->start, start);
     m->bpm = bpm;
     m->count = count;
     m->handler = h;
@@ -136,6 +138,7 @@ mapper_metronome mapper_clock_add_metronome(mapper_clock clock,
     m->next = clock->metronomes;
     clock->metronomes = m;
 
+    mapper_clock_now(clock, &clock->now);
     mapper_clock_init_metronome(clock, m);
     return m;
 }
@@ -154,13 +157,16 @@ float mapper_clock_check_metronomes(mapper_clock clock)
         if (diff <= 0) {
             // call handler
             double elapsed = mapper_timetag_difference(clock->now, m->start);
-            unsigned int beat_num = floor(elapsed / m->spb);
+            long int beat_num = floor(elapsed / m->spb);
+
             if (m->handler)
                 m->handler(m, beat_num / m->count,
                            beat_num % m->count, m->user_data);
+
             // reset next_beat
-            // TODO: should calculate next_beat from start time instead
-            mapper_timetag_add_seconds(&m->next_beat, m->spb);
+            mapper_timetag_cpy(&m->next_beat, clock->now);
+            mapper_timetag_add_seconds(&m->next_beat, m->spb - fmod(elapsed, m->spb));
+
             if (wait < 0. || m->spb < wait)
                 wait = m->spb;
         }
@@ -184,13 +190,4 @@ void mapper_clock_remove_metronome(mapper_clock clock, mapper_metronome m)
         }
         temp = &(*temp)->next;
     }
-}
-
-void mapper_clock_adjust_metronome(mapper_clock clock, mapper_metronome m,
-                                   mapper_timetag_t start, float bpm,
-                                   unsigned int count)
-{
-    if (!m)
-        return;
-    
 }

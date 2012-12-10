@@ -1263,21 +1263,44 @@ typedef void mapper_metronome_handler(mapper_metronome m,
                                       unsigned int beat,
                                       void *user_data);
 
-/*! Add a metronome to the device. */
+/*! Add a metronome to the device.
+ *  \param dev          The mapper device.
+ *  \param name         Unique name for this metronome.
+ *  \param start        Start time for the metronome.
+ *  \param bpm          Tempo for the metronome in beats-per-minute.
+ *  \param count        New modulus count for the metronome.
+ *  \param handler      Function to be called when a beat occurs.
+ *  \param user_data    User context pointer to be passed to handler. */
 mapper_metronome mdev_add_metronome(mapper_device dev,
                                     const char *name,
                                     mapper_timetag_t start,
                                     double BPM,
                                     unsigned int count,
-                                    mapper_metronome_handler h,
+                                    mapper_metronome_handler handler,
                                     void *user_data);
 
+/*! Set the modulo count for a mapper_metronome.
+ *  \param dev          The mapper device.
+ *  \param m            The metronome to adjust.
+ *  \param start        New start time for the metronome. */
 void mdev_set_metronome_start(mapper_device dev, mapper_metronome m,
                               mapper_timetag_t start);
 
+/*! Set the modulo count for a mapper_metronome.
+ *  \param dev          The mapper device.
+ *  \param m            The metronome to adjust.
+ *  \param bpm          New tempo for the metronome in beats-per-minute.
+ *  \param revise_start If 1 adjust the metronome start time to maintain
+ *                      The same beat and bar counts. */
 void mdev_set_metronome_bpm(mapper_device dev, mapper_metronome m,
                             float bpm, int revise_start);
 
+/*! Set the modulo count for a mapper_metronome. 
+ *  \param dev          The mapper device.
+ *  \param m            The metronome to adjust.
+ *  \param count        New modulus count for the metronome.
+ *  \param revise_start If 1 adjust the metronome start time to maintain
+ *                      The same beat and bar counts. */
 void mdev_set_metronome_count(mapper_device dev, mapper_metronome m,
                               unsigned int count, int revise_start);
 
@@ -1300,6 +1323,9 @@ double mapper_timetag_get_double(mapper_timetag_t tt);
 
 /*! Set value of a mapper_timetag from a double-precision floating point value. */
 void mapper_timetag_set_from_double(mapper_timetag_t *tt, double value);
+
+/*! Copy value of a mapper_timetag. */
+void mapper_timetag_cpy(mapper_timetag_t *ttl, mapper_timetag_t ttr);
 
 /* @} */
 
