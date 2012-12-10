@@ -1265,11 +1265,21 @@ typedef void mapper_metronome_handler(mapper_metronome m,
 
 /*! Add a metronome to the device. */
 mapper_metronome mdev_add_metronome(mapper_device dev,
+                                    const char *name,
                                     mapper_timetag_t start,
                                     double BPM,
                                     unsigned int count,
                                     mapper_metronome_handler h,
                                     void *user_data);
+
+void mdev_set_metronome_start(mapper_device dev, mapper_metronome m,
+                              mapper_timetag_t start);
+
+void mdev_set_metronome_bpm(mapper_device dev, mapper_metronome m,
+                            float bpm, int revise_start);
+
+void mdev_set_metronome_count(mapper_device dev, mapper_metronome m,
+                              unsigned int count, int revise_start);
 
 /*! Remove a metronome from the device. */
 void mdev_remove_metronome(mapper_device dev, mapper_metronome m);
@@ -1287,6 +1297,9 @@ void mapper_timetag_add_seconds(mapper_timetag_t *tt, double addend);
 
 /*! Return value of mapper_timetag as a double-precision floating point value. */
 double mapper_timetag_get_double(mapper_timetag_t tt);
+
+/*! Set value of a mapper_timetag from a double-precision floating point value. */
+void mapper_timetag_set_from_double(mapper_timetag_t *tt, double value);
 
 /* @} */
 

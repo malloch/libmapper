@@ -1232,22 +1232,138 @@ lo_server mdev_get_lo_server(mapper_device md)
     return md->server;
 }
 
+void metronome_handler(mapper_signal sig, mapper_db_signal props,
+                       int instance_id, void *value, int count,
+                       mapper_timetag_t *timetag)
+{
+    mapper_metronome m = (mapper_metronome) props->user_data;
+
+    // find signal
+    if (sig == m->start_in) {
+        float *f = (float *)value;
+        double d = f[0];
+        mapper_timetag_set_from_double(&m->start, d);
+    }
+    else if (sig == m->bpm_in) {
+        float *f = (float *)value;
+        if (f[0] >= 0.) {
+            m->bpm = f[0];
+            m->spb = 60. / m->bpm;
+        }
+    }
+    else if (sig == m->count_in) {
+        int *i = (int *)value;
+        if (i[0] > 0)
+            m->count = i[0];
+    }
+    else
+        return;
+
+    mapper_clock_init_metronome(&sig->device->admin->clock, m);
+}
+
 mapper_metronome mdev_add_metronome(mapper_device dev,
+                                    const char *name,
                                     mapper_timetag_t start,
                                     double BPM,
                                     unsigned int count,
                                     mapper_metronome_handler h,
                                     void *user_data)
 {
-    if (!dev)
+    if (!dev || !name || name[0] != '/')
         return 0;
-    return mapper_clock_add_metronome(&dev->admin->clock, start,
-                                      BPM, count, h, user_data);
+
+    mapper_metronome m = mapper_clock_add_metronome(&dev->admin->clock, name, start,
+                                                    BPM, count, h, user_data);
+    if (!m)
+        return 0;
+
+    // add signals for start time, bpm, count
+    // TODO: check if device has server, launch if necessary
+    // TODO: declare starttime signal as double once support is added
+    char sig_name[256];
+    snprintf(sig_name, 256, "%s%s", name, "/start");
+    m->start_in = mdev_add_input(dev, sig_name, 1, 'f', "seconds",
+                                 0, 0, metronome_handler, m);
+    m->start_out = mdev_add_output(dev, sig_name, 1, 'f', "seconds", 0, 0);
+    snprintf(sig_name, 256, "%s%s", name, "/bpm");
+    m->bpm_in = mdev_add_input(dev, sig_name, 1, 'f', "bpm", 0, 0,
+                               metronome_handler, m);
+    m->bpm_out = mdev_add_output(dev, sig_name, 1, 'f', "bpm", 0, 0);
+    snprintf(sig_name, 256, "%s%s", name, "/count");
+    m->count_in = mdev_add_input(dev, sig_name, 1, 'i', 0, 0, 0,
+                                 metronome_handler, m);
+    m->count_out = mdev_add_output(dev, sig_name, 1, 'i', 0, 0, 0);
+
+    return m;
+}
+
+void mdev_set_metronome_start(mapper_device dev, mapper_metronome m,
+                              mapper_timetag_t start)
+{
+    if (!dev || !m)
+        return;
+
+    // Copy new start timetag
+    m->start.sec = start.sec;
+    m->start.frac = start.frac;
+    mapper_clock_init_metronome(&dev->admin->clock, m);
+
+    msig_update_float(m->start_out, (float) mapper_timetag_get_double(start));
+}
+
+void mdev_set_metronome_bpm(mapper_device dev, mapper_metronome m,
+                            float bpm, int revise_start)
+{
+    if (!dev || !m)
+        return;
+
+    if (revise_start) {
+        mapper_clock_now(&dev->admin->clock, &dev->admin->clock.now);
+        if (m->bpm <= 0.) {
+            if (bpm > 0.) {
+                m->start.sec = dev->admin->clock.now.sec;
+                m->start.frac = dev->admin->clock.now.frac;
+            }
+        }
+        else {
+            // calculate elapsed time
+            double elapsed = mapper_timetag_difference(dev->admin->clock.now, m->start);
+            // convert to elapsed beats at old bpm
+            elapsed /= m->spb;
+            // convert to elapsed time at new bpm
+            elapsed *= 60. / bpm;
+            m->start.sec = dev->admin->clock.now.sec;
+            m->start.frac = dev->admin->clock.now.frac;
+            mapper_timetag_add_seconds(&m->start, elapsed * -1.);
+        }
+    }
+    m->bpm = bpm;
+    mapper_clock_init_metronome(&dev->admin->clock, m);
+
+    msig_update_float(m->bpm_out, m->bpm);
+    if (revise_start)
+        msig_update_float(m->start_out, (float) mapper_timetag_get_double(m->start));
+}
+
+void mdev_set_metronome_count(mapper_device dev, mapper_metronome m,
+                              unsigned int count, int revise_start)
+{
+    if (!dev || !m || !count)
+        return;
+
+    // Copy new start timetag
+    m->count = count;
+    mapper_clock_init_metronome(&dev->admin->clock, m);
+
+    msig_update_int(m->start_out, (int) m->count);
 }
 
 void mdev_remove_metronome(mapper_device dev, mapper_metronome m)
 {
-    if (!dev)
+    if (!dev || !m)
         return;
     mapper_clock_remove_metronome(&dev->admin->clock, m);
+
+    // TODO: remove metronome signals
 }

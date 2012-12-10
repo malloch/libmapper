@@ -82,31 +82,21 @@ double mapper_timetag_get_double(mapper_timetag_t timetag)
     return (double)timetag.sec + (double)timetag.frac * multiplier;
 }
 
-mapper_metronome mapper_clock_add_metronome(mapper_clock clock,
-                                            mapper_timetag_t start,
-                                            double bpm,
-                                            unsigned int count,
-                                            mapper_metronome_handler h,
-                                            void *user_data)
+void mapper_timetag_set_from_double(mapper_timetag_t *tt, double value)
 {
-    // TODO: check if metronome already exists?
-    if (!h)
-        return 0;
+    tt->sec = floor(value);
+    tt->frac = (uint32_t) (((double)value) * (double)(1LL<<32));
+}
 
+void mapper_clock_init_metronome(mapper_clock clock, mapper_metronome m)
+{
     mapper_clock_now(clock, &clock->now);
-    mapper_metronome m = (mapper_metronome) malloc(sizeof(mapper_metronome_t));
-    if (memcmp(&start, &MAPPER_TIMETAG_NOW, sizeof(mapper_timetag_t))==0) {
+    if (memcmp(&m->start, &MAPPER_TIMETAG_NOW, sizeof(mapper_timetag_t))==0) {
         m->start.sec = clock->now.sec;
         m->start.frac = clock->now.frac;
     }
-    else {
-        m->start.sec = start.sec;
-        m->start.frac = start.frac;
-    }
-    m->bpm = bpm;
-    m->count = count;
-    if (bpm > 0.) {
-        m->spb = 60. / bpm;
+    if (m->bpm > 0.) {
+        m->spb = 60. / m->bpm;
         double elapsed = mapper_timetag_difference(clock->now, m->start);
         if (elapsed < 0.) {
             m->next_beat.sec = m->start.sec;
@@ -121,21 +111,46 @@ mapper_metronome mapper_clock_add_metronome(mapper_clock clock,
     }
     else
         m->next_beat.sec = 0;
+}
 
+mapper_metronome mapper_clock_add_metronome(mapper_clock clock,
+                                            const char *name,
+                                            mapper_timetag_t start,
+                                            float bpm,
+                                            unsigned int count,
+                                            mapper_metronome_handler h,
+                                            void *user_data)
+{
+    // TODO: check if metronome already exists?
+    if (!h)
+        return 0;
+
+    mapper_metronome m = (mapper_metronome) malloc(sizeof(mapper_metronome_t));
+    m->name = strdup(name);
+    m->start.sec = start.sec;
+    m->start.frac = start.frac;
+    m->bpm = bpm;
+    m->count = count;
     m->handler = h;
     m->user_data = user_data;
     m->next = clock->metronomes;
     clock->metronomes = m;
+
+    mapper_clock_init_metronome(clock, m);
     return m;
 }
 
-double mapper_clock_check_metronomes(mapper_clock clock)
+float mapper_clock_check_metronomes(mapper_clock clock)
 {
-    double wait = -1.;
+    float wait = -1.;
     mapper_clock_now(clock, &clock->now);
     mapper_metronome m = clock->metronomes;
     while (m) {
         double diff = mapper_timetag_difference(m->next_beat, clock->now);
+        if (m->bpm <= 0.) {
+            m = m->next;
+            continue;
+        }
         if (diff <= 0) {
             // call handler
             double elapsed = mapper_timetag_difference(clock->now, m->start);
@@ -169,4 +184,13 @@ void mapper_clock_remove_metronome(mapper_clock clock, mapper_metronome m)
         }
         temp = &(*temp)->next;
     }
+}
+
+void mapper_clock_adjust_metronome(mapper_clock clock, mapper_metronome m,
+                                   mapper_timetag_t start, float bpm,
+                                   unsigned int count)
+{
+    if (!m)
+        return;
+    
 }

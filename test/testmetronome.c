@@ -20,7 +20,7 @@ uint32_t last_update;
 int ready = 0;
 int done = 0;
 int counter = 0;
-int current_bar = 0;
+int current_bar = -1;
 
 void handler(mapper_metronome m, unsigned int bar,
              unsigned int beat, void *user_data)
@@ -34,6 +34,13 @@ void handler(mapper_metronome m, unsigned int bar,
         printf(" %i", beat);
         fflush(stdout);
     }
+    switch (bar) {
+        case 20:
+            mdev_set_metronome_bpm(device, m, 240., 1);
+            break;
+        default:
+            break;
+    }
 }
 
 int setup_device()
@@ -44,8 +51,10 @@ int setup_device()
 
     device->admin->clock.offset = (rand() % 20) - 10;
 
-    mapper_timetag_t then = {1000000000, 0};
-    mdev_add_metronome(device, then, 120, 4, handler, 0);
+    mapper_timetag_t tt;
+    mdev_timetag_now(device, &tt);
+    mapper_timetag_add_seconds(&tt, 5.);
+    mdev_add_metronome(device, "/foo", tt, 120, 4, handler, 0);
 
     return 0;
 

@@ -82,13 +82,19 @@ typedef struct _mapper_signal_instance
 typedef struct _mapper_metronome {
     char *name;                         //!< Name of this metronome.
     mapper_timetag_t start;             //!< Metronome starting time (absolute).
-    double bpm;                         //!< Beats per minute.
-    double spb;                         //!< Seconds per beat.
+    float bpm;                         //!< Beats per minute.
+    float spb;                         //!< Seconds per beat.
     int count;                          //!< Beats per bar.
     mapper_timetag_t next_beat;         //!< Time at which next beat occurs.
     mapper_metronome_handler *handler;  /*!< Handler to call when a beat
                                          *   occurs. */
     void *user_data;
+    mapper_signal start_in;             //!< Pointers to associated mapper signals.
+    mapper_signal start_out;
+    mapper_signal bpm_in;
+    mapper_signal bpm_out;
+    mapper_signal count_in;
+    mapper_signal count_out;
     struct _mapper_metronome *next;     //!< Next metronome in the list
 } mapper_metronome_t;
 
@@ -740,8 +746,9 @@ void mapper_clock_now(mapper_clock clock, mapper_timetag_t *timetag);
 
 /*! Add a metronome to the clock. */
 mapper_metronome mapper_clock_add_metronome(mapper_clock clock,
+                                            const char *name,
                                             mapper_timetag_t start,
-                                            double bpm,
+                                            float bpm,
                                             unsigned int count,
                                             mapper_metronome_handler h,
                                             void *user_data);
@@ -750,7 +757,11 @@ mapper_metronome mapper_clock_add_metronome(mapper_clock clock,
 void mapper_clock_remove_metronome(mapper_clock clock,
                                    mapper_metronome m);
 
-double mapper_clock_check_metronomes(mapper_clock clock);
+float mapper_clock_check_metronomes(mapper_clock clock);
+
+void mapper_clock_init_metronome(mapper_clock clock, mapper_metronome m);
+
+
 
 /**** Debug macros ****/
 
