@@ -109,7 +109,6 @@ void mapper_clock_init_metronome(mapper_clock clock, mapper_metronome m)
             mapper_timetag_cpy(&m->next_beat, clock->now);
             mapper_timetag_add_seconds(&m->next_beat,
                                        m->spb - fmod(elapsed, m->spb));
-  //          printf("scheduled next beat in %f seconds\n", m->spb - fmod(elapsed, m->spb));
         }
     }
     else
@@ -163,10 +162,10 @@ float mapper_clock_check_metronomes(mapper_clock clock)
                 m->handler(m, beat_num / m->count,
                            beat_num % m->count, m->user_data);
 
-            // reset next_beat
+            // handler may have caused changes to metronome settings, so recalulate elapsed time
+            elapsed = mapper_timetag_difference(clock->now, m->start);
             mapper_timetag_cpy(&m->next_beat, clock->now);
             mapper_timetag_add_seconds(&m->next_beat, m->spb - fmod(elapsed, m->spb));
-
             if (wait < 0. || m->spb < wait)
                 wait = m->spb;
         }

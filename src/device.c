@@ -1330,12 +1330,14 @@ void mdev_set_metronome_bpm(mapper_device dev, mapper_metronome m,
         else {
             // calculate elapsed time
             double elapsed = mapper_timetag_difference(dev->admin->clock.now, m->start);
+
             // convert to elapsed beats at old bpm
             elapsed /= m->spb;
+
             // convert to elapsed time at new bpm
             elapsed *= 60. / bpm;
-            m->start.sec = dev->admin->clock.now.sec;
-            m->start.frac = dev->admin->clock.now.frac;
+
+            mapper_timetag_cpy(&m->start, dev->admin->clock.now);
             mapper_timetag_add_seconds(&m->start, elapsed * -1.);
         }
     }
@@ -1376,6 +1378,8 @@ void mdev_set_metronome_count(mapper_device dev, mapper_metronome m,
     mapper_clock_init_metronome(&dev->admin->clock, m);
 
     msig_update_int(m->count_out, (int) m->count);
+    if (revise_start)
+        msig_update_float(m->start_out, (float) mapper_timetag_get_double(m->start));
 }
 
 void mdev_remove_metronome(mapper_device dev, mapper_metronome m)

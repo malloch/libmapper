@@ -26,18 +26,24 @@ void handler(mapper_metronome m, unsigned int bar,
              unsigned int beat, void *user_data)
 {
     if (bar != current_bar) {
+        counter++;
+        if (counter % 10 == 5) {
+            double new_tempo = rand() % 150 + 50;
+            printf("\nSetting tempo to %f BPM", new_tempo);
+            mdev_set_metronome_bpm(device, m, new_tempo, 1);
+        }
+        else if (counter % 10 == 0) {
+            unsigned int new_count = rand() % 9 + 1;
+            printf("\nSetting count to %i", new_count);
+            mdev_set_metronome_count(device, m, new_count, 1);
+        }
         printf("\n%i --> %i", bar, beat);
         fflush(stdout);
         current_bar = bar;
-        counter++;
     }
     else {
         printf(" %i", beat);
         fflush(stdout);
-    }
-    if ((counter % 10 == 9) && beat == 2) {
-     //   mdev_set_metronome_bpm(device, m, 240., 1);
-        mdev_set_metronome_count(device, m, rand() % 9 + 1, 1);
     }
 }
 
@@ -50,7 +56,7 @@ int setup_device()
     mapper_timetag_t tt = {10000000,0};
     mdev_timetag_now(device, &tt);
     mapper_timetag_add_seconds(&tt, 5.);
-    mdev_add_metronome(device, "/foo", tt, 120, 4, handler, 0);
+    mdev_add_metronome(device, "/foo", tt, 120., 4, handler, 0);
 
     return 0;
 
