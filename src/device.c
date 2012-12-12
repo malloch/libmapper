@@ -1260,7 +1260,7 @@ void metronome_handler(mapper_signal sig, mapper_db_signal props,
     else
         return;
 
-    mapper_clock_init_metronome(&sig->device->admin->clock, m);
+    m->needs_init = 1;
 }
 
 mapper_metronome mdev_add_metronome(mapper_device dev,
@@ -1306,9 +1306,8 @@ void mdev_set_metronome_start(mapper_device dev, mapper_metronome m,
         return;
 
     // Copy new start timetag
-    m->start.sec = start.sec;
-    m->start.frac = start.frac;
-    mapper_clock_init_metronome(&dev->admin->clock, m);
+    mapper_timetag_cpy(&m->start, start);
+    m->needs_init = 1;
 
     msig_update_float(m->start_out, (float) mapper_timetag_get_double(start));
 }
@@ -1342,7 +1341,7 @@ void mdev_set_metronome_bpm(mapper_device dev, mapper_metronome m,
         }
     }
     m->bpm = bpm;
-    mapper_clock_init_metronome(&dev->admin->clock, m);
+    m->needs_init = 1;
 
     msig_update_float(m->bpm_out, m->bpm);
     if (revise_start)
@@ -1375,7 +1374,7 @@ void mdev_set_metronome_count(mapper_device dev, mapper_metronome m,
         mapper_timetag_add_seconds(&m->start, elapsed * -1.);
     }
     m->count = count;
-    mapper_clock_init_metronome(&dev->admin->clock, m);
+    m->needs_init = 1;
 
     msig_update_int(m->count_out, (int) m->count);
     if (revise_start)

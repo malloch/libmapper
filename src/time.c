@@ -132,13 +132,13 @@ mapper_metronome mapper_clock_add_metronome(mapper_clock clock,
     mapper_timetag_cpy(&m->start, start);
     m->bpm = bpm;
     m->count = count;
+    m->needs_init = 1;
     m->handler = h;
     m->user_data = user_data;
     m->next = clock->metronomes;
     clock->metronomes = m;
 
     mapper_clock_now(clock, &clock->now);
-    mapper_clock_init_metronome(clock, m);
     return m;
 }
 
@@ -148,6 +148,10 @@ float mapper_clock_check_metronomes(mapper_clock clock)
     mapper_clock_now(clock, &clock->now);
     mapper_metronome m = clock->metronomes;
     while (m) {
+        if (m->needs_init) {
+            mapper_clock_init_metronome(clock, m);
+            m->needs_init = 0;
+        }
         double diff = mapper_timetag_difference(m->next_beat, clock->now);
         if (m->bpm <= 0.) {
             m = m->next;
