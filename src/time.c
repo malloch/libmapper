@@ -188,6 +188,8 @@ void mapper_clock_remove_metronome(mapper_clock clock, mapper_metronome m)
     while (*temp) {
         if (*temp == m) {
             *temp = m->next;
+            if (m->name)
+                free(m->name);
             free(m);
             return;
         }

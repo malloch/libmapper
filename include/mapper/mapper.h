@@ -1304,6 +1304,9 @@ void mdev_set_metronome_bpm(mapper_device dev, mapper_metronome m,
 void mdev_set_metronome_count(mapper_device dev, mapper_metronome m,
                               unsigned int count, int revise_start);
 
+mapper_metronome mdev_get_metronome_by_name(mapper_device md, const char *name,
+                                            int *index);
+
 /*! Remove a metronome from the device. */
 void mdev_remove_metronome(mapper_device dev, mapper_metronome m);
 

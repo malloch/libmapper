@@ -1278,7 +1278,6 @@ mapper_metronome mdev_add_metronome(mapper_device dev,
 
     // add signals for start time, bpm, count
     // TODO: check if device has server, launch if necessary
-    // TODO: declare starttime signal as double once support is added
     char sig_name[256];
     snprintf(sig_name, 256, "%s%s", name, "/start");
     m->start_in = mdev_add_input(dev, sig_name, 2, 'i', "timetag",
@@ -1378,11 +1377,38 @@ void mdev_set_metronome_count(mapper_device dev, mapper_metronome m,
         msig_update(m->start_out, &m->start, 1, MAPPER_TIMETAG_NOW);
 }
 
+mapper_metronome mdev_get_metronome_by_name(mapper_device md, const char *name,
+                                            int *index)
+{
+    int i = 0;
+    int slash = name[0]=='/' ? 1 : 0;
+    mapper_metronome m = md->admin->clock.metronomes;
+    while (m)
+    {
+        if (strcmp(m->name + 1, name + slash)==0)
+        {
+            if (index)
+                *index = i;
+            return m;
+        }
+        i++;
+        m = m->next;
+    }
+    return 0;
+}
+
 void mdev_remove_metronome(mapper_device dev, mapper_metronome m)
 {
     if (!dev || !m)
         return;
-    mapper_clock_remove_metronome(&dev->admin->clock, m);
 
-    // TODO: remove metronome signals
+    // remove metronome signals
+    mdev_remove_input(dev, m->start_in);
+    mdev_remove_output(dev, m->start_out);
+    mdev_remove_input(dev, m->bpm_in);
+    mdev_remove_output(dev, m->bpm_out);
+    mdev_remove_input(dev, m->count_in);
+    mdev_remove_output(dev, m->count_out);
+
+    mapper_clock_remove_metronome(&dev->admin->clock, m);
 }
