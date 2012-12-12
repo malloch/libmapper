@@ -549,6 +549,11 @@ int mapper_admin_poll(mapper_admin admin)
                 lo_message_free(m);
             }
             clock->next_ping = clock->now.sec + 5 + (rand() % 5);
+            /* TODO: we are periodically sending metronome updates here, but this should
+             * be taken care of by a connection property instead. */
+            if (admin->device) {
+                mdev_update_metronomes(admin->device);
+            }
         }
     }
     return count;

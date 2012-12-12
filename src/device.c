@@ -1295,6 +1295,20 @@ mapper_metronome mdev_add_metronome(mapper_device dev,
     return m;
 }
 
+void mdev_update_metronomes(mapper_device dev)
+{
+    mapper_metronome m = dev->admin->clock.metronomes;
+    mapper_clock_now(&dev->admin->clock, &dev->admin->clock.now);
+    mdev_start_queue(dev, dev->admin->clock.now);
+    while (m) {
+        msig_update(m->start_out, &m->start, 1, dev->admin->clock.now);
+        msig_update(m->bpm_out, &m->bpm, 1, dev->admin->clock.now);
+        msig_update(m->count_out, &m->count, 1, dev->admin->clock.now);
+        m = m->next;
+    }
+    mdev_send_queue(dev, dev->admin->clock.now);
+}
+
 void mdev_set_metronome_start(mapper_device dev, mapper_metronome m,
                               mapper_timetag_t start)
 {

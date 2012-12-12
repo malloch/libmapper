@@ -206,6 +206,8 @@ const char *mdev_name(mapper_device md);
 
 void mdev_num_instances_changed(mapper_device md, mapper_signal sig);
 
+void mdev_update_metronomes(mapper_device md);
+
 /***** Router *****/
 
 mapper_router mapper_router_new(mapper_device device, const char *host,
