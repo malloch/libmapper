@@ -1241,16 +1241,13 @@ void metronome_handler(mapper_signal sig, mapper_db_signal props,
 
     // find signal
     if (sig == m->start_in) {
-        float *f = (float *)value;
-        double d = f[0];
-        mapper_timetag_set_from_double(&m->start, d);
+        mapper_timetag_t *tt = (mapper_timetag_t *)value;
+        mapper_timetag_cpy(&m->start, tt[0]);
     }
     else if (sig == m->bpm_in) {
         float *f = (float *)value;
-        if (f[0] >= 0.) {
+        if (f[0] >= 0.)
             m->bpm = f[0];
-            m->spb = 60. / m->bpm;
-        }
     }
     else if (sig == m->count_in) {
         int *i = (int *)value;
@@ -1284,9 +1281,9 @@ mapper_metronome mdev_add_metronome(mapper_device dev,
     // TODO: declare starttime signal as double once support is added
     char sig_name[256];
     snprintf(sig_name, 256, "%s%s", name, "/start");
-    m->start_in = mdev_add_input(dev, sig_name, 1, 'f', "seconds",
+    m->start_in = mdev_add_input(dev, sig_name, 2, 'i', "timetag",
                                  0, 0, metronome_handler, m);
-    m->start_out = mdev_add_output(dev, sig_name, 1, 'f', "seconds", 0, 0);
+    m->start_out = mdev_add_output(dev, sig_name, 2, 'i', "seconds", 0, 0);
     snprintf(sig_name, 256, "%s%s", name, "/bpm");
     m->bpm_in = mdev_add_input(dev, sig_name, 1, 'f', "bpm", 0, 0,
                                metronome_handler, m);
@@ -1309,7 +1306,7 @@ void mdev_set_metronome_start(mapper_device dev, mapper_metronome m,
     mapper_timetag_cpy(&m->start, start);
     m->needs_init = 1;
 
-    msig_update_float(m->start_out, (float) mapper_timetag_get_double(start));
+    msig_update(m->start_out, &start, 1, MAPPER_TIMETAG_NOW);
 }
 
 void mdev_set_metronome_bpm(mapper_device dev, mapper_metronome m,
@@ -1345,7 +1342,7 @@ void mdev_set_metronome_bpm(mapper_device dev, mapper_metronome m,
 
     msig_update_float(m->bpm_out, m->bpm);
     if (revise_start)
-        msig_update_float(m->start_out, (float) mapper_timetag_get_double(m->start));
+        msig_update(m->start_out, &m->start, 1, MAPPER_TIMETAG_NOW);
 }
 
 void mdev_set_metronome_count(mapper_device dev, mapper_metronome m,
@@ -1378,7 +1375,7 @@ void mdev_set_metronome_count(mapper_device dev, mapper_metronome m,
 
     msig_update_int(m->count_out, (int) m->count);
     if (revise_start)
-        msig_update_float(m->start_out, (float) mapper_timetag_get_double(m->start));
+        msig_update(m->start_out, &m->start, 1, MAPPER_TIMETAG_NOW);
 }
 
 void mdev_remove_metronome(mapper_device dev, mapper_metronome m)
