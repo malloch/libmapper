@@ -82,6 +82,18 @@ double mapper_timetag_get_double(mapper_timetag_t timetag)
     return (double)timetag.sec + (double)timetag.frac * multiplier;
 }
 
+void mapper_timetag_set_from_int(mapper_timetag_t *tt, int value)
+{
+    tt->sec = value;
+    tt->frac = 0;
+}
+
+void mapper_timetag_set_from_float(mapper_timetag_t *tt, float value)
+{
+    tt->sec = floor(value);
+    tt->frac = (uint32_t) (((float)value) * (double)(1LL<<32));
+}
+
 void mapper_timetag_set_from_double(mapper_timetag_t *tt, double value)
 {
     tt->sec = floor(value);
@@ -180,6 +192,11 @@ float mapper_clock_check_metronomes(mapper_clock clock)
         m = m->next;
     }
     return wait * 1000;
+}
+
+const char *mapper_metronome_name(mapper_metronome m)
+{
+    return m->name;
 }
 
 void mapper_clock_remove_metronome(mapper_clock clock, mapper_metronome m)

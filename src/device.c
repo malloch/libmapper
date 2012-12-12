@@ -1263,7 +1263,7 @@ void metronome_handler(mapper_signal sig, mapper_db_signal props,
 mapper_metronome mdev_add_metronome(mapper_device dev,
                                     const char *name,
                                     mapper_timetag_t start,
-                                    double BPM,
+                                    double bpm,
                                     unsigned int count,
                                     mapper_metronome_handler h,
                                     void *user_data)
@@ -1272,7 +1272,7 @@ mapper_metronome mdev_add_metronome(mapper_device dev,
         return 0;
 
     mapper_metronome m = mapper_clock_add_metronome(&dev->admin->clock, name, start,
-                                                    BPM, count, h, user_data);
+                                                    bpm, count, h, user_data);
     if (!m)
         return 0;
 

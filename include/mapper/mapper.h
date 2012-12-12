@@ -1325,10 +1325,19 @@ void mapper_timetag_add_seconds(mapper_timetag_t *tt, double addend);
 double mapper_timetag_get_double(mapper_timetag_t tt);
 
 /*! Set value of a mapper_timetag from a double-precision floating point value. */
+void mapper_timetag_set_from_int(mapper_timetag_t *tt, int value);
+
+/*! Set value of a mapper_timetag from a double-precision floating point value. */
+void mapper_timetag_set_from_float(mapper_timetag_t *tt, float value);
+
+/*! Set value of a mapper_timetag from a double-precision floating point value. */
 void mapper_timetag_set_from_double(mapper_timetag_t *tt, double value);
 
 /*! Copy value of a mapper_timetag. */
 void mapper_timetag_cpy(mapper_timetag_t *ttl, mapper_timetag_t ttr);
+
+/*! Get the name of a metronome. */
+const char *mapper_metronome_name(mapper_metronome m);
 
 /* @} */
 
