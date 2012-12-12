@@ -172,7 +172,7 @@ float mapper_clock_check_metronomes(mapper_clock clock)
         if (diff <= 0) {
             // call handler
             double elapsed = mapper_timetag_difference(clock->now, m->start);
-            long int beat_num = floor(elapsed / m->spb);
+            uint64_t beat_num = floor(elapsed / m->spb);
 
             if (m->handler)
                 m->handler(m, beat_num / m->count,
