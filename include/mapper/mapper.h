@@ -510,6 +510,12 @@ void mdev_send_queue(mapper_device md, mapper_timetag_t tt);
 /*! Get access to the device's underlying lo_server. */
 lo_server mdev_get_lo_server(mapper_device md);
 
+/*! Get the device's synchronization clock offset. */
+double mdev_get_clock_offset(mapper_device md);
+
+/*! Get the network synchronization jitter. */
+double mdev_get_sync_jitter(mapper_device md);
+
 /* @} */
 
 /*** Admins ***/

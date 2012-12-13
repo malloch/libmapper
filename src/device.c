@@ -1233,6 +1233,18 @@ lo_server mdev_get_lo_server(mapper_device md)
     return md->server;
 }
 
+double mdev_get_clock_offset(mapper_device dev)
+{
+    double offset = dev->admin->clock.offset;
+    return offset;
+}
+
+double mdev_get_sync_jitter(mapper_device dev)
+{
+    double jitter = dev->admin->clock.remote_jitter;
+    return jitter;
+}
+
 void metronome_handler(mapper_signal sig, mapper_db_signal props,
                        int instance_id, void *value, int count,
                        mapper_timetag_t *timetag)
