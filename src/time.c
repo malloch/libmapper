@@ -108,19 +108,20 @@ void mapper_timetag_cpy(mapper_timetag_t *ttl, mapper_timetag_t ttr)
 
 void mapper_clock_init_metronome(mapper_clock clock, mapper_metronome m)
 {
+    mapper_clock_now(clock, &clock->now);
     if (memcmp(&m->start, &MAPPER_TIMETAG_NOW, sizeof(mapper_timetag_t))==0) {
         mapper_timetag_cpy(&m->start, clock->now);
     }
     if (m->bpm > 0.) {
-        m->spb = 60. / m->bpm;
         double elapsed = mapper_timetag_difference(clock->now, m->start);
         if (elapsed < 0.) {
             mapper_timetag_cpy(&m->next_beat, m->start);
         }
         else {
             mapper_timetag_cpy(&m->next_beat, clock->now);
-            mapper_timetag_add_seconds(&m->next_beat,
-                                       m->spb - fmod(elapsed, m->spb));
+            double spb = 1. / m->bps;
+            double delay = spb - fmod(elapsed, spb);
+            mapper_timetag_add_seconds(&m->next_beat, delay);
         }
     }
     else
@@ -143,6 +144,7 @@ mapper_metronome mapper_clock_add_metronome(mapper_clock clock,
     m->name = strdup(name);
     mapper_timetag_cpy(&m->start, start);
     m->bpm = bpm;
+    m->bps = bpm / 60.;
     m->count = count;
     m->needs_init = 1;
     m->handler = h;
@@ -172,7 +174,7 @@ float mapper_clock_check_metronomes(mapper_clock clock)
         if (diff <= 0) {
             // call handler
             double elapsed = mapper_timetag_difference(clock->now, m->start);
-            uint64_t beat_num = floor(elapsed / m->spb);
+            uint64_t beat_num = floor(elapsed * m->bps);
 
             if (m->handler)
                 m->handler(m, beat_num / m->count,
@@ -181,9 +183,11 @@ float mapper_clock_check_metronomes(mapper_clock clock)
             // handler may have caused changes to metronome settings, so recalulate elapsed time
             elapsed = mapper_timetag_difference(clock->now, m->start);
             mapper_timetag_cpy(&m->next_beat, clock->now);
-            mapper_timetag_add_seconds(&m->next_beat, m->spb - fmod(elapsed, m->spb));
-            if (wait < 0. || m->spb < wait)
-                wait = m->spb;
+            double spb = 1. / m->bps;
+            double delay = spb - fmod(elapsed, spb);
+            mapper_timetag_add_seconds(&m->next_beat, delay);
+            if (wait < 0. || delay < wait)
+                wait = delay;
         }
         else {
             if (diff < wait || wait < 0.)

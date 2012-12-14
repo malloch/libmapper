@@ -1254,22 +1254,29 @@ void metronome_handler(mapper_signal sig, mapper_db_signal props,
     // find signal
     if (sig == m->start_in) {
         mapper_timetag_t *tt = (mapper_timetag_t *)value;
-        mapper_timetag_cpy(&m->start, tt[0]);
+        if (memcmp(tt, &m->start, sizeof(mapper_timetag_t))!=0) {
+            mapper_timetag_cpy(&m->start, tt[0]);
+            m->needs_init = 1;
+        }
     }
     else if (sig == m->bpm_in) {
         float *f = (float *)value;
-        if (f[0] >= 0.)
-            m->bpm = f[0];
+        double d = (double)f[0];
+        if (d != m->bpm) {
+            m->bpm = d;
+            m->bps = d / 60.;
+            m->needs_init = 1;
+        }
     }
     else if (sig == m->count_in) {
         int *i = (int *)value;
-        if (i[0] > 0)
+        if (i[0] != m->count && i[0] > 0) {
             m->count = i[0];
+            m->needs_init = 1;
+        }
     }
     else
         return;
-
-    m->needs_init = 1;
 }
 
 mapper_metronome mdev_add_metronome(mapper_device dev,
@@ -1314,7 +1321,8 @@ void mdev_update_metronomes(mapper_device dev)
     mdev_start_queue(dev, dev->admin->clock.now);
     while (m) {
         msig_update(m->start_out, &m->start, 1, dev->admin->clock.now);
-        msig_update(m->bpm_out, &m->bpm, 1, dev->admin->clock.now);
+        float bpmf = (float)m->bpm;
+        msig_update(m->bpm_out, &bpmf, 1, dev->admin->clock.now);
         msig_update(m->count_out, &m->count, 1, dev->admin->clock.now);
         m = m->next;
     }
@@ -1335,9 +1343,9 @@ void mdev_set_metronome_start(mapper_device dev, mapper_metronome m,
 }
 
 void mdev_set_metronome_bpm(mapper_device dev, mapper_metronome m,
-                            float bpm, int revise_start)
+                            double bpm, int revise_start)
 {
-    if (!dev || !m)
+    if (!dev || !m || bpm == m->bpm)
         return;
 
     mapper_clock_now(&dev->admin->clock, &dev->admin->clock.now);
@@ -1353,19 +1361,21 @@ void mdev_set_metronome_bpm(mapper_device dev, mapper_metronome m,
             double elapsed = mapper_timetag_difference(dev->admin->clock.now, m->start);
 
             // convert to elapsed beats at old bpm
-            elapsed /= m->spb;
+            elapsed *= m->bps;
 
             // convert to elapsed time at new bpm
-            elapsed *= 60. / bpm;
+            double spb = 60. / bpm;
+            elapsed *= spb;
 
             mapper_timetag_cpy(&m->start, dev->admin->clock.now);
             mapper_timetag_add_seconds(&m->start, elapsed * -1.);
         }
     }
     m->bpm = bpm;
+    m->bps = bpm / 60.;
     m->needs_init = 1;
 
-    msig_update_float(m->bpm_out, m->bpm);
+    msig_update_float(m->bpm_out, (float)bpm);
     if (revise_start)
         msig_update(m->start_out, &m->start, 1, MAPPER_TIMETAG_NOW);
 }
@@ -1373,25 +1383,30 @@ void mdev_set_metronome_bpm(mapper_device dev, mapper_metronome m,
 void mdev_set_metronome_count(mapper_device dev, mapper_metronome m,
                               unsigned int count, int revise_start)
 {
-    if (!dev || !m || !count)
+    if (!dev || !m || !count || count == m->count)
         return;
 
     mapper_clock_now(&dev->admin->clock, &dev->admin->clock.now);
-    if (revise_start && m->bpm > 0.) {
+    if (revise_start && m->bps > 0.) {
         // calculate elapsed time
         double elapsed = mapper_timetag_difference(dev->admin->clock.now, m->start);
 
         // convert to elapsed beats at current bpm
-        elapsed /= m->spb;
+        elapsed *= m->bps;
 
-        // convert to elapsed bars at old count
-        double bars = floor(elapsed / m->count);
+        // calculate to elapsed bars at old count
+        double bars = floor(elapsed / (double)m->count);
 
         // elapsed beat-time in bar
-        elapsed = fmod(elapsed, m->count) * m->spb;
+        double spb = 1. / m->bps;
+        elapsed = fmod(elapsed, (double)m->count);
+
+        // convert to number of beats
+        elapsed += (bars * count);
 
         // convert to elapsed time at current bpm
-        elapsed += bars * count * m->spb;
+        elapsed *= spb;
+
         mapper_timetag_cpy(&m->start, dev->admin->clock.now);
         mapper_timetag_add_seconds(&m->start, elapsed * -1.);
     }

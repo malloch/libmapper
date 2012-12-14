@@ -82,8 +82,8 @@ typedef struct _mapper_signal_instance
 typedef struct _mapper_metronome {
     char *name;                         //!< Name of this metronome.
     mapper_timetag_t start;             //!< Metronome starting time (absolute).
-    float bpm;                          //!< Beats per minute.
-    float spb;                          //!< Seconds per beat.
+    double bpm;                         //!< Beats per minute.
+    double bps;                         //!< Beats per second.
     int count;                          //!< Beats per bar.
     int needs_init;                     /*!< 1 if metronome needs to calculate
                                          *   next beat, 0 otherwise. */

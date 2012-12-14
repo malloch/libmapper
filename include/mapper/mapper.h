@@ -1299,7 +1299,7 @@ void mdev_set_metronome_start(mapper_device dev, mapper_metronome m,
  *  \param revise_start If 1 adjust the metronome start time to maintain
  *                      The same beat and bar counts. */
 void mdev_set_metronome_bpm(mapper_device dev, mapper_metronome m,
-                            float bpm, int revise_start);
+                            double bpm, int revise_start);
 
 /*! Set the modulo count for a mapper_metronome. 
  *  \param dev          The mapper device.
