@@ -93,12 +93,14 @@ void mapper_timetag_set_from_int(mapper_timetag_t *tt, int value)
 void mapper_timetag_set_from_float(mapper_timetag_t *tt, float value)
 {
     tt->sec = floor(value);
+    value -= tt->sec;
     tt->frac = (uint32_t) (((float)value) * (double)(1LL<<32));
 }
 
 void mapper_timetag_set_from_double(mapper_timetag_t *tt, double value)
 {
     tt->sec = floor(value);
+    value -= tt->sec;
     tt->frac = (uint32_t) (((double)value) * (double)(1LL<<32));
 }
 
