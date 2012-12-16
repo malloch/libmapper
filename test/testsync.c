@@ -33,10 +33,10 @@ int setup_device()
     device = mdev_new("testsync", 0, 0);
     if (!device)
         goto error;
-    return 0;
 
     mdev_add_input(device, "/insig", 1, 'f', 0,
                    0, 0, insig_handler, 0);
+    return 0;
 
   error:
     return 1;

@@ -2355,7 +2355,7 @@ static int handler_sync(const char *path,
         double change = mapper_timetag_difference(clock->ping, then);
         double latency = mapper_timetag_difference(now, then) + change;
         double jitter = fabs(latency - clock->latency);
-        if (clock->latency == 0.0) {
+        if (clock->latency < 0.0) {
             clock->latency = latency;
             clock->confidence = 0.1;
             clock->jitter = 0.001;
@@ -2363,8 +2363,10 @@ static int handler_sync(const char *path,
         else {
             clock->jitter *= 0.9;
             clock->jitter += jitter * 0.1;
-            clock->latency *= 0.9;
-            clock->latency += latency * 0.1;
+            if (fabs(clock->latency - latency) < clock->jitter) {
+                clock->latency *= 0.9;
+                clock->latency += latency * 0.1;
+            }
         }
         return 0;
     }
@@ -2384,7 +2386,7 @@ static int handler_sync(const char *path,
         double compensated = diff + latency;
         double jitter = fabs(clock->remote_diff - diff);
         double variation = fabs(diff - clock->remote_diff);
-        if (variation > clock->remote_jitter) {
+        if (clock->remote_diff != 0.0 && variation > clock->remote_jitter) {
             compensated = 0.0;
         }
         else {

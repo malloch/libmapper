@@ -17,9 +17,11 @@ void mapper_clock_init(mapper_clock clock)
 {
     clock->rate = 1.0;
     clock->offset = 0.0;
-    clock->latency = 0.0;
+    clock->latency = -1.0;
     clock->jitter = 0.0;
     clock->confidence = 0.001;
+    clock->remote_diff = 0.0;
+    clock->remote_jitter = 0.0;
 
     mapper_clock_now(clock, &clock->now);
     clock->next_ping = clock->now.sec;
