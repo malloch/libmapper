@@ -1092,6 +1092,21 @@ typedef struct _admin {} admin;
     }
 }
 
+%extend metronome {
+    void set_start(unsigned long long int start) {
+        mapper_timetag_t tt;
+        tt.frac = start;
+        tt.sec = start >> 32;
+        mapper_metronome_set_start((mapper_metronome)$self, tt);
+    }
+    void set_bpm(double bpm, int revise_start=0) {
+        mapper_metronome_set_bpm((mapper_metronome)$self, bpm, revise_start);
+    }
+    void set_count(unsigned int count, int revise_start=0) {
+        mapper_metronome_set_count((mapper_metronome)$self, count, revise_start);
+    }
+}
+
 %extend monitor {
     monitor(admin *DISOWN=0, int enable_autorequest=1) {
         return (monitor *)mapper_monitor_new((mapper_admin) DISOWN,
