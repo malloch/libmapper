@@ -315,6 +315,7 @@
 
 typedef struct _device {} device;
 typedef struct _signal {} signal__;
+typedef struct _metronome {} metronome;
 typedef struct _monitor {} monitor;
 typedef struct _db {} db;
 typedef struct _admin {} admin;
@@ -490,6 +491,31 @@ static void msig_handler_py(struct _mapper_signal *msig,
     _save = PyEval_SaveThread();
 }
 
+/* Wrapper for callback back to python when a mapper_signal handler is
+ * called. */
+static void mmetro_handler_py(struct _mapper_metronome *mmetro,
+                              unsigned int bar,
+                              unsigned int beat,
+                              void *user_data)
+{
+    PyEval_RestoreThread(_save);
+    PyObject *arglist=0;
+    PyObject *result=0;
+
+    PyObject *py_mmetro = SWIG_NewPointerObj(SWIG_as_voidptr(mmetro),
+                                             SWIGTYPE_p__metronome, 0);
+
+    arglist = Py_BuildValue("(Oii)", py_mmetro, bar, beat);
+    if (!arglist) {
+        printf("[mapper] Could not build arglist (mmetro_handler_py).\n");
+        return;
+    }
+    result = PyEval_CallObject((PyObject*)user_data, arglist);
+    Py_DECREF(arglist);
+    Py_XDECREF(result);
+    _save = PyEval_SaveThread();
+}
+
 typedef struct {
     mapper_signal_value_t v;
     char t;
@@ -634,6 +660,7 @@ typedef enum {
 
 typedef struct _device {} device;
 typedef struct _signal {} signal;
+typedef struct _metronome {} metronome;
 typedef struct _monitor {} monitor;
 typedef struct _db {} db;
 typedef struct _admin {} admin;
@@ -772,6 +799,27 @@ typedef struct _admin {} admin;
             Py_XDECREF((PyObject*)msig->props.user_data);
         }
         return mdev_remove_output((mapper_device)$self, msig);
+    }
+    metronome* add_metronome(const char *name, unsigned long long int start, double bpm,
+                             int count, PyObject *PyFunc=0) {
+        void *h = 0;
+        if (PyFunc) {
+            h = mmetro_handler_py;
+            Py_XINCREF(PyFunc);
+        }
+        mapper_timetag_t tt;
+        tt.frac = start;
+        tt.sec = start >> 32;
+        mapper_metronome metro = mdev_add_metronome((mapper_device)$self, name,
+                                                    tt, bpm, count, h, PyFunc);
+        return (metronome *)metro;
+    }
+    void remove_metronome(metronome *metro) {
+        mapper_metronome mmetro = (mapper_metronome)metro;
+        if (mmetro->user_data) {
+            Py_XDECREF((PyObject*)mmetro->user_data);
+        }
+        return mdev_remove_metronome((mapper_device)$self, mmetro);
     }
     maybeInt get_port() {
         mapper_device md = (mapper_device)$self;
