@@ -30,12 +30,12 @@ void handler(mapper_metronome m, unsigned int bar,
         if (counter % 10 == 5) {
             double new_tempo = rand() % 150 + 50;
             printf("\nSetting tempo to %f BPM", new_tempo);
-            mdev_set_metronome_bpm(device, m, new_tempo, 1);
+            mapper_metronome_set_bpm(m, new_tempo, 1);
         }
         else if (counter % 10 == 0) {
             unsigned int new_count = rand() % 9 + 1;
             printf("\nSetting count to %i", new_count);
-            mdev_set_metronome_count(device, m, new_count, 1);
+            mapper_metronome_set_count(m, new_count, 1);
         }
         printf("\n%i --> %i", bar, beat);
         fflush(stdout);

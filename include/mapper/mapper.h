@@ -1286,29 +1286,26 @@ mapper_metronome mdev_add_metronome(mapper_device dev,
                                     void *user_data);
 
 /*! Set the modulo count for a mapper_metronome.
- *  \param dev          The mapper device.
  *  \param m            The metronome to adjust.
  *  \param start        New start time for the metronome. */
-void mdev_set_metronome_start(mapper_device dev, mapper_metronome m,
-                              mapper_timetag_t start);
+void mapper_metronome_set_start(mapper_metronome m,
+                                mapper_timetag_t start);
 
 /*! Set the modulo count for a mapper_metronome.
- *  \param dev          The mapper device.
  *  \param m            The metronome to adjust.
  *  \param bpm          New tempo for the metronome in beats-per-minute.
  *  \param revise_start If 1 adjust the metronome start time to maintain
  *                      The same beat and bar counts. */
-void mdev_set_metronome_bpm(mapper_device dev, mapper_metronome m,
-                            double bpm, int revise_start);
+void mapper_metronome_set_bpm(mapper_metronome m, double bpm,
+                              int revise_start);
 
-/*! Set the modulo count for a mapper_metronome. 
- *  \param dev          The mapper device.
+/*! Set the modulo count for a mapper_metronome.
  *  \param m            The metronome to adjust.
  *  \param count        New modulus count for the metronome.
  *  \param revise_start If 1 adjust the metronome start time to maintain
  *                      The same beat and bar counts. */
-void mdev_set_metronome_count(mapper_device dev, mapper_metronome m,
-                              unsigned int count, int revise_start);
+void mapper_metronome_set_count(mapper_metronome m, unsigned int count,
+                                int revise_start);
 
 mapper_metronome mdev_get_metronome_by_name(mapper_device md, const char *name,
                                             int *index);

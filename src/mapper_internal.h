@@ -80,6 +80,7 @@ typedef struct _mapper_signal_instance
 /**** Metronomes ****/
 
 typedef struct _mapper_metronome {
+    mapper_clock clock;                 //!< Parent clock of this metronome.
     char *name;                         //!< Name of this metronome.
     mapper_timetag_t start;             //!< Metronome starting time (absolute).
     double bpm;                         //!< Beats per minute.

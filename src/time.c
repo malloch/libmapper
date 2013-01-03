@@ -153,6 +153,7 @@ mapper_metronome mapper_clock_add_metronome(mapper_clock clock,
     m->needs_init = 1;
     m->handler = h;
     m->user_data = user_data;
+    m->clock = clock;
     m->next = clock->metronomes;
     clock->metronomes = m;
 
@@ -205,6 +206,95 @@ float mapper_clock_check_metronomes(mapper_clock clock)
 const char *mapper_metronome_name(mapper_metronome m)
 {
     return m->name;
+}
+
+void mapper_metronome_set_start(mapper_metronome m,
+                                mapper_timetag_t start)
+{
+    if (!m)
+        return;
+
+    // Copy new start timetag
+    mapper_timetag_cpy(&m->start, start);
+    m->needs_init = 1;
+
+    msig_update(m->start_out, &start, 1, MAPPER_TIMETAG_NOW);
+}
+
+void mapper_metronome_set_bpm(mapper_metronome m, double bpm,
+                              int revise_start)
+{
+    if (!m || bpm == m->bpm)
+        return;
+
+    mapper_clock_now(m->clock, &m->clock->now);
+    if (revise_start) {
+        if (m->bpm <= 0.) {
+            if (bpm > 0.) {
+                m->start.sec = m->clock->now.sec;
+                m->start.frac = m->clock->now.frac;
+            }
+        }
+        else {
+            // calculate elapsed time
+            double elapsed = mapper_timetag_difference(m->clock->now, m->start);
+
+            // convert to elapsed beats at old bpm
+            elapsed *= m->bps;
+
+            // convert to elapsed time at new bpm
+            double spb = 60. / bpm;
+            elapsed *= spb;
+
+            mapper_timetag_cpy(&m->start, m->clock->now);
+            mapper_timetag_add_seconds(&m->start, elapsed * -1.);
+        }
+    }
+    m->bpm = bpm;
+    m->bps = bpm / 60.;
+    m->needs_init = 1;
+
+    msig_update_float(m->bpm_out, (float)bpm);
+    if (revise_start)
+        msig_update(m->start_out, &m->start, 1, MAPPER_TIMETAG_NOW);
+}
+
+void mapper_metronome_set_count(mapper_metronome m, unsigned int count,
+                                int revise_start)
+{
+    if (!m || !count || count == m->count)
+        return;
+
+    mapper_clock_now(m->clock, &m->clock->now);
+    if (revise_start && m->bps > 0.) {
+        // calculate elapsed time
+        double elapsed = mapper_timetag_difference(m->clock->now, m->start);
+
+        // convert to elapsed beats at current bpm
+        elapsed *= m->bps;
+
+        // calculate to elapsed bars at old count
+        double bars = floor(elapsed / (double)m->count);
+
+        // elapsed beat-time in bar
+        double spb = 1. / m->bps;
+        elapsed = fmod(elapsed, (double)m->count);
+
+        // convert to number of beats
+        elapsed += (bars * count);
+
+        // convert to elapsed time at current bpm
+        elapsed *= spb;
+
+        mapper_timetag_cpy(&m->start, m->clock->now);
+        mapper_timetag_add_seconds(&m->start, elapsed * -1.);
+    }
+    m->count = count;
+    m->needs_init = 1;
+
+    msig_update_int(m->count_out, (int) m->count);
+    if (revise_start)
+        msig_update(m->start_out, &m->start, 1, MAPPER_TIMETAG_NOW);
 }
 
 void mapper_clock_remove_metronome(mapper_clock clock, mapper_metronome m)
