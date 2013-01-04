@@ -113,7 +113,7 @@ void mapper_timetag_cpy(mapper_timetag_t *ttl, mapper_timetag_t ttr)
 void mapper_clock_init_metronome(mapper_clock clock, mapper_metronome m)
 {
     mapper_clock_now(clock, &clock->now);
-    if (memcmp(&m->start, &MAPPER_TIMETAG_NOW, sizeof(mapper_timetag_t))==0) {
+    if (memcmp(&m->start, &MAPPER_NOW, sizeof(mapper_timetag_t))==0) {
         mapper_timetag_cpy(&m->start, clock->now);
     }
     if (m->bpm > 0.) {
@@ -218,7 +218,7 @@ void mapper_metronome_set_start(mapper_metronome m,
     mapper_timetag_cpy(&m->start, start);
     m->needs_init = 1;
 
-    msig_update(m->start_out, &start, 1, MAPPER_TIMETAG_NOW);
+    msig_update(m->start_out, &start, 1, MAPPER_NOW);
 }
 
 void mapper_metronome_set_bpm(mapper_metronome m, double bpm,
@@ -256,7 +256,7 @@ void mapper_metronome_set_bpm(mapper_metronome m, double bpm,
 
     msig_update_float(m->bpm_out, (float)bpm);
     if (revise_start)
-        msig_update(m->start_out, &m->start, 1, MAPPER_TIMETAG_NOW);
+        msig_update(m->start_out, &m->start, 1, MAPPER_NOW);
 }
 
 void mapper_metronome_set_count(mapper_metronome m, unsigned int count,
@@ -294,7 +294,7 @@ void mapper_metronome_set_count(mapper_metronome m, unsigned int count,
 
     msig_update_int(m->count_out, (int) m->count);
     if (revise_start)
-        msig_update(m->start_out, &m->start, 1, MAPPER_TIMETAG_NOW);
+        msig_update(m->start_out, &m->start, 1, MAPPER_NOW);
 }
 
 void mapper_clock_remove_metronome(mapper_clock clock, mapper_metronome m)

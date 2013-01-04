@@ -18,7 +18,7 @@ mapper_receiver mapper_receiver_new(mapper_device device, const char *host,
     sprintf(str, "%d", port);
     r->props.src_addr = lo_address_new(host, str);
     r->props.src_name = strdup(name);
-    r->props.src_name_hash = crc32(0L, (const Bytef *)name, strlen(name));
+    r->props.name_hash = crc32(0L, (const Bytef *)name, strlen(name));
     if (default_scope) {
         r->props.num_scopes = 1;
         r->props.scope_names = (char **) malloc(sizeof(char *));
@@ -379,7 +379,7 @@ int mapper_receiver_remove_connection(mapper_receiver r,
                         mapper_signal_instance temp = si;
                         si = si->next;
                         msig_release_instance_internal(rs->signal, temp, 0, 0,
-                                                       MAPPER_TIMETAG_NOW);
+                                                       MAPPER_NOW);
                         continue;
                     }
                     si = si->next;
@@ -507,7 +507,7 @@ void mapper_receiver_remove_scope(mapper_receiver receiver, const char *scope)
                 mapper_signal_instance temp = si;
                 si = si->next;
                 msig_release_instance_internal(rs->signal, temp, 0, 0,
-                                               MAPPER_TIMETAG_NOW);
+                                               MAPPER_NOW);
                 continue;
             }
             si = si->next;
@@ -568,7 +568,7 @@ mapper_receiver mapper_receiver_find_by_src_name_hash(mapper_receiver receiver,
                                                       uint32_t hash)
 {
     while (receiver) {
-        if (receiver->props.src_name_hash == hash)
+        if (receiver->props.name_hash == hash)
             return receiver;
         receiver = receiver->next;
     }
