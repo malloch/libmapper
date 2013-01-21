@@ -147,6 +147,7 @@ typedef struct _mapper_db_connection {
     char *src_name;             //!< Source signal name (OSC path).
     char *dest_name;            //!< Destination signal name (OSC path).
     char *query_name;           //!< Used for sending queries/responses.
+    int protocol;               //!< Data transport protocol.
 
     char src_type;              //!< Source signal type.
     char dest_type;             //!< Destination signal type.

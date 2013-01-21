@@ -496,6 +496,7 @@ mapper_connection mapper_router_add_connection(mapper_router r,
     c->props.range.dest_min = 0;
     c->props.range.dest_max = 0;
 
+    c->props.protocol = LO_UDP;
     c->props.extra = table_new();
 
     int len = strlen(dest_name) + 5;

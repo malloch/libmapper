@@ -33,6 +33,7 @@ const char* mapper_msg_param_strings[] =
     "@numLinksOut",     /* AT_NUM_LINKS_OUT */
     "@numOutputs",      /* AT_NUM_OUTPUTS */
     "@port",            /* AT_PORT */
+    "@protocol",        /* AT_PROTOCOL */
     "@rate",            /* AT_RATE */
     "@rev",             /* AT_REV */
     "@scope",           /* AT_SCOPE */
@@ -606,6 +607,12 @@ void mapper_link_prepare_osc_message(lo_message m,
 void mapper_connection_prepare_osc_message(lo_message m,
                                            mapper_connection con)
 {
+    lo_message_add_string(m, mapper_msg_param_strings[AT_PROTOCOL])
+    if (c->props.protocol == LO_UDP)
+        lo_message_add_string(m, "osc.udp");
+    else if (c->props.protocol == LO_TCP)
+        lo_message_add_string(m, "osc.tcp");
+
     if (con->props.mode) {
         lo_message_add_string(m, mapper_msg_param_strings[AT_MODE]);
         lo_message_add_string(m, mapper_mode_type_strings[con->props.mode]);

@@ -1007,6 +1007,11 @@ int mapper_connection_set_from_message(mapper_connection c,
         updated++;
     }
 
+    /* Protocol. */
+    int protocol;
+    if (!mapper_msg_get_param_if_int(msg, AT_PROTOCOL, &protocol))
+        c->props.protocol = protocol;
+
     /* Extra properties. */
     updated += mapper_msg_add_or_update_extra_params(c->props.extra, msg);
 
