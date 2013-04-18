@@ -10,9 +10,10 @@
 
 /**** Signals ****/
 
+struct _mapper_signal_id_map_t;
+
 /*! A signal is defined as a vector of values, along with some
  *  metadata. */
-
 struct _mapper_signal
 {
     /*! Properties of this signal. */
@@ -21,8 +22,9 @@ struct _mapper_signal
     /*! The device associated with this signal. */
     struct _mapper_device *device;
 
-    /*! The first active instance of this signal. */
-    struct _mapper_signal_instance *active_instances;
+    /*! ID maps and active instances. */
+    struct _mapper_signal_id_map *id_maps;
+    int id_map_length;
 
     /*! The first reserve instance of this signal. */
     struct _mapper_signal_instance *reserve_instances;
@@ -32,7 +34,7 @@ struct _mapper_signal
 
     /*! An optional function to be called when the signal value
      *  changes. */
-    mapper_signal_handler *handler;
+    mapper_signal_update_handler *handler;
 
     /*! An optional function to be called when the signal instance management
      *  events occur. */
@@ -46,20 +48,13 @@ struct _mapper_signal
 
 /*! A signal instance is defined as a vector of values, along with some
  *  metadata. */
-
 typedef struct _mapper_signal_instance
 {
     /*! Unique instance ID */
-    int id;
-
-    /*! Pointer to the id_map to use (managed by device). */
-    mapper_instance_id_map id_map;
+    int index;
 
     /*! User data of this instance. */
     void *user_data;
-
-    /*! Flag to show if this instance is active */
-    int is_active;
 
     /*! The instance's creation timestamp. */
     mapper_timetag_t creation_time;
@@ -76,6 +71,16 @@ typedef struct _mapper_signal_instance
     /*! Pointer to the next instance. */
     struct _mapper_signal_instance *next;
 } *mapper_signal_instance;
+
+/*! Bit flags for indicating signal instance status. */
+#define IN_RELEASED_LOCALLY  0x01
+#define IN_RELEASED_REMOTELY 0x02
+
+typedef struct _mapper_signal_id_map {
+    struct _mapper_id_map *map;                 /*! Pointer to id_map in use */
+    struct _mapper_signal_instance *instance;   /*! Pointer to signal instance. */
+    int status;
+} mapper_signal_id_map_t;
 
 /**** Metronomes ****/
 
@@ -109,6 +114,8 @@ void mapper_admin_add_device(mapper_admin admin, mapper_device dev,
                              const char *identifier, int port);
 
 void mapper_admin_add_monitor(mapper_admin admin, mapper_monitor mon);
+
+void mapper_admin_remove_monitor(mapper_admin admin, mapper_monitor mon);
 
 int mapper_admin_poll(mapper_admin admin);
 
@@ -161,7 +168,7 @@ void mdev_num_instances_changed(mapper_device md,
 
 void mdev_route_signal(mapper_device md,
                        mapper_signal sig,
-                       mapper_signal_instance si,
+                       int instance_index,
                        void *value,
                        int count,
                        mapper_timetag_t tt);
@@ -169,10 +176,10 @@ void mdev_route_signal(mapper_device md,
 int mdev_route_query(mapper_device md, mapper_signal sig,
                      mapper_timetag_t tt);
 
-void mdev_route_release_request(mapper_device md,
-                                mapper_signal sig,
-                                mapper_signal_instance si,
-                                mapper_timetag_t tt);
+void mdev_route_released(mapper_device md,
+                         mapper_signal sig,
+                         int instance_index,
+                         mapper_timetag_t tt);
 
 void mdev_add_router(mapper_device md, mapper_router rt);
 
@@ -183,7 +190,7 @@ void mdev_add_receiver(mapper_device md, mapper_receiver r);
 void mdev_remove_receiver(mapper_device md, mapper_receiver r);
 
 void mdev_receive_update(mapper_device md, mapper_signal sig,
-                         mapper_signal_instance si, mapper_timetag_t tt);
+                         int instance_index, mapper_timetag_t tt);
 
 void mdev_release_scope(mapper_device md, const char *scope);
 
@@ -192,16 +199,16 @@ void mdev_start_server(mapper_device mdev);
 void mdev_on_id_and_ordinal(mapper_device md,
                             mapper_admin_allocated_t *resource);
 
-mapper_instance_id_map mdev_add_instance_id_map(mapper_device device, int local_id,
-                                                int group_id, int remote_id);
+mapper_id_map mdev_add_instance_id_map(mapper_device device, int local_id,
+                                       int group_id, int remote_id);
 
-void mdev_remove_instance_id_map(mapper_device device, mapper_instance_id_map map);
+void mdev_remove_instance_id_map(mapper_device device, mapper_id_map map);
 
-mapper_instance_id_map mdev_find_instance_id_map_by_local(mapper_device device,
-                                                          int local_id);
+mapper_id_map mdev_find_instance_id_map_by_local(mapper_device device,
+                                                 int local_id);
 
-mapper_instance_id_map mdev_find_instance_id_map_by_remote(mapper_device device,
-                                                           int group_id, int remote_id);
+mapper_id_map mdev_find_instance_id_map_by_remote(mapper_device device,
+                                                  int group_id, int remote_id);
 
 const char *mdev_name(mapper_device md);
 
@@ -227,22 +234,16 @@ void mapper_router_num_instances_changed(mapper_router r,
  *  send it on to the destination. */
 void mapper_router_process_signal(mapper_router r,
                                   mapper_signal sig,
-                                  mapper_signal_instance si,
+                                  int instance_index,
                                   void *value,
                                   int count,
                                   mapper_timetag_t timetag,
                                   int flags);
 
-void mapper_router_send_new_instance(mapper_router r,
-                                     mapper_connection c,
-                                     int index,
-                                     mapper_instance_id_map id_map,
-                                     mapper_timetag_t tt);
-
 void mapper_router_send_update(mapper_router r,
                                mapper_connection c,
-                               int index,
-                               mapper_instance_id_map id_map,
+                               int history_index,
+                               mapper_id_map id_map,
                                mapper_timetag_t tt,
                                lo_blob blob);
 
@@ -299,13 +300,13 @@ void mapper_receiver_set_from_message(mapper_receiver receiver,
 
 void mapper_receiver_send_update(mapper_receiver r,
                                  mapper_signal sig,
-                                 mapper_signal_instance si,
+                                 int instance_index,
                                  mapper_timetag_t tt);
 
-void mapper_receiver_send_release_request(mapper_receiver r,
-                                          mapper_signal sig,
-                                          mapper_signal_instance si,
-                                          mapper_timetag_t tt);
+void mapper_receiver_send_released(mapper_receiver r,
+                                   mapper_signal sig,
+                                   int instance_index,
+                                   mapper_timetag_t tt);
 
 mapper_connection mapper_receiver_add_connection(mapper_receiver receiver,
                                                  mapper_signal sig,
@@ -360,7 +361,8 @@ void mapper_receiver_remove_scope(mapper_receiver receiver, const char *scope);
 mapper_signal msig_new(const char *name, int length, char type,
                        int is_output, const char *unit,
                        void *minimum, void *maximum,
-                       mapper_signal_handler *handler, void *user_data);
+                       mapper_signal_update_handler *handler,
+                       void *user_data);
 
 /*! Free memory used by a mapper_signal. Call this only for signals
  *  that are not registered with a device. Registered signals will be
@@ -370,55 +372,62 @@ void msig_free(mapper_signal sig);
 
 /**** Instances ****/
 
-/*! Find an active instance with the given instance ID.
- *  \param sig          The signal owning the desired instance.
- *  \param instance_id  The requested signal instance ID.
- *  \return             The retrieved signal instance, or NULL if no active
- *                      instances match the specified instance ID. */
-mapper_signal_instance msig_find_instance_with_id(mapper_signal sig,
-                                                  int instance_id);
+/*! Store an instance id_map record.
+ *  \param sig   The signal owning the instance.
+ *  \param si    A pointer to the signal instance structure.
+ *  \param map   The id map matched to this instance.
+ *  \return      The index at which the record was stored. */
+int msig_add_id_map(mapper_signal sig, mapper_signal_instance si,
+                    mapper_id_map map);
 
 /*! Find an active instance with the given instance ID.
- *  \param sig  The signal owning the desired instance.
- *  \param map  The requested signal instance ID.
- *  \return     The retrieved signal instance, or NULL if no active
- *              instances match the specified instance ID map. */
-mapper_signal_instance msig_find_instance_with_id_map(mapper_signal sig,
-                                                      mapper_instance_id_map map);
+ *  \param sig   The signal owning the desired instance.
+ *  \param id    The requested signal instance ID.
+ *  \param flags Bitflags indicating if search should include released instances.
+ *  \return      The index of the retrieved signal instance, or -1 if no active
+ *               instances match the specified instance ID. */
+int msig_find_instance_with_local_id(mapper_signal sig, int id, int flags);
+
+/*! Find an active instance with the given instance ID.
+ *  \param sig   The signal owning the desired instance.
+ *  \param group The remote group.
+ *  \param id    The remote id.
+ *  \param flags Bitflags indicating if search should include released instances.
+ *  \return      The index of the retrieved signal instance, or -1 if no active
+ *               instances match the specified instance ID map. */
+int msig_find_instance_with_remote_ids(mapper_signal sig, int group,
+                                       int id, int flags);
 
 /*! Fetch a reserved (preallocated) signal instance using an instance id,
  *  activating it if necessary.
- *  \param  sig             The signal owning the desired instance.
- *  \param  instance_id     The requested signal instance ID.
- *  \param  is_new_instance Indicates whether instance has just been created,
- *                          relevant for choosing instance stealing schemes.
- *  \return The retrieved signal instance, or NULL if no free
- *          instances were available and allocation of a new instance
- *          was unsuccessful according to the selected allocation
- *          strategy. */
-mapper_signal_instance msig_get_instance_with_id(mapper_signal sig,
-                                                 int instance_id,
-                                                 int is_new_instance);
+ *  \param sig   The signal owning the desired instance.
+ *  \param id    The requested signal instance ID.
+ *  \param flags Bitflags indicating if search should include released instances.
+ *  \param tt    Timetag associated with this action.
+ *  \return      The index of the retrieved signal instance, or -1 if no free
+ *               instances were available and allocation of a new instance
+ *               was unsuccessful according to the selected allocation
+ *               strategy. */
+int msig_get_instance_with_local_id(mapper_signal sig, int id,
+                                    int flags, mapper_timetag_t *tt);
 
 /*! Fetch a reserved (preallocated) signal instance using instance id map,
  *  activating it if necessary.
- *  \param  sig             The signal owning the desired instance.
- *  \param  map             The ID map to match.
- *  \param  is_new_instance Indicates whether instance has just been created,
- *                          relevant for choosing instance stealing schemes.
- *  \return The retrieved signal instance, or NULL if no free
- *          instances were available and allocation of a new instance
- *          was unsuccessful according to the selected allocation
- *          strategy. */
-mapper_signal_instance msig_get_instance_with_id_map(mapper_signal sig,
-                                                     mapper_instance_id_map map,
-                                                     int is_new_instance,
-                                                     int local);
+ *  \param sig   The signal owning the desired instance.
+ *  \param group The remote group.
+ *  \param id    The remote id.
+ *  \param flags Bitflags indicating if search should include released instances.
+ *  \param tt    Timetag associated with this action.
+ *  \return      The index of the retrieved signal instance, or NULL if no free
+ *               instances were available and allocation of a new instance
+ *               was unsuccessful according to the selected allocation
+ *               strategy. */
+int msig_get_instance_with_remote_ids(mapper_signal sig, int group, int id,
+                                      int flags, mapper_timetag_t *tt);
 
 /*! Release a specific signal instance. */
 void msig_release_instance_internal(mapper_signal sig,
-                                    mapper_signal_instance si,
-                                    int stolen, int local,
+                                    int instance_index,
                                     mapper_timetag_t timetag);
 
 /**** connections ****/
@@ -433,7 +442,7 @@ int mapper_connection_perform(mapper_connection connection,
                               mapper_signal_history_t *from_value,
                               mapper_signal_history_t *to_value);
 
-int mapper_clipping_perform(mapper_connection connection,
+int mapper_boundary_perform(mapper_connection connection,
                             mapper_signal_history_t *from_value);
 
 /*! Set a connection's properties based on message parameters. */
@@ -451,7 +460,7 @@ void mapper_connection_set_expression(mapper_connection connection,
 void mapper_connection_set_calibrate(mapper_connection connection,
                                      float dest_min, float dest_max);
 
-const char *mapper_get_clipping_type_string(mapper_clipping_type clipping);
+const char *mapper_get_boundary_action_string(mapper_boundary_action bound);
 
 const char *mapper_get_mode_type_string(mapper_mode_type mode);
 
@@ -503,7 +512,7 @@ int mapper_db_add_or_update_connection_params(mapper_db db,
                                               mapper_message_t *params);
 
 /*! Remove a named device from the database if it exists. */
-void mapper_db_remove_device(mapper_db db, const char *name);
+void mapper_db_remove_device_by_name(mapper_db db, const char *name);
 
 /*! Remove signals in the provided query. */
 void mapper_db_remove_inputs_by_query(mapper_db db,
@@ -532,6 +541,8 @@ void mapper_db_remove_link(mapper_db db,
 /*! Dump device information database to the screen.  Useful for
  *  debugging, only works when compiled in debug mode. */
 void mapper_db_dump(mapper_db db);
+
+void mapper_db_remove_all_callbacks(mapper_db db);
 
 /**** Links ****/
 
@@ -616,12 +627,12 @@ int mapper_msg_get_param_if_float(mapper_message_t *msg,
                                   mapper_msg_param_t param,
                                   float *value);
 
-/*! Helper to return the clipping type from a message parameter.
+/*! Helper to return the boundary action from a message parameter.
  *  \param msg Structure containing parameter info.
- *  \param param Either AT_CLIPMIN or AT_CLIPMAX.
- *  \return The clipping type, or -1 if not found. */
-mapper_clipping_type mapper_msg_get_clipping(mapper_message_t *msg,
-                                             mapper_msg_param_t param);
+ *  \param param Either AT_BOUND_MIN or AT_BOUND_MAX.
+ *  \return The boundary action, or -1 if not found. */
+mapper_boundary_action mapper_msg_get_boundary_action(mapper_message_t *msg,
+                                                      mapper_msg_param_t param);
 
 /*! Helper to return the signal direction from a message parameter.
  *  \param msg Structure containing parameter info.
@@ -638,8 +649,12 @@ mapper_mode_type mapper_msg_get_mode(mapper_message_t *msg);
  *  \return The muted state (0 or 1), or -1 if not found. */
 int mapper_msg_get_mute(mapper_message_t *msg);
 
-void mapper_msg_add_or_update_extra_params(table t,
-                                                  mapper_message_t *params);
+/*! Store 'extra' parameters specified in a mapper_message to a table.
+ *  \param t      Table to edit.
+ *  \param params Message containing parameters.
+ *  \return The number of parameters added or modified. */
+int mapper_msg_add_or_update_extra_params(table t,
+                                          mapper_message_t *params);
 
 /*! Prepare a lo_message for sending based on a vararg list of
  *  parameter pairs. */
@@ -729,9 +744,14 @@ int table_add_or_update(table t, const char *key, void *value);
 void table_dump_osc_values(table t);
 #endif
 
-/*! Add a typed OSC argument to a string table. */
-void mapper_table_add_or_update_osc_value(table t, const char *key,
-                                          lo_type type, lo_arg *arg);
+/*! Add a typed OSC argument to a string table.
+ *  \param t    Table to update.
+ *  \param key  Key to store.
+ *  \param type OSC type of value to add.
+ *  \param arg  OSC value to add
+ *  \return The number of table values added or modified. */
+int mapper_table_add_or_update_osc_value(table t, const char *key,
+                                         lo_type type, lo_arg *arg);
 
 /*! Add OSC arguments contained in a string table to a lo_message */
 void mapper_msg_add_osc_value_table(lo_message m, table t);

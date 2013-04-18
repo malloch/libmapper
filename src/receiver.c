@@ -46,29 +46,21 @@ void mapper_receiver_free(mapper_receiver r)
     int i;
 
     if (r) {
+        if (r->props.src_name)
+            free(r->props.src_name);
         if (r->props.src_addr)
             lo_address_free(r->props.src_addr);
-        while (r->signals) {
-            mapper_receiver_signal rs = r->signals;
-            mapper_receiver_signal tmp = rs->next;
-            while (rs->connections) {
-                mapper_receiver_remove_connection(r, rs->connections);
-            }
-            int i;
-            for (i=0; i<rs->num_instances; i++) {
-                free(rs->history[i].value);
-                free(rs->history[i].timetag);
-            }
-            free(rs->history);
-            r->signals = rs->next;
-            free(rs);
-            rs = tmp;
+        while (r->signals && r->signals->connections) {
+            // receiver_signal is freed with last child connection
+            mapper_receiver_remove_connection(r, r->signals->connections);
         }
         for (i=0; i<r->props.num_scopes; i++) {
             free(r->props.scope_names[i]);
         }
         free(r->props.scope_names);
         free(r->props.scope_hashes);
+        if (r->props.extra)
+            table_free(r->props.extra, 1);
         free(r);
     }
 }
@@ -136,9 +128,12 @@ static void message_add_coerced_signal_value(lo_message m,
 
 void mapper_receiver_send_update(mapper_receiver r,
                                  mapper_signal sig,
-                                 mapper_signal_instance si,
+                                 int instance_index,
                                  mapper_timetag_t tt)
 {
+    int i;
+    mapper_id_map map = sig->id_maps[instance_index].map;
+
     // find the signal connection
     mapper_receiver_signal rc = r->signals;
     while (rc) {
@@ -158,28 +153,21 @@ void mapper_receiver_send_update(mapper_receiver r,
             continue;
         }
 
-        if (!sig->active_instances) {
-            // If there are no active instances, send null response
+        if (sig->props.num_instances == 1) {
             lo_message m = lo_message_new();
             if (!m)
                 return;
-            lo_message_add_nil(m);
-            lo_bundle_add_message(b, c->props.query_name, m);
-        }
-        else if (sig->props.num_instances == 1) {
-            lo_message m = lo_message_new();
-            if (!m)
-                return;
-            message_add_coerced_signal_value(m, sig, sig->active_instances,
+            message_add_coerced_signal_value(m, sig, sig->id_maps[0].instance,
                                              c->props.src_type);
             lo_bundle_add_message(b, c->props.query_name, m);
         }
-        else if (si) {
+        else if (instance_index >= 0) {
+            mapper_signal_instance si = sig->id_maps[instance_index].instance;
             lo_message m = lo_message_new();
             if (!m)
                 return;
-            lo_message_add_int32(m, si->id_map->group);
-            lo_message_add_int32(m, si->id_map->remote);
+            lo_message_add_int32(m, map->group);
+            lo_message_add_int32(m, map->remote);
             if (si->has_value)
                 message_add_coerced_signal_value(m, sig, si, c->props.src_type);
             else
@@ -188,19 +176,31 @@ void mapper_receiver_send_update(mapper_receiver r,
         }
         else {
             // TODO: need to make one->many instance mapping a connection property
-            si = sig->active_instances;
-            while (si) {
+            int sent = 0;
+            for (i = 0; i < sig->id_map_length; i++) {
+                mapper_signal_instance si = sig->id_maps[i].instance;
+                if (!si)
+                    continue;
                 lo_message m = lo_message_new();
                 if (!m)
                     return;
-                lo_message_add_int32(m, si->id_map->group);
-                lo_message_add_int32(m, si->id_map->remote);
+                lo_message_add_int32(m, map->group);
+                lo_message_add_int32(m, map->remote);
                 if (si->has_value)
-                    message_add_coerced_signal_value(m, sig, si, c->props.src_type);
+                    message_add_coerced_signal_value(m, sig, si,
+                                                     c->props.src_type);
                 else
                     lo_message_add_nil(m);
                 lo_bundle_add_message(b, c->props.query_name, m);
-                si = si->next;
+                sent++;
+            }
+            if (!sent) {
+                // If there are no active instances, send null response
+                lo_message m = lo_message_new();
+                if (!m)
+                    return;
+                lo_message_add_nil(m);
+                lo_bundle_add_message(b, c->props.query_name, m);
             }
         }
         c = c->next;
@@ -209,15 +209,15 @@ void mapper_receiver_send_update(mapper_receiver r,
     lo_bundle_free_messages(b);
 }
 
-void mapper_receiver_send_release_request(mapper_receiver rc,
-                                          mapper_signal sig,
-                                          mapper_signal_instance si,
-                                          mapper_timetag_t tt)
+void mapper_receiver_send_released(mapper_receiver r, mapper_signal sig,
+                                   int instance_index, mapper_timetag_t tt)
 {
-    mapper_receiver_signal rs = rc->signals;
+    mapper_receiver_signal rs = r->signals;
     mapper_connection c;
 
-    if (!mapper_receiver_in_scope(rc, si->id_map->group))
+    mapper_id_map map = sig->id_maps[instance_index].map;
+
+    if (!mapper_receiver_in_scope(r, map->group))
         return;
 
     while (rs) {
@@ -228,23 +228,22 @@ void mapper_receiver_send_release_request(mapper_receiver rc,
     if (!rs)
         return;
 
-    //lo_bundle b = lo_bundle_new(tt);
-    lo_bundle b = lo_bundle_new(LO_TT_IMMEDIATE);
+    lo_bundle b = lo_bundle_new(tt);
 
     c = rs->connections;
     while (c) {
         lo_message m = lo_message_new();
         if (!m)
             return;
-        lo_message_add_int32(m, si->id_map->group);
-        lo_message_add_int32(m, si->id_map->remote);
+        lo_message_add_int32(m, map->group);
+        lo_message_add_int32(m, map->remote);
         lo_message_add_false(m);
         lo_bundle_add_message(b, c->props.src_name, m);
         c = c->next;
     }
 
     if (lo_bundle_count(b))
-        lo_send_bundle_from(rc->props.src_addr, rc->device->server, b);
+        lo_send_bundle_from(r->props.src_addr, r->device->server, b);
 
     lo_bundle_free_messages(b);
 }
@@ -292,8 +291,8 @@ mapper_connection mapper_receiver_add_connection(mapper_receiver r,
     c->props.dest_length = sig->props.length;
     c->props.mode = MO_UNDEFINED;
     c->props.expression = strdup("y=x");
-    c->props.clip_min = CT_NONE;
-    c->props.clip_max = CT_NONE;
+    c->props.bound_min = BA_NONE;
+    c->props.bound_max = BA_NONE;
     c->props.muted = 0;
     c->props.extra = table_new();
 
@@ -310,10 +309,39 @@ mapper_connection mapper_receiver_add_connection(mapper_receiver r,
     return c;
 }
 
+static void mapper_receiver_free_connection(mapper_receiver r, mapper_connection c)
+{
+    int i;
+    if (r && c) {
+        if (c->props.src_name)
+            free(c->props.src_name);
+        if (c->props.dest_name)
+            free(c->props.dest_name);
+        if (c->expr)
+            mapper_expr_free(c->expr);
+        if (c->props.expression)
+            free(c->props.expression);
+        if (c->props.query_name)
+            free(c->props.query_name);
+        table_free(c->props.extra, 1);
+        for (i=0; i<c->parent->num_instances; i++) {
+            free(c->history[i].value);
+            free(c->history[i].timetag);
+        }
+        if (c->history)
+            free(c->history);
+        if (c->blob)
+            free(c->blob);
+        free(c);
+        r->n_connections--;
+        return;
+    }
+}
+
 int mapper_receiver_remove_connection(mapper_receiver r,
                                       mapper_connection c)
 {
-    int i = 0;
+    int i = 0, j, found = 0, count = 0;
     mapper_receiver_signal rs = c->parent;
 
     /* Release signal instances owned by remote device. This is a bit tricky
@@ -323,12 +351,14 @@ int mapper_receiver_remove_connection(mapper_receiver r,
      * connections to this signal. In the latter case, we can still release
      * instances scoped uniquely to this connection's receiver. */
 
+    // TODO: this situation should be avoided using e.g. signal "slots"
+
     mapper_connection *ctemp = &c->parent->connections;
     while (*ctemp) {
         i++;
         ctemp = &(*ctemp)->next;
     }
-    if (i <= 1) {
+    if (i <= 1 && c->parent->signal) {
         /* need to compile a list of scopes used by this link not used by other
          * links including connections to this signal. */
         int count = 0;
@@ -365,27 +395,26 @@ int mapper_receiver_remove_connection(mapper_receiver r,
 
         if (count < r->props.num_scopes) {
             // can release instances with untouched scopes
-            mapper_signal_instance si;
-            for (i=0; i<r->props.num_scopes; i++) {
-                if (scope_matches[i])
+            for (i = 0; i < rs->signal->id_map_length; i++) {
+                mapper_signal_id_map_t *id_map = &rs->signal->id_maps[i];
+                if (!id_map->map || !id_map->instance || id_map->status & IN_RELEASED_REMOTELY)
                     continue;
-                si = c->parent->signal->active_instances;
-                while (si) {
-                    if (si->id_map->group == r->props.scope_hashes[i]) {
-                        if (rs->signal->handler) {
-                            rs->signal->handler(rs->signal, &rs->signal->props,
-                                                si->id_map->local, 0, 0, 0);
-                        }
-                        mapper_signal_instance temp = si;
-                        si = si->next;
-                        msig_release_instance_internal(rs->signal, temp, 0, 0,
-                                                       MAPPER_NOW);
+                for (j = 0; j < r->props.num_scopes; j++) {
+                    if (scope_matches[j]) {
+                        // scope is used by another link
                         continue;
                     }
-                    si = si->next;
+                    if (id_map->map->group == r->props.scope_hashes[j]) {
+                        if (rs->signal->handler)
+                            rs->signal->handler(rs->signal, &rs->signal->props,
+                                                id_map->map->local, 0, 0, 0);
+                        // TODO: call instance management handler with IN_DISCONNECTED
+                        continue;
+                    }
                 }
             }
         }
+        free(scope_matches);
     }
 
     // Now free the connection
@@ -393,25 +422,38 @@ int mapper_receiver_remove_connection(mapper_receiver r,
     while (*temp) {
         if (*temp == c) {
             *temp = c->next;
-            if (c->props.src_name)
-                free(c->props.src_name);
-            if (c->props.dest_name)
-                free(c->props.dest_name);
-            for (i=0; i<c->parent->num_instances; i++) {
-                free(c->history[i].value);
-                free(c->history[i].timetag);
-            }
-            if (c->history)
-                free(c->history);
-            if (c->blob)
-                free(c->blob);
-            free(c);
+            mapper_receiver_free_connection(r, c);
             r->n_connections--;
-            return 0;
+            found = 1;
+            break;
         }
         temp = &(*temp)->next;
     }
-    return 1;
+    // Count remaining connections
+    temp = &rs->connections;
+    while (*temp) {
+        count++;
+        temp = &(*temp)->next;
+    }
+    if (!count) {
+        // We need to remove the router_signal also
+        mapper_router_signal *rstemp = &r->signals;
+        while (*rstemp) {
+            if (*rstemp == rs) {
+                *rstemp = rs->next;
+                int i;
+                for (i=0; i < rs->num_instances; i++) {
+                    free(rs->history[i].value);
+                    free(rs->history[i].timetag);
+                }
+                free(rs->history);
+                free(rs);
+                break;
+            }
+            rstemp = &(*rstemp)->next;
+        }
+    }
+    return !found;
 }
 
 mapper_connection mapper_receiver_find_connection_by_names(mapper_receiver rc,
@@ -492,25 +534,21 @@ void mapper_receiver_remove_scope(mapper_receiver receiver, const char *scope)
         rc = rc->next;
     }
 
-    mapper_signal_instance si;
-
     /* Release input instances owned by remote device. */
     mapper_receiver_signal rs = receiver->signals;
     while (rs) {
-        si = rs->signal->active_instances;
-        while (si) {
-            if (si->id_map->group == hash) {
+        int i;
+        for (i = 0; i < rs->signal->id_map_length; i++) {
+            mapper_id_map map = rs->signal->id_maps[i].map;
+            if (map->group == hash) {
                 if (rs->signal->handler) {
                     rs->signal->handler(rs->signal, &rs->signal->props,
-                                        si->id_map->local, 0, 0, 0);
+                                        map->local, 0, 0, 0);
                 }
-                mapper_signal_instance temp = si;
-                si = si->next;
-                msig_release_instance_internal(rs->signal, temp, 0, 0,
-                                               MAPPER_NOW);
+                // TODO: call instance management handler if defined
+                //msig_release_instance_internal(rs->signal, i, 0, MAPPER_NOW);
                 continue;
             }
-            si = si->next;
         }
         rs = rs->next;
     }

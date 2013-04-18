@@ -41,27 +41,29 @@ typedef struct _mapper_metronome *mapper_metronome;
 /*! The set of possible actions on an instance, used to register callbacks
  *  to inform them of what is happening. */
 typedef enum {
-    IN_NEW              = 0x01, //!< New instance has been created.
-    IN_STOLEN           = 0x02, //!< Instance has been stolen by another instance.
-    IN_REQUEST_RELEASE  = 0x04, //!< Instance release has been requested by remote device.
-    IN_OVERFLOW         = 0x08  //!< No local instances left for incoming remote instance.
+    IN_NEW                  = 0x01, //!< New instance has been created.
+    IN_UPSTREAM_RELEASE     = 0x02, //!< Instance has been released by upstream device.
+    IN_DOWNSTREAM_RELEASE   = 0x04, //!< Instance has been released by downstream device.
+    IN_OVERFLOW             = 0x08, //!< No local instances left for incoming remote instance.
+    IN_ALL                  = 0xFF
 } msig_instance_event_t;
 
 /*! A signal handler function can be called whenever a signal value
  *  changes. */
-typedef void mapper_signal_handler(mapper_signal msig,
-                                   mapper_db_signal props,
-                                   int instance_id,
-                                   void *value,
-                                   int count,
-                                   mapper_timetag_t *tt);
+typedef void mapper_signal_update_handler(mapper_signal msig,
+                                          mapper_db_signal props,
+                                          int instance_id,
+                                          void *value,
+                                          int count,
+                                          mapper_timetag_t *tt);
 
 /*! A handler function to be called whenever a signal instance management
  *  event occurs. */
 typedef void mapper_signal_instance_management_handler(mapper_signal msig,
                                                        mapper_db_signal props,
                                                        int instance_id,
-                                                       msig_instance_event_t event);
+                                                       msig_instance_event_t event,
+                                                       mapper_timetag_t *tt);
 
 /*! Update the value of a signal.
  *  The signal will be routed according to external requests.
@@ -121,13 +123,6 @@ int msig_query_remotes(mapper_signal sig, mapper_timetag_t tt);
  *  \param num          The number of instances to add. */
 void msig_reserve_instances(mapper_signal sig, int num);
 
-/*! Explicitly activate an instance with a given id. This instance will be marked
- *  as "new" allowing it to steal a previous instance depending on the allocation
- *  mode set with msig_set_instance_allocation_mode().
- *  \param sig          The signal to operate on.
- *  \param instance_id  The instance to activate. */
-void msig_start_new_instance(mapper_signal sig, int instance_id);
-
 /*! Update the value of a specific signal instance.
  *  The signal will be routed according to external requests.
  *  \param sig          The signal to operate on.
@@ -155,6 +150,18 @@ void msig_update_instance(mapper_signal sig, int instance_id,
  *                     bundling multiple signal updates with the same timetag. */
 void msig_release_instance(mapper_signal sig, int instance_id,
                            mapper_timetag_t tt);
+
+/*! Get the local id of the oldest active instance.
+ *  \param sig         The signal to operate on.
+ *  \param instance_id A location to receive the instance id.
+ *  \return            Zero if an instance id has been found, non-zero otherwise. */
+int msig_get_oldest_active_instance(mapper_signal sig, int *instance_id);
+
+/*! Get the local id of the newest active instance.
+ *  \param sig         The signal to operate on.
+ *  \param instance_id A location to receive the instance id.
+ *  \return            Zero if an instance id has been found, non-zero otherwise. */
+int msig_get_newest_active_instance(mapper_signal sig, int *instance_id);
 
 /*! Get a signal_instance's value.
  *  \param sig         The signal to operate on.
@@ -201,12 +208,18 @@ int msig_active_instance_id(mapper_signal sig, int index);
 void msig_set_instance_allocation_mode(mapper_signal sig,
                                        mapper_instance_allocation_type mode);
 
+/*! Get the allocation method to be used when a previously-unseen
+ *  instance ID is received.
+ *  \param sig  The signal to operate on.
+ *  \return     The allocation mode of the provided signal. */
+mapper_instance_allocation_type msig_get_instance_allocation_mode(mapper_signal sig);
+
 /*! Set the handler to be called on signal instance management events.
  *  \param sig          The signal to operate on.
  *  \param h            A handler function for processing instance managment events.
  *  \param flags        Bitflags for indicating the types of events which should
  *                      trigger the callback. Can be a combination of IN_NEW,
- *                      IN_STOLEN, IN_RELEASE_REQUEST, and IN_OVERFLOW.
+ *                      IN_UPSTREAM_RELEASE, IN_DOWNSTREAM_RELEASE, and IN_OVERFLOW.
  *  \param user_data    User context pointer to be passed to handler. */
 void msig_set_instance_management_callback(mapper_signal sig,
                                            mapper_signal_instance_management_handler h,
@@ -228,11 +241,11 @@ void *msig_get_instance_data(mapper_signal sig, int instance_id);
 
 /*! Set or unset the message handler for a signal.
  *  \param sig       The signal to operate on.
- *  \param handler   A pointer to a mapper_signal_handler function for
- *                   processing incoming messages.
+ *  \param handler   A pointer to a mapper_signal_update_handler
+ *                   function for processing incoming messages.
  *  \param user_data User context pointer to be passed to handler. */
 void msig_set_callback(mapper_signal sig,
-                       mapper_signal_handler *handler,
+                       mapper_signal_update_handler *handler,
                        void *user_data);
 
 /**** Signal properties ****/
@@ -333,7 +346,7 @@ void mdev_free(mapper_device dev);
 mapper_signal mdev_add_input(mapper_device dev, const char *name,
                              int length, char type, const char *unit,
                              void *minimum, void *maximum,
-                             mapper_signal_handler *handler,
+                             mapper_signal_update_handler *handler,
                              void *user_data);
 
 /*! Add an output signal to a mapper device.  Values and strings
@@ -453,6 +466,33 @@ void mdev_remove_property(mapper_device dev, const char *property);
  *  \return The number of handled messages. May be zero if there was
  *          nothing to do. */
 int mdev_poll(mapper_device dev, int block_ms);
+
+/*! Return the number of file descriptors needed for this device.
+ *  This can be used to allocated an appropriately-sized list for
+ *  called to mdev_get_fds.  Note that the number of descriptors
+ *  needed can change throughout the life of a device, therefore this
+ *  function should be called whenever the list of file descriptors is
+ *  needed.
+ *  \param md The device to count file descriptors for.
+ *  \return The number of file descriptors needed for the indicated
+ *          device. */
+int mdev_num_fds(mapper_device md);
+
+/*! Write the list of file descriptors for this device to the provided
+ *  array.  Up to num file descriptors will be written.  These file
+ *  descriptors can be used as input for the read array of select or
+ *  poll, for example.
+ *  \param md  The device to get file descriptors for.
+ *  \param fds Memory to receive file descriptors.
+ *  \param num The number of file descriptors pointed to by fds.
+ *  \return The number of file descriptors actually written to fds. */
+int mdev_get_fds(mapper_device md, int *fds, int num);
+
+/*! If an external event indicates that a file descriptor for this
+ *  device needs servicing, this function should be called.
+ *  \param md The device that needs servicing.
+ *  \param fd The file descriptor that needs servicing. */
+void mdev_service_fd(mapper_device md, int fd);
 
 /*! Detect whether a device is completely initialized.
  *  \return Non-zero if device is completely initialized, i.e., has an
@@ -576,26 +616,28 @@ typedef enum {
  *                 is happening to the database record.
  *  \param user    The user context pointer registered with this
  *                 callback. */
-typedef void device_callback_func(mapper_db_device record,
-                                  mapper_db_action_t action,
-                                  void *user);
+typedef void mapper_db_device_handler(mapper_db_device record,
+                                      mapper_db_action_t action,
+                                      void *user);
 
 /*! Register a callback for when a device record is added or updated
  *  in the database.
  *  \param db   The database to query.
- *  \param f   Callback function.
+ *  \param h    Callback function.
  *  \param user A user-defined pointer to be passed to the callback
  *              for context . */
 void mapper_db_add_device_callback(mapper_db db,
-                                   device_callback_func *f, void *user);
+                                   mapper_db_device_handler *h,
+                                   void *user);
 
 /*! Remove a device record callback from the database service.
  *  \param db   The database to query.
- *  \param f    Callback function.
+ *  \param h    Callback function.
  *  \param user The user context pointer that was originally specified
  *              when adding the callback. */
 void mapper_db_remove_device_callback(mapper_db db,
-                                      device_callback_func *f, void *user);
+                                      mapper_db_device_handler *h,
+                                      void *user);
 
 /*! Return the whole list of devices.
  *  \param db   The database to query.
@@ -677,26 +719,28 @@ int mapper_db_device_property_lookup(mapper_db_device dev,
  *                 is happening to the database record.
  *  \param user    The user context pointer registered with this
  *                 callback. */
-typedef void signal_callback_func(mapper_db_signal record,
-                                  mapper_db_action_t action,
-                                  void *user);
+typedef void mapper_db_signal_handler(mapper_db_signal record,
+                                      mapper_db_action_t action,
+                                      void *user);
 
 /*! Register a callback for when a signal record is added or updated
  *  in the database.
  *  \param db   The database to query.
- *  \param f    Callback function.
+ *  \param h    Callback function.
  *  \param user A user-defined pointer to be passed to the callback
  *              for context . */
 void mapper_db_add_signal_callback(mapper_db db,
-                                   signal_callback_func *f, void *user);
+                                   mapper_db_signal_handler *h,
+                                   void *user);
 
 /*! Remove a signal record callback from the database service.
  *  \param db   The database to query.
- *  \param f    Callback function.
+ *  \param h    Callback function.
  *  \param user The user context pointer that was originally specified
  *              when adding the callback. */
 void mapper_db_remove_signal_callback(mapper_db db,
-                                      signal_callback_func *f, void *user);
+                                      mapper_db_signal_handler *h,
+                                      void *user);
 
 /*! Return the list of all known inputs across all devices.
  *  \param db   The database to query.
@@ -729,6 +773,22 @@ mapper_db_signal_t **mapper_db_get_inputs_by_device_name(
  *          iterate. */
 mapper_db_signal_t **mapper_db_get_outputs_by_device_name(
     mapper_db db, const char *device_name);
+
+/*! Find information for a registered input signal.
+ *  \param db          The database to query.
+ *  \param device_name Name of the device to find in the database.
+ *  \param signal_name Name of the input signal to find in the database.
+ *  \return            Information about the signal, or zero if not found. */
+mapper_db_signal mapper_db_get_input_by_device_and_signal_names(
+    mapper_db db, const char *device_name, const char *signal_name);
+
+/*! Find information for a registered output signal.
+ *  \param db          The database to query.
+ *  \param device_name Name of the device to find in the database.
+ *  \param signal_name Name of the output signal to find in the database.
+ *  \return            Information about the signal, or zero if not found. */
+mapper_db_signal mapper_db_get_output_by_device_and_signal_names(
+    mapper_db db, const char *device_name, char const *signal_name);
 
 /*! Return the list of inputs for a given device.
  *  \param db            The database to query.
@@ -806,27 +866,27 @@ int mapper_db_signal_property_lookup(mapper_db_signal sig,
  *                 is happening to the database record.
  *  \param user    The user context pointer registered with this
  *                 callback. */
-typedef void connection_callback_func(mapper_db_connection record,
-                                      mapper_db_action_t action,
-                                      void *user);
+typedef void mapper_db_connection_handler(mapper_db_connection record,
+                                          mapper_db_action_t action,
+                                          void *user);
 
 /*! Register a callback for when a connection record is added or
  *  updated in the database.
  *  \param db   The database to query.
- *  \param f    Callback function.
+ *  \param h    Callback function.
  *  \param user A user-defined pointer to be passed to the callback
  *              for context . */
 void mapper_db_add_connection_callback(mapper_db db,
-                                       connection_callback_func *f,
+                                       mapper_db_connection_handler *h,
                                        void *user);
 
 /*! Remove a connection record callback from the database service.
  *  \param db   The database to query.
- *  \param f    Callback function.
+ *  \param h    Callback function.
  *  \param user The user context pointer that was originally specified
  *              when adding the callback. */
 void mapper_db_remove_connection_callback(mapper_db db,
-                                          connection_callback_func *f,
+                                          mapper_db_connection_handler *h,
                                           void *user);
 
 /*! Return a list of all registered connections.
@@ -999,26 +1059,28 @@ int mapper_db_connection_property_lookup(mapper_db_connection con,
  *                 is happening to the database record.
  *  \param user    The user context pointer registered with this
  *                 callback. */
-typedef void link_callback_func(mapper_db_link record,
-                                mapper_db_action_t action,
-                                void *user);
+typedef void mapper_db_link_handler(mapper_db_link record,
+                                    mapper_db_action_t action,
+                                    void *user);
 
 /*! Register a callback for when a link record is added or updated
  *  in the database.
  *  \param db   The database to query.
- *  \param f    Callback function.
+ *  \param h    Callback function.
  *  \param user A user-defined pointer to be passed to the callback
  *              for context . */
 void mapper_db_add_link_callback(mapper_db db,
-                                 link_callback_func *f, void *user);
+                                 mapper_db_link_handler *h,
+                                 void *user);
 
 /*! Remove a link record callback from the database service.
  *  \param db   The database to query.
- *  \param f    Callback function.
+ *  \param h    Callback function.
  *  \param user The user context pointer that was originally specified
  *              when adding the callback. */
 void mapper_db_remove_link_callback(mapper_db db,
-                                    link_callback_func *f, void *user);
+                                    mapper_db_link_handler *h,
+                                    void *user);
 
 /*! Return the whole list of links.
  *  \param db The database to query.
@@ -1155,32 +1217,92 @@ mapper_db mapper_monitor_get_db(mapper_monitor mon);
 /*! Request that all devices report in. */
 int mapper_monitor_request_devices(mapper_monitor mon);
 
+/*! Request properties for specific device. */
+int mapper_monitor_request_device_info(
+    mapper_monitor mon, const char* name);
+
 /*! Request signals for specific device. */
-int mapper_monitor_request_signals_by_name(
+int mapper_monitor_request_signals_by_device_name(
+    mapper_monitor mon, const char* name);
+
+/*! Request output signals for specific device. */
+int mapper_monitor_request_output_signals_by_device_name(
+    mapper_monitor mon, const char* name);
+
+/*! Request input signals for specific device. */
+int mapper_monitor_request_input_signals_by_device_name(
     mapper_monitor mon, const char* name);
 
 /*! Request an indexed subset of signals for specific device. */
-int mapper_monitor_request_signals_by_name_and_index(
+int mapper_monitor_request_signal_range_by_device_name(
+    mapper_monitor mon, const char* name, int start_index, int stop_index);
+
+/*! Request an indexed subset of output signals for specific device. */
+int mapper_monitor_request_output_signal_range_by_device_name(
+    mapper_monitor mon, const char* name, int start_index, int stop_index);
+
+/*! Request an indexed subset of input signals for specific device. */
+int mapper_monitor_request_intput_signal_range_by_device_name(
     mapper_monitor mon, const char* name, int start_index, int stop_index);
 
 /*! Request signals for specific device in measured batches. */
-int mapper_monitor_batch_request_signals_by_name(
+int mapper_monitor_batch_request_signals_by_device_name(
+    mapper_monitor mon, const char* name, int batch_size);
+
+/*! Request output signals for specific device in measured batches. */
+int mapper_monitor_batch_request_output_signals_by_device_name(
+    mapper_monitor mon, const char* name, int batch_size);
+
+/*! Request input signals for specific device in measured batches. */
+int mapper_monitor_batch_request_input_signals_by_device_name(
     mapper_monitor mon, const char* name, int batch_size);
 
 /*! Request links for specific device. */
-int mapper_monitor_request_links_by_name(
+int mapper_monitor_request_links_by_device_name(
+    mapper_monitor mon, const char* name);
+
+/*! Request outgoing links for specific device. */
+int mapper_monitor_request_links_by_src_device_name(
+    mapper_monitor mon, const char* name);
+
+/*! Request incoming links for specific device. */
+int mapper_monitor_request_links_by_dest_device_name(
     mapper_monitor mon, const char* name);
 
 /*! Request connections for specific device. */
-int mapper_monitor_request_connections_by_name(
+int mapper_monitor_request_connections_by_device_name(
+    mapper_monitor mon, const char* name);
+
+/*! Request outgoing connections for specific device. */
+int mapper_monitor_request_connections_by_src_device_name(
+    mapper_monitor mon, const char* name);
+
+/*! Request incoming connections for specific device. */
+int mapper_monitor_request_connections_by_dest_device_name(
     mapper_monitor mon, const char* name);
 
 /*! Request an indexed subset of connections for specific device. */
-int mapper_monitor_request_connections_by_name_and_index(
+int mapper_monitor_request_connection_range_by_device_name(
+    mapper_monitor mon, const char* name, int start_index, int stop_index);
+    
+/*! Request an indexed subset of outgoing connections for specific device. */
+int mapper_monitor_request_connection_range_by_src_device_name(
+    mapper_monitor mon, const char* name, int start_index, int stop_index);
+
+/*! Request an indexed subset of incoming connections for specific device. */
+int mapper_monitor_request_connection_range_by_dest_device_name(
     mapper_monitor mon, const char* name, int start_index, int stop_index);
 
 /*! Request connections for specific device in measured batches. */
-int mapper_monitor_batch_request_connections_by_name(
+int mapper_monitor_batch_request_connections_by_device_name(
+    mapper_monitor mon, const char* name, int batch_size);
+
+/*! Request outgoing connections for specific device in measured batches. */
+int mapper_monitor_batch_request_connections_by_src_device_name(
+    mapper_monitor mon, const char* name, int batch_size);
+
+/*! Request incoming connections for specific device in measured batches. */
+int mapper_monitor_batch_request_connections_by_dest_device_name(
     mapper_monitor mon, const char* name, int batch_size);
 
 /*! When auto-request is enabled (enable=1), the monitor automatically
@@ -1328,6 +1450,7 @@ void mapper_timetag_add_seconds(mapper_timetag_t *tt, double addend);
 double mapper_timetag_get_double(mapper_timetag_t tt);
 
 /*! Set value of a mapper_timetag from a double-precision floating point value. */
+
 void mapper_timetag_set_from_int(mapper_timetag_t *tt, int value);
 
 /*! Set value of a mapper_timetag from a double-precision floating point value. */
