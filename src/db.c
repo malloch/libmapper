@@ -1122,6 +1122,8 @@ void mapper_db_signal_init(mapper_db_signal sig, int is_output,
     sig->type = type;
     sig->length = length;
     sig->unit = unit ? strdup(unit) : 0;
+    sig->period_ema = 0;
+    sig->period_emd = 0;
     sig->extra = table_new();
 
     if (!name)

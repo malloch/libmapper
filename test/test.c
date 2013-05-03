@@ -167,6 +167,8 @@ void loop()
         msig_update_float(source->outputs[0], ((i % 10) * 1.0f));
         msig_update_float(source->outputs[1], ((i % 10) * 1.0f));
         printf("source value updated to %d -->\n", i % 10);
+        mapper_db_signal props = msig_properties(source->outputs[0]);
+        printf("signal stats: ema = %f, emd = %f\n", props->period_ema, props->period_emd);
 
         printf("Received %i messages.\n\n", mdev_poll(destination, 100));
         i++;

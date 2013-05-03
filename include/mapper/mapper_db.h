@@ -237,6 +237,12 @@ typedef struct _mapper_db_signal
     /*! The rate of this signal, or 0 for non-periodic signals. */
     float rate;
 
+    /*! Exponential moving average of the sample period. */
+    float period_ema;
+
+    /*! Exponential moving deviation of the sample period. */
+    float period_emd;
+
     /*! Extra properties associated with this signal. */
     struct _mapper_string_table *extra;
 

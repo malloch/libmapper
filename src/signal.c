@@ -569,10 +569,25 @@ static void msig_update_internal(mapper_signal sig,
         si->has_value = 0;
     }
 
-    if (memcmp(&tt, &MAPPER_NOW, sizeof(mapper_timetag_t))==0)
-        mdev_timetag_now(sig->device, &si->timetag);
-    else
+    // calculate elapsed time, add to rate and jitter calculation
+    float period;
+    if (memcmp(&tt, &MAPPER_NOW, sizeof(mapper_timetag_t))==0) {
+        mapper_timetag_t *temp = &sig->device->admin->clock.now;
+        mdev_timetag_now(sig->device, temp);
+        period = mapper_timetag_difference(*temp, si->timetag);
+        memcpy(&si->timetag, temp, sizeof(mapper_timetag_t));
+    }
+    else {
+        period = mapper_timetag_difference(tt, si->timetag);
         memcpy(&si->timetag, &tt, sizeof(mapper_timetag_t));
+    }
+
+    // update signal statistics
+    // TODO: should the period be divided by count variable?
+    sig->props.period_emd *= 0.9;
+    sig->props.period_emd += (0.1 * fabsf(sig->props.period_ema - period));
+    sig->props.period_ema *= 0.9;
+    sig->props.period_ema += (0.1 * period);
 
     if (sig->props.is_output) {
         mdev_route_signal(sig->device, sig, instance_index, value,
