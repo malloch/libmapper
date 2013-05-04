@@ -584,10 +584,16 @@ static void msig_update_internal(mapper_signal sig,
 
     // update signal statistics
     // TODO: should the period be divided by count variable?
-    sig->props.period_emd *= 0.9;
-    sig->props.period_emd += (0.1 * fabsf(sig->props.period_ema - period));
-    sig->props.period_ema *= 0.9;
-    sig->props.period_ema += (0.1 * period);
+    if (sig->props.period_ema < 0)
+        sig->props.period_ema = 0;
+    else if (sig->props.period_ema == 0)
+        sig->props.period_ema = period;
+    else {
+        sig->props.period_emd *= 0.99;
+        sig->props.period_emd += (0.01 * fabsf(sig->props.period_ema - period));
+        sig->props.period_ema *= 0.99;
+        sig->props.period_ema += (0.01 * period);
+    }
 
     if (sig->props.is_output) {
         mdev_route_signal(sig->device, sig, instance_index, value,
