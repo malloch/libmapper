@@ -38,10 +38,64 @@ struct _mapper_signal
 
     /*! An optional function to be called when the signal instance management
      *  events occur. */
-    mapper_signal_instance_management_handler *instance_management_handler;
+    mapper_signal_instance_event_handler *instance_event_handler;
 
-    /*! Flags for deciding when to call the instance management handler. */
-    int instance_management_flags;
+    /*! Flags for deciding when to call the instance event handler. */
+    int instance_event_flags;
+};
+
+/**** Devices ****/
+
+struct _mapper_device {
+    /*! Prefix for the name of this device.  It gets a unique ordinal
+     *  appended to it to differentiate from other devices of the same
+     *  name. */
+    char *name_prefix;
+
+    /*! Non-zero if this device is the sole owner of this admin, i.e.,
+     *  it was created during mdev_new() and should be freed during
+     *  mdev_free(). */
+    int own_admin;
+
+    mapper_admin admin;
+    struct _mapper_signal **inputs;
+    struct _mapper_signal **outputs;
+    int n_inputs;
+    int n_outputs;
+    int n_alloc_inputs;
+    int n_alloc_outputs;
+    int n_output_callbacks;
+    int n_links_in;
+    int n_links_out;
+    int version;
+    int flags;    /*!< Bitflags indicating if information has already been
+                   *   sent in a given polling step. */
+    mapper_router routers;
+    mapper_receiver receivers;
+
+    /*! Function to call for custom link handling. */
+    mapper_device_link_handler *link_cb;
+    void *link_cb_userdata;
+
+    /*! Function to call for custom connection handling. */
+    mapper_device_connection_handler *connection_cb;
+    void *connection_cb_userdata;
+
+    /*! The list of active instance id mappings. */
+    struct _mapper_id_map *active_id_map;
+
+    /*! The list of reserve instance id mappings. */
+    struct _mapper_id_map *reserve_id_map;
+
+    uint32_t id_counter;
+
+    /*! Server used to handle incoming messages.  NULL until at least
+     *  one input has been registered and the incoming port has been
+     *  allocated. */
+    lo_server server;
+
+    /*! Extra properties associated with this device. */
+    struct _mapper_string_table *extra;
 };
 
 /**** Instances ****/
@@ -76,9 +130,16 @@ typedef struct _mapper_signal_instance
 #define IN_RELEASED_LOCALLY  0x01
 #define IN_RELEASED_REMOTELY 0x02
 
-typedef struct _mapper_signal_id_map {
-    struct _mapper_id_map *map;                 /*! Pointer to id_map in use */
-    struct _mapper_signal_instance *instance;   /*! Pointer to signal instance. */
+typedef struct _mapper_signal_id_map
+{
+    /*! Pointer to id_map in use */
+    struct _mapper_id_map *map;
+
+    /*! Pointer to signal instance. */
+    struct _mapper_signal_instance *instance;
+
+    /*! Status of the id_map. Can be either 0 or a combination of
+     *  IN_RELEASED_LOCALLY and IN_RELEASED_REMOTELY. */
     int status;
 } mapper_signal_id_map_t;
 
@@ -111,7 +172,7 @@ typedef struct _mapper_metronome {
 /**** Admin ****/
 
 void mapper_admin_add_device(mapper_admin admin, mapper_device dev,
-                             const char *identifier, int port);
+                             const char *identifier);
 
 void mapper_admin_add_monitor(mapper_admin admin, mapper_monitor mon);
 
@@ -152,6 +213,8 @@ void _real_mapper_admin_send_osc_with_params(const char *file, int line,
                                             LO_MARKER_A, LO_MARKER_B)
 
 /***** Device *****/
+
+void mdev_registered(mapper_device md);
 
 void mdev_add_signal_methods(mapper_device md, mapper_signal sig);
 
@@ -194,7 +257,7 @@ void mdev_receive_update(mapper_device md, mapper_signal sig,
 
 void mdev_release_scope(mapper_device md, const char *scope);
 
-void mdev_start_server(mapper_device mdev);
+void mdev_start_server(mapper_device mdev, int port);
 
 void mdev_on_id_and_ordinal(mapper_device md,
                             mapper_admin_allocated_t *resource);
@@ -265,7 +328,7 @@ mapper_connection mapper_router_find_connection_by_names(mapper_router rt,
                                                          const char* src_name,
                                                          const char* dest_name);
 
-int mapper_router_in_scope(mapper_router router, int group_id);
+int mapper_router_in_scope(mapper_router router, uint32_t group_id);
 
 /*! Find a router by destination address in a linked list of routers. */
 mapper_router mapper_router_find_by_dest_address(mapper_router routers,
@@ -322,7 +385,7 @@ mapper_connection mapper_receiver_find_connection_by_names(mapper_receiver rc,
                                                            const char* src_name,
                                                            const char* dest_name);
 
-int mapper_receiver_in_scope(mapper_receiver receiver, int group_id);
+int mapper_receiver_in_scope(mapper_receiver receiver, uint32_t group_id);
 
 /*! Find a receiver by source address in a linked list of receivers. */
 mapper_receiver mapper_receiver_find_by_src_address(mapper_receiver receivers,

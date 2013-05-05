@@ -105,8 +105,7 @@ typedef struct _mapper_clock_t {
 
 /*! A structure that keeps information about a device. */
 typedef struct _mapper_admin {
-    char *identifier;                 /*!< The identifier (prefix) for
-                                       *   this device. */
+    char *identifier;                 /*!< The identifier (prefix) for this device. */
     char *name;                       /*!< The full name for this
                                        *   device, or zero. */
     mapper_admin_allocated_t ordinal; /*!< A unique ordinal for this
@@ -208,49 +207,8 @@ typedef struct _mapper_id_map {
     struct _mapper_id_map *next;   //!< The next id map in the list.
 } *mapper_id_map;
 
-typedef struct _mapper_device {
-    /*! Prefix for the name of this device.  It gets a unique ordinal
-     *  appended to it to differentiate from other devices of the same
-     *  name. */
-    char *name_prefix;
-
-    /*! Non-zero if this device is the sole owner of this admin, i.e.,
-     *  it was created during mdev_new() and should be freed during
-     *  mdev_free(). */
-    int own_admin;
-
-    mapper_admin admin;
-    struct _mapper_signal **inputs;
-    struct _mapper_signal **outputs;
-    int n_inputs;
-    int n_outputs;
-    int n_alloc_inputs;
-    int n_alloc_outputs;
-    int n_output_callbacks;
-    int n_links_in;
-    int n_links_out;
-    int version;
-    int flags;    /*!< Bitflags indicating if information has already been
-                   *   sent in a given polling step. */
-    mapper_router routers;
-    mapper_receiver receivers;
-
-    /*!< The list of active instance id mappings. */
-    struct _mapper_id_map *active_id_map;
-
-    /*!< The list of reserve instance id mappings. */
-    struct _mapper_id_map *reserve_id_map;
-
-    uint32_t id_counter;
-
-    /*! Server used to handle incoming messages.  NULL until at least
-     *  one input has been registered and the incoming port has been
-     *  allocated. */
-    lo_server server;
-
-    /*! Extra properties associated with this device. */
-    struct _mapper_string_table *extra;
-} *mapper_device;
+struct _mapper_device;
+typedef struct _mapper_device *mapper_device;
 
 /*! Bit flags indicating if information has already been
  *  sent in a given polling step. */
@@ -303,6 +261,7 @@ typedef enum {
     AT_BOUND_MAX,
     AT_BOUND_MIN,
     AT_DEST_LENGTH,
+    AT_DEST_PORT,
     AT_DEST_TYPE,
     AT_DIRECTION,
     AT_EXPRESSION,
@@ -328,6 +287,7 @@ typedef enum {
     AT_SCOPE,
     AT_SEND_AS_INSTANCE,
     AT_SRC_LENGTH,
+    AT_SRC_PORT,
     AT_SRC_TYPE,
     AT_TYPE,
     AT_UNITS,

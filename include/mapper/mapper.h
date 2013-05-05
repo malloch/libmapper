@@ -59,11 +59,11 @@ typedef void mapper_signal_update_handler(mapper_signal msig,
 
 /*! A handler function to be called whenever a signal instance management
  *  event occurs. */
-typedef void mapper_signal_instance_management_handler(mapper_signal msig,
-                                                       mapper_db_signal props,
-                                                       int instance_id,
-                                                       msig_instance_event_t event,
-                                                       mapper_timetag_t *tt);
+typedef void mapper_signal_instance_event_handler(mapper_signal msig,
+                                                  mapper_db_signal props,
+                                                  int instance_id,
+                                                  msig_instance_event_t event,
+                                                  mapper_timetag_t *tt);
 
 /*! Update the value of a signal.
  *  The signal will be routed according to external requests.
@@ -77,10 +77,12 @@ typedef void mapper_signal_instance_management_handler(mapper_signal msig,
  *                  or 1.  For periodic signals, this may indicate that a
  *                  block of values should be accepted, where the last
  *                  value is the current value.
- *  \param timetag  The time at which the value update was aquired. If NULL,
- *                  libmapper will tag the value update with the current
- *                  time. See mdev_start_queue() for more information on
- *                  bundling multiple signal updates with the same timetag. */
+ *  \param timetag  The time at which the value update was aquired. If
+ *                  the value is MAPPER_NOW, libmapper will tag the
+ *                  value update with the current time. See
+ *                  mdev_start_queue() for more information on
+ *                  bundling multiple signal updates with the same
+ *                  timetag. */
 void msig_update(mapper_signal sig, void *value,
                  int count, mapper_timetag_t tt);
 
@@ -221,9 +223,9 @@ mapper_instance_allocation_type msig_get_instance_allocation_mode(mapper_signal 
  *                      trigger the callback. Can be a combination of IN_NEW,
  *                      IN_UPSTREAM_RELEASE, IN_DOWNSTREAM_RELEASE, and IN_OVERFLOW.
  *  \param user_data    User context pointer to be passed to handler. */
-void msig_set_instance_management_callback(mapper_signal sig,
-                                           mapper_signal_instance_management_handler h,
-                                           int flags, void *user_data);
+void msig_set_instance_event_callback(mapper_signal sig,
+                                      mapper_signal_instance_event_handler h,
+                                      int flags, void *user_data);
 
 /*! Associate a signal instance with an arbitrary pointer.
  *  \param sig          The signal to operate on.
@@ -247,6 +249,11 @@ void *msig_get_instance_data(mapper_signal sig, int instance_id);
 void msig_set_callback(mapper_signal sig,
                        mapper_signal_update_handler *handler,
                        void *user_data);
+
+/*! Get the number of connections attatched to a specific signal.
+ *  \param sig      The signal to check.
+ *  \return         The number of attached connections. */
+int msig_num_connections(mapper_signal sig);
 
 /**** Signal properties ****/
 
@@ -276,12 +283,6 @@ void msig_set_maximum(mapper_signal sig, void *maximum);
  *  \param rate     A rate for this signal in samples/second, or zero
  *                  for non-periodic signals. */
 void msig_set_rate(mapper_signal sig, float rate);
-
-/*! Get the rate of a signal.
- *  \param sig      The signal to operate on.
- *  \return         The rate of this signal, or zero for non-periodic
- *                  signals.. */
-float msig_get_rate(mapper_signal sig);
 
 /*! Get a signal's property structure.
  *  \param sig  The signal to operate on.
@@ -556,6 +557,43 @@ double mdev_get_clock_offset(mapper_device md);
 /*! Get the network synchronization jitter. */
 double mdev_get_sync_jitter(mapper_device md);
 
+/*! The set of possible actions on a local device link or
+ *  connection. */
+typedef enum {
+    MDEV_LOCAL_ESTABLISHED,
+    MDEV_LOCAL_DESTROYED,
+} mapper_device_local_action_t;
+
+/*! Function to call when a local device link is established or
+ *  destroyed. */
+typedef void mapper_device_link_handler(mapper_device dev,
+                                        mapper_db_link link,
+                                        mapper_device_local_action_t action,
+                                        void *user);
+
+/*! Function to call when a local device connection is established or
+ *  destroyed. */
+typedef void mapper_device_connection_handler(mapper_device dev,
+                                              mapper_db_link link,
+                                              mapper_signal sig,
+                                              mapper_db_connection connection,
+                                              mapper_device_local_action_t action,
+                                              void *user);
+
+/*! Add a function to be called when a local device link is
+ *  established or destroyed, indicated by the action parameter to the
+ *  provided function. */
+void mdev_add_link_callback(mapper_device dev,
+                            mapper_device_link_handler *h, void *user);
+
+/*! Add a function to be called when a local device connection is
+ *  established or destroyed, indicated by the action parameter to the
+ *  provided function. Important: if a link is destroyed, this
+ *  function will not be called for all connections in the link. */
+void mdev_add_connection_callback(mapper_device dev,
+                                  mapper_device_connection_handler *h,
+                                  void *user);
+
 /* @} */
 
 /*** Admins ***/
@@ -652,6 +690,13 @@ mapper_db_device_t **mapper_db_get_all_devices(mapper_db db);
  *  \return            Information about the device, or zero if not found. */
 mapper_db_device mapper_db_get_device_by_name(mapper_db db,
                                               const char *device_name);
+
+/*! Look up information for a registered device using a hash of its name.
+ *  \param db          The database to query.
+ *  \param name_hash   CRC-32 name hash of the device to find in the database.
+ *  \return            Information about the device, or zero if not found. */
+mapper_db_device mapper_db_get_device_by_name_hash(mapper_db db,
+                                                   uint32_t name_hash);
 
 /*! Return the list of devices with a substring in their name.
  *  \param db             The database to query.
@@ -1450,14 +1495,13 @@ void mapper_timetag_add_seconds(mapper_timetag_t *tt, double addend);
 double mapper_timetag_get_double(mapper_timetag_t tt);
 
 /*! Set value of a mapper_timetag from a double-precision floating point value. */
+void mapper_timetag_set_int(mapper_timetag_t *tt, int value);
 
-void mapper_timetag_set_from_int(mapper_timetag_t *tt, int value);
+/*! Set value of a mapper_timetag from a floating point value. */
+void mapper_timetag_set_float(mapper_timetag_t *tt, float value);
 
 /*! Set value of a mapper_timetag from a double-precision floating point value. */
-void mapper_timetag_set_from_float(mapper_timetag_t *tt, float value);
-
-/*! Set value of a mapper_timetag from a double-precision floating point value. */
-void mapper_timetag_set_from_double(mapper_timetag_t *tt, double value);
+void mapper_timetag_set_double(mapper_timetag_t *tt, double value);
 
 /*! Copy value of a mapper_timetag. */
 void mapper_timetag_cpy(mapper_timetag_t *ttl, mapper_timetag_t ttr);

@@ -36,7 +36,7 @@ interfaces for mapping design and will also not be covered here.
 
 Functions and types from each module are prefixed with
 `mapper_<module>_`, in order to avoid namespace clashing.  However,
-since this is a bit verbose, it is shortened to `mdev_` and `msig` for
+since this is a bit verbose, it is shortened to `mdev_` and `msig_` for
 device and signal functions respectively.
 
 Devices
@@ -497,7 +497,7 @@ The argument `mode` can have one of the following values:
   resources to the new instance;
 
 If you want to use another method for determining which active instance
-to release (e.g. the sound with the lowest volume), you can create an `instance_management_handler` for the signal and write the method yourself:
+to release (e.g. the sound with the lowest volume), you can create an `instance_event_handler` for the signal and write the method yourself:
 
     void my_handler(mapper_signal msig,
                     mapper_db_signal props,
@@ -514,10 +514,10 @@ to release (e.g. the sound with the lowest volume), you can create an `instance_
 For this function to be called when instance stealing is necessary, we
 need to register it for `IN_OVERFLOW` events:
 
-    msig_set_instance_management_callback(msig,
-                                          my_handler,
-                                          IN_OVERFLOW,
-                                          *user_context);
+    msig_set_instance_event_callback(msig,
+                                     my_handler,
+                                     IN_OVERFLOW,
+                                     *user_context);
 
 Publishing metadata
 ===================

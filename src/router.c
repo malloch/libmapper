@@ -21,9 +21,10 @@ mapper_router mapper_router_new(mapper_device device, const char *host,
     char str[16];
     mapper_router r = (mapper_router) calloc(1, sizeof(struct _mapper_link));
     sprintf(str, "%d", port);
+    r->props.src_name = strdup(mdev_name(device));
     r->props.dest_addr = lo_address_new(host, str);
     r->props.dest_name = strdup(name);
-    r->props.name_hash = crc32(0L, (const Bytef *)name, strlen(name));
+    r->props.dest_name_hash = crc32(0L, (const Bytef *)name, strlen(name));
     if (default_scope) {
         r->props.num_scopes = 1;
         r->props.scope_names = (char **) malloc(sizeof(char *));
@@ -51,6 +52,8 @@ void mapper_router_free(mapper_router r)
     int i;
 
     if (r) {
+        if (r->props.src_name)
+            free(r->props.src_name);
         if (r->props.dest_name)
             free(r->props.dest_name);
         if (r->props.dest_addr)
@@ -589,7 +592,8 @@ int mapper_router_add_scope(mapper_router router, const char *scope)
     if (!scope)
         return 1;
     // Check if scope is already stored for this router
-    int i, hash = crc32(0L, (const Bytef *)scope, strlen(scope));
+    int i;
+    uint32_t hash = crc32(0L, (const Bytef *)scope, strlen(scope));
     mapper_db_link props = &router->props;
     for (i=0; i<props->num_scopes; i++)
         if (props->scope_hashes[i] == hash)
@@ -605,7 +609,8 @@ int mapper_router_add_scope(mapper_router router, const char *scope)
 
 void mapper_router_remove_scope(mapper_router router, const char *scope)
 {
-    int i, j, hash;
+    int i, j;
+    uint32_t hash;
 
     if (!scope)
         return;
@@ -633,11 +638,11 @@ void mapper_router_remove_scope(mapper_router router, const char *scope)
      * but we will let the receiver-side handle it instead. */
 }
 
-int mapper_router_in_scope(mapper_router router, int id)
+int mapper_router_in_scope(mapper_router router, uint32_t name_hash)
 {
     int i;
     for (i=0; i<router->props.num_scopes; i++)
-        if (router->props.scope_hashes[i] == id)
+        if (router->props.scope_hashes[i] == name_hash)
             return 1;
     return 0;
 }
@@ -678,7 +683,7 @@ mapper_router mapper_router_find_by_dest_name_hash(mapper_router router,
                                                    uint32_t hash)
 {
     while (router) {
-        if (router->props.name_hash == hash)
+        if (router->props.dest_name_hash == hash)
             return router;
         router = router->next;
     }
