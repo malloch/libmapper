@@ -54,7 +54,7 @@ int setup_device()
         goto error;
 
     mapper_timetag_t tt;
-    mdev_timetag_now(device, &tt);
+    mdev_now(device, &tt);
     mapper_timetag_add_seconds(&tt, 5.);
     mdev_add_metronome(device, "/foo", tt, 120., 4, handler, 0);
 

@@ -59,7 +59,7 @@ void loop()
 
     while (i >= 0 && !done) {
         mdev_poll(device, 10);
-        mdev_timetag_now(device, &device_time);
+        mdev_now(device, &device_time);
         if (device_time.sec != last_update) {
             last_update = device_time.sec;
             if (ready) {
