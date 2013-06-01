@@ -47,10 +47,11 @@ struct _mapper_signal
 /**** Devices ****/
 
 struct _mapper_device {
-    /*! Prefix for the name of this device.  It gets a unique ordinal
-     *  appended to it to differentiate from other devices of the same
-     *  name. */
-    char *name_prefix;
+    mapper_db_device_t props;           //!< Properties.
+    mapper_admin_allocated_t ordinal;   /*!< A unique ordinal for this
+                                         *   device instance. */
+    int registered;                     /*!< Non-zero if this device has
+                                         *   been registered. */
 
     /*! Non-zero if this device is the sole owner of this admin, i.e.,
      *  it was created during mdev_new() and should be freed during
@@ -60,13 +61,9 @@ struct _mapper_device {
     mapper_admin admin;
     struct _mapper_signal **inputs;
     struct _mapper_signal **outputs;
-    int n_inputs;
-    int n_outputs;
     int n_alloc_inputs;
     int n_alloc_outputs;
     int n_output_callbacks;
-    int n_links_in;
-    int n_links_out;
     int version;
     int flags;    /*!< Bitflags indicating if information has already been
                    *   sent in a given polling step. */
@@ -77,25 +74,20 @@ struct _mapper_device {
     mapper_device_link_handler *link_cb;
     void *link_cb_userdata;
 
-    /*!< Function to call for custom connection handling. */
+    /*! Function to call for custom connection handling. */
     mapper_device_connection_handler *connection_cb;
     void *connection_cb_userdata;
 
-    /*!< The list of active instance id mappings. */
+    /*! The list of active instance id mappings. */
     struct _mapper_id_map *active_id_map;
 
-    /*!< The list of reserve instance id mappings. */
+    /*! The list of reserve instance id mappings. */
     struct _mapper_id_map *reserve_id_map;
 
     uint32_t id_counter;
 
-    /*! Server used to handle incoming messages.  NULL until at least
-     *  one input has been registered and the incoming port has been
-     *  allocated. */
+    /*! Server used to handle incoming messages. */
     lo_server server;
-
-    /*! Extra properties associated with this device. */
-    struct _mapper_string_table *extra;
 };
 
 /**** Instances ****/
@@ -130,9 +122,16 @@ typedef struct _mapper_signal_instance
 #define IN_RELEASED_LOCALLY  0x01
 #define IN_RELEASED_REMOTELY 0x02
 
-typedef struct _mapper_signal_id_map {
-    struct _mapper_id_map *map;                 /*! Pointer to id_map in use */
-    struct _mapper_signal_instance *instance;   /*! Pointer to signal instance. */
+typedef struct _mapper_signal_id_map
+{
+    /*! Pointer to id_map in use */
+    struct _mapper_id_map *map;
+
+    /*! Pointer to signal instance. */
+    struct _mapper_signal_instance *instance;
+
+    /*! Status of the id_map. Can be either 0 or a combination of
+     *  IN_RELEASED_LOCALLY and IN_RELEASED_REMOTELY. */
     int status;
 } mapper_signal_id_map_t;
 
@@ -140,8 +139,7 @@ typedef struct _mapper_signal_id_map {
 
 /**** Admin ****/
 
-void mapper_admin_add_device(mapper_admin admin, mapper_device dev,
-                             const char *identifier);
+void mapper_admin_add_device(mapper_admin admin, mapper_device dev);
 
 void mapper_admin_add_monitor(mapper_admin admin, mapper_monitor mon);
 
@@ -149,15 +147,7 @@ void mapper_admin_remove_monitor(mapper_admin admin, mapper_monitor mon);
 
 int mapper_admin_poll(mapper_admin admin);
 
-void mapper_admin_name_probe(mapper_admin admin);
-
-/* A macro allow tracing bad usage of this function. */
-#define mapper_admin_name(admin)                        \
-    _real_mapper_admin_name(admin, __FILE__, __LINE__)
-
-/* The real function, don't call directly. */
-const char *_real_mapper_admin_name(mapper_admin admin,
-                                    const char *file, unsigned int line);
+void mapper_admin_probe_device_name(mapper_admin admin, mapper_device dev);
 
 /*! Macro for calling message-sending function. */
 #define mapper_admin_send_osc(...)                  \
@@ -299,7 +289,8 @@ int mapper_router_in_scope(mapper_router router, uint32_t group_id);
 
 /*! Find a router by destination address in a linked list of routers. */
 mapper_router mapper_router_find_by_dest_address(mapper_router routers,
-                                                 lo_address dest_addr);
+                                                 const char *host,
+                                                 int port);
 
 /*! Find a router by destination device name in a linked list of routers. */
 mapper_router mapper_router_find_by_dest_name(mapper_router routers,
@@ -307,7 +298,7 @@ mapper_router mapper_router_find_by_dest_name(mapper_router routers,
 
 int mapper_router_add_scope(mapper_router router, const char *scope);
 
-void mapper_router_remove_scope(mapper_router router, const char *scope);
+int mapper_router_remove_scope(mapper_router router, const char *scope);
 
 void mapper_router_start_queue(mapper_router router, mapper_timetag_t tt);
 
@@ -352,7 +343,8 @@ int mapper_receiver_in_scope(mapper_receiver receiver, uint32_t group_id);
 
 /*! Find a receiver by source address in a linked list of receivers. */
 mapper_receiver mapper_receiver_find_by_src_address(mapper_receiver receivers,
-                                                    lo_address src_addr);
+                                                    const char *host,
+                                                    int port);
 
 /*! Find a receiver by source device name in a linked list of receivers. */
 mapper_receiver mapper_receiver_find_by_src_name(mapper_receiver receivers,
@@ -360,7 +352,7 @@ mapper_receiver mapper_receiver_find_by_src_name(mapper_receiver receivers,
 
 int mapper_receiver_add_scope(mapper_receiver receiver, const char *scope);
 
-void mapper_receiver_remove_scope(mapper_receiver receiver, const char *scope);
+int mapper_receiver_remove_scope(mapper_receiver receiver, const char *scope);
 
 /**** Signals ****/
 
@@ -582,6 +574,14 @@ int mapper_db_add_or_update_link_params(mapper_db db,
                                         const char *dest_name,
                                         mapper_message_t *params);
 
+/*! Add a scope identifier to a given link record. */
+int mapper_db_link_add_scope(mapper_db_link link,
+                             const char *scope);
+
+/*! Remove a scope identifier from a given link record. */
+int mapper_db_link_remove_scope(mapper_db_link link,
+                                const char *scope);
+
 /**** Messages ****/
 
 /*! Parse a message based on an OSC path and parameters.
@@ -606,13 +606,20 @@ lo_arg** mapper_msg_get_param(mapper_message_t *msg,
  *  Note that it's possible the returned type string will be longer
  *  than the actual contents pointed to; it is up to the usage of this
  *  function to ensure it only processes the a priori expected number
- *  of parameters.  (e.g., "@range" has 4 parameters.)
+ *  of parameters. The number of parameter elements can be retrieved
+ *  using the function mapper_msg_get_length().
  *  \param msg    Structure containing parameter info.
  *  \param param  Symbolic identifier of the parameter to look for.
- *  \return       String containing type of each parameter argument.
- */
+ *  \return       String containing type of each parameter argument. */
 const char* mapper_msg_get_type(mapper_message_t *msg,
                                 mapper_msg_param_t param);
+
+/*! Look up the vector length of a message parameter by symbolic identifier.
+ *  \param msg    Structure containing parameter info.
+ *  \param param  Symbolic identifier of the parameter to look for.
+ *  \return       Integer containing the length of the parameter vector. */
+int mapper_msg_get_length(mapper_message_t *msg,
+                          mapper_msg_param_t param);
 
 /*! Helper to get a direct parameter value only if it's a string.
  *  \param msg    Structure containing parameter info.

@@ -97,7 +97,7 @@ void msig_update(mapper_signal sig, void *value,
     mapper_timetag_t *ttp;
     if (memcmp(&tt, &MAPPER_NOW, sizeof(mapper_timetag_t))==0) {
         ttp = &sig->device->admin->clock.now;
-        mdev_timetag_now(sig->device, ttp);
+        mdev_now(sig->device, ttp);
     }
     else
         ttp = &tt;
@@ -131,7 +131,7 @@ void msig_update_int(mapper_signal sig, int value)
 #endif
 
     mapper_timetag_t *tt = &sig->device->admin->clock.now;
-    mdev_timetag_now(sig->device, tt);
+    mdev_now(sig->device, tt);
 
     int index = 0;
     if (!sig->id_maps[0].instance)
@@ -162,7 +162,7 @@ void msig_update_float(mapper_signal sig, float value)
 #endif
 
     mapper_timetag_t *tt = &sig->device->admin->clock.now;
-    mdev_timetag_now(sig->device, tt);
+    mdev_now(sig->device, tt);
 
     int index = 0;
     if (!sig->id_maps[0].instance)
@@ -560,7 +560,7 @@ static void msig_update_internal(mapper_signal sig,
      * and size. */
 
     if (value) {
-        if (count==0) count=1;
+        if (count<=0) count=1;
         size_t n = msig_vector_bytes(sig);
         memcpy(si->value, value + n*(count-1), n);
         si->has_value = 1;
@@ -573,7 +573,7 @@ static void msig_update_internal(mapper_signal sig,
     float period;
     if (memcmp(&tt, &MAPPER_NOW, sizeof(mapper_timetag_t))==0) {
         mapper_timetag_t *temp = &sig->device->admin->clock.now;
-        mdev_timetag_now(sig->device, temp);
+        mdev_now(sig->device, temp);
         period = mapper_timetag_difference(*temp, si->timetag);
         memcpy(&si->timetag, temp, sizeof(mapper_timetag_t));
     }
@@ -625,7 +625,7 @@ void msig_release_instance_internal(mapper_signal sig,
     mapper_timetag_t *ttp;
     if (memcmp(&tt, &MAPPER_NOW, sizeof(mapper_timetag_t))==0) {
         ttp = &sig->device->admin->clock.now;
-        mdev_timetag_now(sig->device, ttp);
+        mdev_now(sig->device, ttp);
     }
     else
         ttp = &tt;
@@ -665,7 +665,7 @@ void msig_remove_instance(mapper_signal sig,
         if (sig->id_maps[i].instance == si) {
             // First release instance
             mapper_timetag_t tt = sig->device->admin->clock.now;
-            mdev_timetag_now(sig->device, &tt);
+            mdev_now(sig->device, &tt);
             msig_release_instance_internal(sig, i, tt);
             msig_free_instance(sig, si);
             sig->id_maps[i].instance = 0;
@@ -729,7 +729,7 @@ void msig_match_instances(mapper_signal from, mapper_signal to, int instance_id)
         return;
 
     mapper_timetag_t tt = from->device->admin->clock.now;
-    mdev_timetag_now(from->device, &tt);
+    mdev_now(from->device, &tt);
 
     // Get "to" instance with same map
     msig_get_instance_with_remote_ids(to, from->id_maps[index].map->group,
@@ -827,7 +827,7 @@ void msig_set_instance_data(mapper_signal sig,
                             void *user_data)
 {
     mapper_timetag_t tt = sig->device->admin->clock.now;
-    mdev_timetag_now(sig->device, &tt);
+    mdev_now(sig->device, &tt);
 
     int index = msig_get_instance_with_local_id(sig, instance_id, 0, &tt);
     if (index >= 0)
