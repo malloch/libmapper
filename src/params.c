@@ -607,10 +607,10 @@ void mapper_link_prepare_osc_message(lo_message m,
 void mapper_connection_prepare_osc_message(lo_message m,
                                            mapper_connection con)
 {
-    lo_message_add_string(m, mapper_msg_param_strings[AT_PROTOCOL])
-    if (c->props.protocol == LO_UDP)
+    lo_message_add_string(m, mapper_msg_param_strings[AT_PROTOCOL]);
+    if (con->props.protocol == LO_UDP)
         lo_message_add_string(m, "osc.udp");
-    else if (c->props.protocol == LO_TCP)
+    else if (con->props.protocol == LO_TCP)
         lo_message_add_string(m, "osc.tcp");
 
     if (con->props.mode) {
