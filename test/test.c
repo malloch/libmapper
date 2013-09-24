@@ -40,7 +40,7 @@ int setup_source()
 
     float mn=0, mx=10;
 
-    sendsig_1 = mdev_add_output(source, "/outsig_1", 1, 'f', "Hz", &mn, &mx);
+    sendsig_1 = mdev_add_output(source, "/outsig_1", 1, 'd', "Hz", &mn, &mx);
     sendsig_2 = mdev_add_output(source, "/outsig_2", 1, 'f', "mm", &mn, &mx);
     sendsig_3 = mdev_add_output(source, "/outsig_3", 3, 'f', 0, &mn, &mx);
     sendsig_4 = mdev_add_output(source, "/outsig_4", 1, 'f', 0, &mn, &mx);
@@ -75,9 +75,17 @@ void insig_handler(mapper_signal sig, mapper_db_signal props,
 {
     if (value) {
         printf("--> destination got %s", props->name);
-        float *v = value;
-        for (int i = 0; i < props->length; i++) {
-            printf(" %f", v[i]);
+        if (props->type == 'f') {
+            float *v = value;
+            for (int i = 0; i < props->length; i++) {
+                printf(" %f", v[i]);
+            }
+        }
+        else if (props->type == 'd') {
+            double *v = value;
+            for (int i = 0; i < props->length; i++) {
+                printf(" %f", v[i]);
+            }
         }
         printf("\n");
     }
@@ -96,7 +104,7 @@ int setup_destination()
 
     recvsig_1 = mdev_add_input(destination, "/insig_1", 1, 'f',
                                0, &mn, &mx, insig_handler, 0);
-    recvsig_2 = mdev_add_input(destination, "/insig_2", 1, 'f',
+    recvsig_2 = mdev_add_input(destination, "/insig_2", 1, 'd',
                                0, &mn, &mx, insig_handler, 0);
     recvsig_3 = mdev_add_input(destination, "/insig_3", 3, 'f',
                                0, &mn, &mx, insig_handler, 0);
@@ -160,12 +168,18 @@ void loop()
         msig_full_name(recvsig_2, dest_name, 1024);
         mapper_monitor_connect(mon, src_name, dest_name, 0, 0);
 
+        // wait until connection has been established
+        while (!source->routers || !source->routers->n_connections) {
+            mdev_poll(source, 1);
+            mdev_poll(destination, 1);
+        }
+
         mapper_monitor_free(mon);
     }
 
     while (i >= 0 && !done) {
         mdev_poll(source, 0);
-        msig_update_float(source->outputs[0], ((i % 10) * 1.0f));
+        msig_update_double(source->outputs[0], ((i % 10) * 1.0f));
         msig_update_float(source->outputs[1], ((i % 10) * 1.0f));
         printf("source value updated to %d -->\n", i % 10);
         mapper_db_signal props = msig_properties(source->outputs[0]);

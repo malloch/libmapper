@@ -70,21 +70,22 @@ typedef struct _mapper_db_device {
  * properties via the mapper_monitor_connect() or
  * mapper_monitor_connection_modify() functions. Should be combined with the
  * above range bitflags. */
-#define CONNECTION_BOUND_MIN     0x0010
-#define CONNECTION_BOUND_MAX     0x0020
-#define CONNECTION_EXPRESSION    0x0040
-#define CONNECTION_MODE          0x0080
-#define CONNECTION_MUTED         0x0100
-#define CONNECTION_ALL           0x01FF
+#define CONNECTION_BOUND_MIN        0x0010
+#define CONNECTION_BOUND_MAX        0x0020
+#define CONNECTION_EXPRESSION       0x0040
+#define CONNECTION_MODE             0x0080
+#define CONNECTION_MUTED            0x0100
+#define CONNECTION_SEND_AS_INSTANCE 0x0200
+#define CONNECTION_ALL              0x0FFF
 
 /*! A structure to keep range information, with a bitfield indicating
  *  which parts of the range are known.
  *  @ingroup connectiondb */
 typedef struct _mapper_connection_range {
-    float src_min;              //!< Source minimum.
-    float src_max;              //!< Source maximum.
-    float dest_min;             //!< Destination minimum.
-    float dest_max;             //!< Destination maximum.
+    double src_min;              //!< Source minimum.
+    double src_max;              //!< Source maximum.
+    double dest_min;             //!< Destination minimum.
+    double dest_max;             //!< Destination maximum.
     int known;                  /*!< Bitfield identifying which range
                                  *   extremities are known. */
 } mapper_connection_range_t;

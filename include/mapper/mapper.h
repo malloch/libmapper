@@ -100,6 +100,14 @@ void msig_update_int(mapper_signal sig, int value);
  *  \param value A new scalar value for this signal. */
 void msig_update_float(mapper_signal sig, float value);
 
+/*! Update the value of a scalar signal of type double.
+ *  This is a scalar equivalent to msig_update(), for when passing by
+ *  value is more convenient than passing a pointer.
+ *  The signal will be routed according to external requests.
+ *  \param sig The signal to update.
+ *  \param value A new scalar value for this signal. */
+void msig_update_double(mapper_signal sig, double value);
+
 /*! Get a signal's value.
  *  \param sig      The signal to operate on.
  *  \param timetag  A location to receive the value's time tag.
@@ -118,10 +126,16 @@ int msig_query_remotes(mapper_signal sig, mapper_timetag_t tt);
 
 /**** Instances ****/
 
-/*! Add new instances to the reserve list.
+/*! Add new instances to the reserve list. Note that if instance ids are specified,
+ *  libmapper will not add multiple instances with the same id.
  *  \param sig          The signal to which the instances will be added.
- *  \param num          The number of instances to add. */
-void msig_reserve_instances(mapper_signal sig, int num);
+ *  \param num          The number of instances to add.
+ *  \param ids          Array of integer ids, one for each new instance,
+ *                      or 0 for automatically-generated instance ids.
+ *  \param user_data    Array of user context pointers, one for each new instance,
+ *                      or 0 if not needed.
+ *  \return             Number of instances added. */
+int msig_reserve_instances(mapper_signal sig, int num, int *ids, void **user_data);
 
 /*! Update the value of a specific signal instance.
  *  The signal will be routed according to external requests.
@@ -150,6 +164,11 @@ void msig_update_instance(mapper_signal sig, int instance_id,
  *                     bundling multiple signal updates with the same timetag. */
 void msig_release_instance(mapper_signal sig, int instance_id,
                            mapper_timetag_t tt);
+
+/*! Remove a specific instance of a signal and free its memory.
+ *  \param sig         The signal to operate on.
+ *  \param instance_id The instance to suspend. */
+void msig_remove_instance(mapper_signal sig, int instance_id);
 
 /*! Get the local id of the oldest active instance.
  *  \param sig         The signal to operate on.
@@ -1442,7 +1461,7 @@ void mapper_monitor_now(mapper_monitor mon,
 /*! Return the difference in seconds between two mapper_timetags.
  *  \param a    The minuend.
  *  \param b    The subtrahend.
- *  \return     The difference a-b in seconds between the two timetags. */
+ *  \return     The difference a-b in seconds. */
 double mapper_timetag_difference(mapper_timetag_t a, mapper_timetag_t b);
 
 /*! Add seconds to a given timetag.
@@ -1453,10 +1472,10 @@ void mapper_timetag_add_seconds(mapper_timetag_t *tt, double addend);
 /*! Return value of mapper_timetag as a double-precision floating point value. */
 double mapper_timetag_get_double(mapper_timetag_t tt);
 
-/*! Set value of a mapper_timetag from a double-precision floating point value. */
+/*! Set value of a mapper_timetag from an integer value. */
 void mapper_timetag_set_int(mapper_timetag_t *tt, int value);
 
-/*! Set value of a mapper_timetag from a double-precision floating point value. */
+/*! Set value of a mapper_timetag from a floating point value. */
 void mapper_timetag_set_float(mapper_timetag_t *tt, float value);
 
 /*! Set value of a mapper_timetag from a double-precision floating point value. */

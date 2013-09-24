@@ -10,8 +10,6 @@
 #include <unistd.h>
 #include <signal.h>
 
-int automate = 1;
-
 mapper_device source = 0;
 mapper_device destination = 0;
 mapper_signal sendsig = 0;
@@ -52,7 +50,7 @@ int setup_source()
     sendsig = mdev_add_output(source, "/outsig", 1, 'f', 0, 0, 0);
     if (!sendsig)
         goto error;
-    msig_reserve_instances(sendsig, 9);
+    msig_reserve_instances(sendsig, 9, 0, 0);
 
     printf("Output signal registered.\n");
     printf("Number of outputs: %d\n", mdev_num_outputs(source));
@@ -110,7 +108,7 @@ int setup_destination()
                              0, 0, 0, insig_handler, 0);
     if (!recvsig)
         goto error;
-    msig_reserve_instances(recvsig, 9);
+    msig_reserve_instances(recvsig, 9, 0, 0);
 
     printf("Input signal registered.\n");
     printf("Number of inputs: %d\n", mdev_num_inputs(destination));
@@ -141,38 +139,27 @@ void wait_local_devices()
 
 void connect_signals()
 {
-    char source_name[1024], destination_name[1024];
+    mapper_monitor mon = mapper_monitor_new(source->admin, 0);
 
-    printf("%s\n", mdev_name(source));
-    printf("%s\n", mdev_name(destination));
+    char src_name[1024], dest_name[1024];
+    mapper_monitor_link(mon, mdev_name(source),
+                        mdev_name(destination), 0, 0);
 
-    lo_address a = lo_address_new_from_url("osc.udp://224.0.1.3:7570");
-    lo_address_set_ttl(a, 1);
+    msig_full_name(sendsig, src_name, 1024);
+    msig_full_name(recvsig, dest_name, 1024);
+    mapper_db_connection_t props;
+    props.expression = "y=y{-1}+1";
+    props.mode = MO_EXPRESSION;
+    mapper_monitor_connect(mon, src_name, dest_name, &props,
+                           CONNECTION_MODE | CONNECTION_EXPRESSION);
 
-    lo_send(a, "/link", "ss", mdev_name(source), mdev_name(destination));
-
-    // wait for link to be processed
-    int j = 50;
-    while (j >= 0) {
-        mdev_poll(source, 10);
-        mdev_poll(destination, 10);
-        j--;
+    // wait until connection has been established
+    while (!source->routers || !source->routers->n_connections) {
+        mdev_poll(source, 1);
+        mdev_poll(destination, 1);
     }
 
-    msig_full_name(sendsig, source_name, 1024);
-    msig_full_name(recvsig, destination_name, 1024);
-
-    lo_send(a, "/connect", "ssssss", source_name, destination_name, "@mode", "expression", "@expression", "y=y{-1}+1");
-
-    lo_address_free(a);
-
-    // wait for connection to be processed
-    j = 50;
-    while (j >= 0) {
-        mdev_poll(source, 10);
-        mdev_poll(destination, 10);
-        j--;
-    }
+    mapper_monitor_free(mon);
 }
 
 void ctrlc(int sig)
@@ -246,15 +233,14 @@ int main()
     }
 
     if (setup_source()) {
-        printf("Done initializing source.\n");
+        printf("Error initializing source.\n");
         result = 1;
         goto done;
     }
 
     wait_local_devices();
 
-    if (automate)
-        connect_signals();
+    connect_signals();
 
     // start things off
     printf("STARTING TEST...\n");

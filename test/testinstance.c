@@ -18,8 +18,6 @@ mapper_device source = 0;
 mapper_device destination = 0;
 mapper_signal sendsig = 0;
 mapper_signal recvsig = 0;
-int sendinst[10] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
-int nextid = 1;
 
 int sent = 0;
 int received = 0;
@@ -38,7 +36,7 @@ int setup_source()
     sendsig = mdev_add_output(source, "/outsig", 1, 'f', 0, &mn, &mx);
     if (!sendsig)
         goto error;
-    msig_reserve_instances(sendsig, 9);
+    msig_reserve_instances(sendsig, 9, 0, 0);
 
     printf("Output signal registered.\n");
     printf("Number of outputs: %d\n", mdev_num_outputs(source));
@@ -81,7 +79,7 @@ void more_handler(mapper_signal sig, mapper_db_signal props,
 {
     if (event & IN_OVERFLOW) {
         printf("OVERFLOW!! ALLOCATING ANOTHER INSTANCE.\n");
-        msig_reserve_instances(sig, 1);
+        msig_reserve_instances(sig, 1, 0, 0);
     }
     else if (event & IN_UPSTREAM_RELEASE) {
         printf("UPSTREAM RELEASE!! RELEASING LOCAL INSTANCE.\n");
@@ -103,7 +101,13 @@ int setup_destination()
                              0, &mn, 0, insig_handler, 0);
     if (!recvsig)
         goto error;
-    msig_reserve_instances(recvsig, 4);
+
+    // remove the default instance "0"
+    msig_remove_instance(recvsig, 0);
+    int i;
+    for (i=100; i<104; i++) {
+        msig_reserve_instances(recvsig, 1, &i, 0);
+    }
 
     printf("Input signal registered.\n");
     printf("Number of inputs: %d\n", mdev_num_inputs(destination));
@@ -145,29 +149,23 @@ void print_instance_ids(mapper_signal sig)
 
 void connect_signals()
 {
-    char source_name[1024], destination_name[1024];
+    mapper_monitor mon = mapper_monitor_new(source->admin, 0);
 
-    printf("%s\n", mdev_name(source));
-    printf("%s\n", mdev_name(destination));
+    char src_name[1024], dest_name[1024];
+    mapper_monitor_link(mon, mdev_name(source),
+                        mdev_name(destination), 0, 0);
 
-    lo_address a = lo_address_new_from_url("osc.udp://224.0.1.3:7570");
-    lo_address_set_ttl(a, 1);
+    msig_full_name(sendsig, src_name, 1024);
+    msig_full_name(recvsig, dest_name, 1024);
+    mapper_monitor_connect(mon, src_name, dest_name, 0, 0);
 
-    lo_send(a, "/link", "ss", mdev_name(source), mdev_name(destination));
-
-    int j = 50;
-    while (j >= 0) {
-        mdev_poll(source, 10);
-        mdev_poll(destination, 10);
-        j--;
+    // wait until connection has been established
+    while (!source->routers || !source->routers->n_connections) {
+        mdev_poll(source, 1);
+        mdev_poll(destination, 1);
     }
 
-    msig_full_name(sendsig, source_name, 1024);
-    msig_full_name(recvsig, destination_name, 1024);
-
-    lo_send(a, "/connect", "ss", source_name, destination_name);
-
-    lo_address_free(a);
+    mapper_monitor_free(mon);
 }
 
 void loop(int iterations)
@@ -180,42 +178,18 @@ void loop(int iterations)
         // here we should create, update and destroy some instances
         switch (rand() % 5) {
             case 0:
-                // try to create a new instance
-                for (j = 0; j < 10; j++) {
-                    if (!sendinst[j]) {
-                        sendinst[j] = nextid++;
-                        printf("--> Created new sender instance: %d\n",
-                               sendinst[j]);
-                        break;
-                    }
-                }
-                break;
-            case 1:
                 // try to destroy an instance
                 j = rand() % 10;
-                if (sendinst[j]) {
-                    printf("--> Retiring sender instance %ld\n",
-                           (long)sendinst[j]);
-                    msig_release_instance(sendsig,
-                                          sendinst[j],
-                                          MAPPER_NOW);
-                    sendinst[j] = 0;
-                    break;
-                }
+                printf("--> Retiring sender instance %i\n", j);
+                msig_release_instance(sendsig, j, MAPPER_NOW);
                 break;
             default:
                 j = rand() % 10;
-                if (sendinst[j]) {
-                    // try to update an instance
-                    value = (rand() % 10) * 1.0f;
-                    msig_update_instance(sendsig,
-                                         sendinst[j],
-                                         &value, 0,
-                                         MAPPER_NOW);
-                    printf("--> sender instance %d updated to %f\n",
-                           sendinst[j], value);
-                    sent++;
-                }
+                // try to update an instance
+                value = (rand() % 10) * 1.0f;
+                msig_update_instance(sendsig, j, &value, 0, MAPPER_NOW);
+                printf("--> sender instance %d updated to %f\n", j, value);
+                sent++;
                 break;
         }
 
@@ -267,12 +241,12 @@ int main()
     stats[1] = received;
 
     for (i=0; i<10; i++)
-        msig_release_instance(sendsig, sendinst[i], MAPPER_NOW);
+        msig_release_instance(sendsig, i, MAPPER_NOW);
     sent = received = 0;
 
     msig_set_instance_allocation_mode(recvsig, IN_STEAL_OLDEST);
     printf("\n**********************************************\n");
-    printf("*************** IN_STEAL_OLDEST **************\n");
+    printf("************ STEAL OLDEST INSTANCE ***********\n");
     loop(100);
 
     stats[2] = sent;
@@ -280,13 +254,13 @@ int main()
     sent = received = 0;
 
     for (i=0; i<10; i++)
-        msig_release_instance(sendsig, sendinst[i], MAPPER_NOW);
+        msig_release_instance(sendsig, i, MAPPER_NOW);
     sent = received = 0;
 
     msig_set_instance_event_callback(recvsig, more_handler,
                                      IN_OVERFLOW | IN_UPSTREAM_RELEASE, 0);
     printf("\n**********************************************\n");
-    printf("*********** CALLBACK > ADD INSTANCE **********\n");
+    printf("*********** CALLBACK -> ADD INSTANCE *********\n");
     loop(100);
 
     stats[4] = sent;
