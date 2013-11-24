@@ -21,7 +21,7 @@ int main()
     int input_history_size, output_history_size;
     mapper_expr e = mapper_expr_new_from_string(str, 'f', 'f', 1, 1,
                                                 &input_history_size,
-                                                &output_history_size);
+                                                &output_history_size, 0);
     printf("Parsing %s\n", str);
     if (!e) { printf("Test FAILED.\n"); return 1; }
 #ifdef DEBUG

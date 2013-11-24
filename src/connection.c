@@ -187,7 +187,7 @@ int mapper_connection_perform(mapper_connection connection,
 
         if (changed) {
             mapper_connection_set_linear_range(connection,
-                                               &connection->props.range);
+                                               &connection->props.range, 0);
 
             /* Stay in calibrate mode. */
             connection->props.mode = MO_CALIBRATE;
@@ -403,12 +403,13 @@ int mapper_boundary_perform(mapper_connection connection,
 static int replace_expression_string(mapper_connection c,
                                      const char *expr_str,
                                      int *input_history_size,
-                                     int *output_history_size)
+                                     int *output_history_size,
+                                     lo_message error)
 {
     mapper_expr expr = mapper_expr_new_from_string(
         expr_str, c->props.src_type, c->props.dest_type,
         c->props.src_length, c->props.dest_length,
-        input_history_size, output_history_size);
+        input_history_size, output_history_size, error);
 
     if (!expr)
         return 1;
@@ -436,7 +437,8 @@ void mapper_connection_set_direct(mapper_connection c)
 }
 
 void mapper_connection_set_linear_range(mapper_connection c,
-                                        mapper_connection_range_t *r)
+                                        mapper_connection_range_t *r,
+                                        lo_message error)
 {
     char expr[256] = "";
     const char *e = expr;
@@ -476,7 +478,7 @@ void mapper_connection_set_linear_range(mapper_connection c,
     if (e) {
         int input_history_size, output_history_size;
         if (!replace_expression_string(c, e, &input_history_size,
-                                       &output_history_size)) {
+                                       &output_history_size, error)) {
             reallocate_connection_histories(c, 1, 1);
             c->props.mode = MO_LINEAR;
         }
@@ -484,11 +486,12 @@ void mapper_connection_set_linear_range(mapper_connection c,
 }
 
 void mapper_connection_set_expression(mapper_connection c,
-                                      const char *expr)
+                                      const char *expr,
+                                      lo_message error)
 {
     int input_history_size, output_history_size;
     if (replace_expression_string(c, expr, &input_history_size,
-                                  &output_history_size))
+                                  &output_history_size, error))
         return;
 
     c->props.mode = MO_EXPRESSION;
@@ -652,7 +655,8 @@ static int get_range(mapper_connection connection,
 }
 
 void mapper_connection_set_from_message(mapper_connection c,
-                                        mapper_message_t *msg)
+                                        mapper_message_t *msg,
+                                        lo_message error)
 {
     /* First record any provided parameters. */
 
@@ -689,7 +693,7 @@ void mapper_connection_set_from_message(mapper_connection c,
 
     if (c->props.range.known == CONNECTION_RANGE_KNOWN &&
         c->props.mode == MO_LINEAR) {
-        mapper_connection_set_linear_range(c, &c->props.range);
+        mapper_connection_set_linear_range(c, &c->props.range, error);
     }
 
     /* Muting. */
@@ -711,7 +715,7 @@ void mapper_connection_set_from_message(mapper_connection c,
     if (expr) {
         int input_history_size, output_history_size;
         if (!replace_expression_string(c, expr, &input_history_size,
-                                       &output_history_size)) {
+                                       &output_history_size, error)) {
             if (c->props.mode == MO_EXPRESSION)
                 reallocate_connection_histories(c, input_history_size,
                                                 output_history_size);
@@ -739,7 +743,7 @@ void mapper_connection_set_from_message(mapper_connection c,
             if (c->props.mode == MO_UNDEFINED) {
                 if (range_known == CONNECTION_RANGE_KNOWN) {
                     /* We have enough information for a linear connection. */
-                    mapper_connection_set_linear_range(c, &c->props.range);
+                    mapper_connection_set_linear_range(c, &c->props.range, error);
                 } else
                     /* No range, default to direct connection. */
                     mapper_connection_set_direct(c);
@@ -750,7 +754,7 @@ void mapper_connection_set_from_message(mapper_connection c,
         break;
     case MO_LINEAR:
         if (range_known == CONNECTION_RANGE_KNOWN) {
-            mapper_connection_set_linear_range(c, &c->props.range);
+            mapper_connection_set_linear_range(c, &c->props.range, error);
         }
         break;
     case MO_CALIBRATE:
@@ -762,7 +766,7 @@ void mapper_connection_set_from_message(mapper_connection c,
         {
             if (!c->props.expression)
                 c->props.expression = strdup("y=x");
-            mapper_connection_set_expression(c, c->props.expression);
+            mapper_connection_set_expression(c, c->props.expression, error);
         }
         break;
     case MO_REVERSE:

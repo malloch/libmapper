@@ -161,8 +161,8 @@ void loop()
                             mdev_name(destination), 0, 0);
 
         while (i++ < 10) {
-            mdev_poll(source, 0);
-            mdev_poll(destination, 0);
+            mdev_poll(source, 10);
+            mdev_poll(destination, 10);
         }
 
         msig_full_name(sendsig_1, src_name, 1024);

@@ -122,7 +122,7 @@ int setup_router()
                                                        recvsig->props.name,
                                                        'f', 3);
     const char *expr = "y=x*10";
-    mapper_connection_set_expression(c, expr);
+    mapper_connection_set_expression(c, expr, 0);
 
     return 0;
 }

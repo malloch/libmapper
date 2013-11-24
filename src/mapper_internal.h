@@ -475,15 +475,16 @@ int mapper_boundary_perform(mapper_connection connection,
 
 /*! Set a connection's properties based on message parameters. */
 void mapper_connection_set_from_message(mapper_connection connection,
-                                        mapper_message_t *msg);
+                                        mapper_message_t *msg, lo_message error);
 
 void mapper_connection_set_direct(mapper_connection connection);
 
 void mapper_connection_set_linear_range(mapper_connection connection,
-                                        mapper_connection_range_t *range);
+                                        mapper_connection_range_t *range,
+                                        lo_message error);
 
 void mapper_connection_set_expression(mapper_connection connection,
-                                      const char *expr);
+                                      const char *expr, lo_message error);
 
 void mapper_connection_set_calibrate(mapper_connection connection,
                                      float dest_min, float dest_max);
@@ -731,7 +732,8 @@ mapper_expr mapper_expr_new_from_string(const char *str,
                                         int input_vector_size,
                                         int output_vector_size,
                                         int *input_history_size,
-                                        int *output_history_size);
+                                        int *output_history_size,
+                                        lo_message m);
 
 int mapper_expr_input_history_size(mapper_expr expr);
 

@@ -2493,7 +2493,7 @@ static int handler_signal_connectTo(const char *path, const char *types,
         }
 
         /* Set its properties. */
-        mapper_connection_set_from_message(c, &params);
+        mapper_connection_set_from_message(c, &params, 0);
     }
 
     // Inform destination device
@@ -2612,7 +2612,7 @@ static int handler_signal_connected(const char *path, const char *types,
 
     if (c && argc > 2) {
         /* Set its properties. */
-        mapper_connection_set_from_message(c, &params);
+        mapper_connection_set_from_message(c, &params, 0);
         // TODO: check if metadata actually changed
 
         // Inform subscribers
@@ -2694,7 +2694,17 @@ static int handler_signal_connection_modify(const char *path, const char *types,
     }
 
     // TODO: check if metadata actually changed
-    mapper_connection_set_from_message(c, &params);
+    lo_message error = lo_message_new();
+    mapper_connection_set_from_message(c, &params, error);
+    if (error) {
+        // get sender's address
+        lo_address a = lo_message_get_source(msg);
+        if (a) {
+            mapper_admin_set_bundle_dest_mesh(admin, a);
+            lo_bundle_add_message(admin->bundle, "/error", error);
+            mapper_admin_send_bundle(admin);
+        }
+    }
 
     // Inform destination device
     mapper_admin_set_bundle_dest_mesh(admin, router->admin_addr);

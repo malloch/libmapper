@@ -750,7 +750,13 @@ static int add_typecast(mapper_token_t *stack, int top)
 }
 
 /* Macros to help express stack operations in parser. */
-#define FAIL(msg) { printf("%s\n", msg); return 0; }
+#define FAIL(msg)                                                   \
+{                                                                   \
+    printf("%s\n", msg);                                            \
+    if (error)                                                      \
+        lo_message_add_string(error, msg);                          \
+    return 0;                                                       \
+}
 #define PUSH_TO_OUTPUT(x)                                           \
 {                                                                   \
     if (++outstack_index >= STACK_SIZE)                             \
@@ -790,7 +796,8 @@ mapper_expr mapper_expr_new_from_string(const char *str,
                                         int input_vector_size,
                                         int output_vector_size,
                                         int *input_history_size,
-                                        int *output_history_size)
+                                        int *output_history_size,
+                                        lo_message error)
 {
     if (!str) return 0;
     if (input_type != 'i' && input_type != 'f' && input_type != 'd') return 0;

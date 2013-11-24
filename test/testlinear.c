@@ -127,7 +127,7 @@ int setup_router()
     range.dest_max = 10;
     range.known = CONNECTION_RANGE_KNOWN;
     
-    mapper_connection_set_linear_range(c, &range);
+    mapper_connection_set_linear_range(c, &range, 0);
 
     return 0;
 }
