@@ -86,8 +86,9 @@ struct _mapper_device {
 
     uint32_t id_counter;
 
-    /*! Server used to handle incoming messages. */
-    lo_server server;
+    /*! Servers used to handle incoming messages. */
+    lo_server udp_server;
+    lo_server tcp_server;
 };
 
 /**** Instances ****/
@@ -221,7 +222,7 @@ void mdev_receive_update(mapper_device md, mapper_signal sig,
 
 void mdev_release_scope(mapper_device md, const char *scope);
 
-void mdev_start_server(mapper_device mdev, int port);
+void mdev_start_servers(mapper_device mdev, int port);
 
 void mdev_on_id_and_ordinal(mapper_device md,
                             mapper_admin_allocated_t *resource);

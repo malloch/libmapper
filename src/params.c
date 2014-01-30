@@ -493,6 +493,10 @@ void mapper_msg_prepare_varargs(lo_message m, va_list aq)
             s = va_arg(aq, char*);
             lo_message_add_string(m, s);
             break;
+        case AT_PROTOCOL:
+            i = va_arg(aq, int);
+            lo_message_add_string(m, i == LO_UDP ? "osc.udp" : "osc.tcp");
+            break;
         case AT_EXTRA:
             tab = va_arg(aq, table);
             i = 0;

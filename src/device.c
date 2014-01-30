@@ -46,9 +46,9 @@ mapper_device mdev_new(const char *name_prefix, int port,
         md->own_admin = 1;
     }
 
-    mdev_start_server(md, port);
+    mdev_start_servers(md, port);
 
-    if (!md->admin || !md->server) {
+    if (!md->admin || !md->udp_server || !md->tcp_server) {
         mdev_free(md);
         return NULL;
     }
@@ -153,8 +153,10 @@ void mdev_free(mapper_device md)
         else
             md->admin->device = 0;
     }
-    if (md->server)
-        lo_server_free(md->server);
+    if (md->udp_server)
+        lo_server_free(md->udp_server);
+    if (md->tcp_server)
+        lo_server_free(md->tcp_server);
     free(md);
 }
 
@@ -484,34 +486,62 @@ mapper_signal mdev_add_input(mapper_device md, const char *name, int length,
     type_string[0] = type_string[1] = 'i';
     memset(type_string + 2, sig->props.type, sig->props.length);
     type_string[sig->props.length + 2] = 0;
-    lo_server_add_method(md->server,
+    lo_server_add_method(md->udp_server,
                          sig->props.name,
                          type_string + 2,
                          handler_signal, (void *) (sig));
-    lo_server_add_method(md->server,
+    lo_server_add_method(md->udp_server,
                          sig->props.name,
                          "b",
                          handler_signal, (void *) (sig));
-    lo_server_add_method(md->server,
+    lo_server_add_method(md->udp_server,
                          sig->props.name,
                          "N",
                          handler_signal, (void *) (sig));
-    lo_server_add_method(md->server,
+    lo_server_add_method(md->udp_server,
                          sig->props.name,
                          type_string,
                          handler_signal_instance, (void *) (sig));
-    lo_server_add_method(md->server,
+    lo_server_add_method(md->udp_server,
                          sig->props.name,
                          "iib",
                          handler_signal_instance, (void *) (sig));
-    lo_server_add_method(md->server,
+    lo_server_add_method(md->udp_server,
+                         sig->props.name,
+                         "iiN",
+                         handler_signal_instance, (void *) (sig));
+    lo_server_add_method(md->tcp_server,
+                         sig->props.name,
+                         type_string + 2,
+                         handler_signal, (void *) (sig));
+    lo_server_add_method(md->tcp_server,
+                         sig->props.name,
+                         "b",
+                         handler_signal, (void *) (sig));
+    lo_server_add_method(md->tcp_server,
+                         sig->props.name,
+                         "N",
+                         handler_signal, (void *) (sig));
+    lo_server_add_method(md->tcp_server,
+                         sig->props.name,
+                         type_string,
+                         handler_signal_instance, (void *) (sig));
+    lo_server_add_method(md->tcp_server,
+                         sig->props.name,
+                         "iib",
+                         handler_signal_instance, (void *) (sig));
+    lo_server_add_method(md->tcp_server,
                          sig->props.name,
                          "iiN",
                          handler_signal_instance, (void *) (sig));
     int len = strlen(sig->props.name) + 5;
     signal_get = (char*) realloc(signal_get, len);
     snprintf(signal_get, len, "%s%s", sig->props.name, "/get");
-    lo_server_add_method(md->server,
+    lo_server_add_method(md->udp_server,
+                         signal_get,
+                         "s",
+                         handler_query, (void *) (sig));
+    lo_server_add_method(md->tcp_server,
                          signal_get,
                          "s",
                          handler_query, (void *) (sig));
@@ -557,19 +587,35 @@ void mdev_add_signal_methods(mapper_device md, mapper_signal sig)
     type[0] = type[1] = 'i';
     memset(type + 2, sig->props.type, sig->props.length);
     type[sig->props.length + 2] = 0;
-    lo_server_add_method(md->server,
+    lo_server_add_method(md->udp_server,
                          path,
                          type + 2,
                          handler_signal, (void *)sig);
-    lo_server_add_method(md->server,
+    lo_server_add_method(md->udp_server,
                          path,
                          type,
                          handler_signal_instance, (void *)sig);
-    lo_server_add_method(md->server,
+    lo_server_add_method(md->udp_server,
                          path,
                          "N",
                          handler_signal, (void *)sig);
-    lo_server_add_method(md->server,
+    lo_server_add_method(md->udp_server,
+                         path,
+                         "iiN",
+                         handler_signal_instance, (void *)sig);
+    lo_server_add_method(md->tcp_server,
+                         path,
+                         type + 2,
+                         handler_signal, (void *)sig);
+    lo_server_add_method(md->tcp_server,
+                         path,
+                         type,
+                         handler_signal_instance, (void *)sig);
+    lo_server_add_method(md->tcp_server,
+                         path,
+                         "N",
+                         handler_signal, (void *)sig);
+    lo_server_add_method(md->tcp_server,
                          path,
                          "iiN",
                          handler_signal_instance, (void *)sig);
@@ -598,10 +644,14 @@ void mdev_remove_signal_methods(mapper_device md, mapper_signal sig)
     len = (int) strlen(sig->props.name) + 5;
     path = (char*) realloc(path, len);
     snprintf(path, len, "%s%s", sig->props.name, "/got");
-    lo_server_del_method(md->server, path, type);
-    lo_server_del_method(md->server, path, type + 2);
-    lo_server_del_method(md->server, path, "N");
-    lo_server_del_method(md->server, path, "iiN");
+    lo_server_del_method(md->udp_server, path, type);
+    lo_server_del_method(md->udp_server, path, type + 2);
+    lo_server_del_method(md->udp_server, path, "N");
+    lo_server_del_method(md->udp_server, path, "iiN");
+    lo_server_del_method(md->tcp_server, path, type);
+    lo_server_del_method(md->tcp_server, path, type + 2);
+    lo_server_del_method(md->tcp_server, path, "N");
+    lo_server_del_method(md->tcp_server, path, "iiN");
     md->n_output_callbacks --;
 }
 
@@ -610,7 +660,11 @@ void mdev_add_instance_release_request_callback(mapper_device md, mapper_signal 
     if (!sig->props.is_output)
         return;
 
-    lo_server_add_method(md->server,
+    lo_server_add_method(md->udp_server,
+                         sig->props.name,
+                         "iiF",
+                         handler_instance_release_request, (void *) (sig));
+    lo_server_add_method(md->tcp_server,
                          sig->props.name,
                          "iiF",
                          handler_instance_release_request, (void *) (sig));
@@ -628,7 +682,8 @@ void mdev_remove_instance_release_request_callback(mapper_device md, mapper_sign
     }
     if (i==md->props.n_outputs)
         return;
-    lo_server_del_method(md->server, sig->props.name, "iiF");
+    lo_server_del_method(md->udp_server, sig->props.name, "iiF");
+    lo_server_del_method(md->tcp_server, sig->props.name, "iiF");
     md->n_output_callbacks --;
 }
 
@@ -650,15 +705,22 @@ void mdev_remove_input(mapper_device md, mapper_signal sig)
     str1[0] = str1[1] = 'i';
     memset(str1 + 2, sig->props.type, sig->props.length);
     str1[sig->props.length + 2] = 0;
-    lo_server_del_method(md->server, sig->props.name, str1);
-    lo_server_del_method(md->server, sig->props.name, str1 + 2);
-    lo_server_del_method(md->server, sig->props.name, "b");
-    lo_server_del_method(md->server, sig->props.name, "N");
-    lo_server_del_method(md->server, sig->props.name, "iib");
-    lo_server_del_method(md->server, sig->props.name, "iiN");
+    lo_server_del_method(md->udp_server, sig->props.name, str1);
+    lo_server_del_method(md->udp_server, sig->props.name, str1 + 2);
+    lo_server_del_method(md->udp_server, sig->props.name, "b");
+    lo_server_del_method(md->udp_server, sig->props.name, "N");
+    lo_server_del_method(md->udp_server, sig->props.name, "iib");
+    lo_server_del_method(md->udp_server, sig->props.name, "iiN");
+    lo_server_del_method(md->tcp_server, sig->props.name, str1);
+    lo_server_del_method(md->tcp_server, sig->props.name, str1 + 2);
+    lo_server_del_method(md->tcp_server, sig->props.name, "b");
+    lo_server_del_method(md->tcp_server, sig->props.name, "N");
+    lo_server_del_method(md->tcp_server, sig->props.name, "iib");
+    lo_server_del_method(md->tcp_server, sig->props.name, "iiN");
 
     snprintf(str1, 1024, "%s/get", sig->props.name);
-    lo_server_del_method(md->server, str1, NULL);
+    lo_server_del_method(md->udp_server, str1, NULL);
+    lo_server_del_method(md->tcp_server, str1, NULL);
 
     mapper_receiver r = md->receivers;
     msig_full_name(sig, str2, 1024);
@@ -705,11 +767,13 @@ void mdev_remove_output(mapper_device md, mapper_signal sig)
     }
     if (sig->handler) {
         snprintf(str1, 1024, "%s/got", sig->props.name);
-        lo_server_del_method(md->server, str1, NULL);
+        lo_server_del_method(md->udp_server, str1, NULL);
+        lo_server_del_method(md->tcp_server, str1, NULL);
     }
     if (sig->instance_event_handler &&
         (sig->instance_event_flags & IN_DOWNSTREAM_RELEASE)) {
-        lo_server_del_method(md->server, sig->props.name, "iiF");
+        lo_server_del_method(md->udp_server, sig->props.name, "iiF");
+        lo_server_del_method(md->tcp_server, sig->props.name, "iiF");
     }
 
     mapper_router r = md->routers;
@@ -854,7 +918,7 @@ int mdev_poll(mapper_device md, int block_ms)
     int admin_count = mapper_admin_poll(md->admin);
     int count = 0;
 
-    if (md->server) {
+    if (md->udp_server) {
 
         /* If a timeout is specified, loop until the time is up. */
         if (block_ms)
@@ -863,7 +927,10 @@ int mdev_poll(mapper_device md, int block_ms)
             int left_ms = block_ms;
             while (left_ms > 0)
             {
-                if (lo_server_recv_noblock(md->server, left_ms))
+                // TODO: need to switch to select()
+                if (lo_server_recv_noblock(md->udp_server, 1))
+                    count++;
+                if (lo_server_recv_noblock(md->tcp_server, 1))
                     count++;
                 double elapsed = get_current_time() - then;
                 left_ms = block_ms - (int)(elapsed*1000);
@@ -878,7 +945,8 @@ int mdev_poll(mapper_device md, int block_ms)
          * can be a heuristic based on a recent number of messages per
          * channel per poll. */
         while (count < (md->props.n_inputs + md->n_output_callbacks)*1
-               && lo_server_recv_noblock(md->server, 0))
+               && lo_server_recv_noblock(md->udp_server, 0)
+               && lo_server_recv_noblock(md->tcp_server, 0))
             count++;
     }
     else if (block_ms) {
@@ -900,22 +968,31 @@ int mdev_num_fds(mapper_device md)
 
 int mdev_get_fds(mapper_device md, int *fds, int num)
 {
-    if (num > 0)
+    if (num > 0) {
         fds[0] = lo_server_get_socket_fd(md->admin->admin_server);
-    if (num > 1)
-        fds[1] = lo_server_get_socket_fd(md->server);
-    else
+        if (num > 1) {
+            fds[1] = lo_server_get_socket_fd(md->udp_server);
+            if (num > 2) {
+                fds[2] = lo_server_get_socket_fd(md->tcp_server);
+                return 3;
+            }
+            return 2;
+        }
         return 1;
-    return 2;
+    }
+    return 0;
 }
 
 void mdev_service_fd(mapper_device md, int fd)
 {
     if (fd == lo_server_get_socket_fd(md->admin->admin_server))
         mapper_admin_poll(md->admin);
-    else if (md->server
-             && fd == lo_server_get_socket_fd(md->server))
-        lo_server_recv_noblock(md->server, 0);
+    else if (md->udp_server
+             && fd == lo_server_get_socket_fd(md->udp_server))
+        lo_server_recv_noblock(md->udp_server, 0);
+    else if (md->tcp_server
+             && fd == lo_server_get_socket_fd(md->tcp_server))
+        lo_server_recv_noblock(md->tcp_server, 0);
 }
 
 void mdev_num_instances_changed(mapper_device md,
@@ -1138,9 +1215,9 @@ static void liblo_error_handler(int num, const char *msg, const char *path)
                num, path, msg);
 }
 
-void mdev_start_server(mapper_device md, int starting_port)
+void mdev_start_servers(mapper_device md, int starting_port)
 {
-    if (!md->server) {
+    if (!md->udp_server) {
         int i;
         char port[16], *pport = port, *type = 0, *path = 0;
 
@@ -1149,15 +1226,24 @@ void mdev_start_server(mapper_device md, int starting_port)
         else
             pport = 0;
 
-        while (!(md->server = lo_server_new(pport, liblo_error_handler))) {
+        // TODO: if UDP and TCP server ports don't match, try again
+        while (!(md->udp_server = lo_server_new(pport, liblo_error_handler))) {
+            pport = 0;
+        }
+        snprintf(port, 16, "%i", lo_server_get_port(md->udp_server));
+        pport = port;
+        while (!(md->tcp_server = lo_server_new_with_proto(pport, LO_TCP,
+                                                           liblo_error_handler))) {
             pport = 0;
         }
 
         // Disable liblo message queueing
-        lo_server_enable_queue(md->server, 0, 1);
+        lo_server_enable_queue(md->udp_server, 0, 1);
+        lo_server_enable_queue(md->tcp_server, 0, 1);
 
-        md->props.port = lo_server_get_port(md->server);
-        trace("bound to port %i\n", md->props.port);
+        md->props.port = lo_server_get_port(md->udp_server);
+        trace("bound to UDP port %i\n", md->props.port);
+        trace("bound to TCP port %i\n", lo_server_get_port(md->tcp_server));
 
         for (i = 0; i < md->props.n_inputs; i++) {
             type = (char*) realloc(type, md->inputs[i]->props.length + 3);
@@ -1165,34 +1251,62 @@ void mdev_start_server(mapper_device md, int starting_port)
             memset(type + 2, md->inputs[i]->props.type,
                    md->inputs[i]->props.length);
             type[md->inputs[i]->props.length + 2] = 0;
-            lo_server_add_method(md->server,
+            lo_server_add_method(md->udp_server,
                                  md->inputs[i]->props.name,
                                  type + 2,
                                  handler_signal, (void *) (md->inputs[i]));
-            lo_server_add_method(md->server,
+            lo_server_add_method(md->udp_server,
                                  md->inputs[i]->props.name,
                                  "b",
                                  handler_signal, (void *) (md->inputs[i]));
-            lo_server_add_method(md->server,
+            lo_server_add_method(md->udp_server,
                                  md->inputs[i]->props.name,
                                  "N",
                                  handler_signal, (void *) (md->inputs[i]));
-            lo_server_add_method(md->server,
+            lo_server_add_method(md->udp_server,
                                  md->inputs[i]->props.name,
                                  type,
                                  handler_signal_instance, (void *) (md->inputs[i]));
-            lo_server_add_method(md->server,
+            lo_server_add_method(md->udp_server,
                                  md->inputs[i]->props.name,
                                  "iib",
                                  handler_signal_instance, (void *) (md->inputs[i]));
-            lo_server_add_method(md->server,
+            lo_server_add_method(md->udp_server,
+                                 md->inputs[i]->props.name,
+                                 "iiN",
+                                 handler_signal_instance, (void *) (md->inputs[i]));
+            lo_server_add_method(md->tcp_server,
+                                 md->inputs[i]->props.name,
+                                 type + 2,
+                                 handler_signal, (void *) (md->inputs[i]));
+            lo_server_add_method(md->tcp_server,
+                                 md->inputs[i]->props.name,
+                                 "b",
+                                 handler_signal, (void *) (md->inputs[i]));
+            lo_server_add_method(md->tcp_server,
+                                 md->inputs[i]->props.name,
+                                 "N",
+                                 handler_signal, (void *) (md->inputs[i]));
+            lo_server_add_method(md->tcp_server,
+                                 md->inputs[i]->props.name,
+                                 type,
+                                 handler_signal_instance, (void *) (md->inputs[i]));
+            lo_server_add_method(md->tcp_server,
+                                 md->inputs[i]->props.name,
+                                 "iib",
+                                 handler_signal_instance, (void *) (md->inputs[i]));
+            lo_server_add_method(md->tcp_server,
                                  md->inputs[i]->props.name,
                                  "iiN",
                                  handler_signal_instance, (void *) (md->inputs[i]));
             int len = (int) strlen(md->inputs[i]->props.name) + 5;
             path = (char*) realloc(path, len);
             snprintf(path, len, "%s%s", md->inputs[i]->props.name, "/get");
-            lo_server_add_method(md->server,
+            lo_server_add_method(md->udp_server,
+                                 path,
+                                 "s",
+                                 handler_query, (void *) (md->inputs[i]));
+            lo_server_add_method(md->tcp_server,
                                  path,
                                  "s",
                                  handler_query, (void *) (md->inputs[i]));
@@ -1207,19 +1321,35 @@ void mdev_start_server(mapper_device md, int starting_port)
                 int len = (int) strlen(md->outputs[i]->props.name) + 5;
                 path = (char*) realloc(path, len);
                 snprintf(path, len, "%s%s", md->outputs[i]->props.name, "/got");
-                lo_server_add_method(md->server,
+                lo_server_add_method(md->udp_server,
                                      path,
                                      type + 2,
                                      handler_signal, (void *) (md->outputs[i]));
-                lo_server_add_method(md->server,
+                lo_server_add_method(md->udp_server,
                                      path,
                                      type,
                                      handler_signal_instance, (void *) (md->outputs[i]));
-                lo_server_add_method(md->server,
+                lo_server_add_method(md->udp_server,
                                      path,
                                      "N",
                                      handler_signal, (void *) (md->outputs[i]));
-                lo_server_add_method(md->server,
+                lo_server_add_method(md->udp_server,
+                                     path,
+                                     "iiN",
+                                     handler_signal_instance, (void *) (md->outputs[i]));
+                lo_server_add_method(md->tcp_server,
+                                     path,
+                                     type + 2,
+                                     handler_signal, (void *) (md->outputs[i]));
+                lo_server_add_method(md->tcp_server,
+                                     path,
+                                     type,
+                                     handler_signal_instance, (void *) (md->outputs[i]));
+                lo_server_add_method(md->tcp_server,
+                                     path,
+                                     "N",
+                                     handler_signal, (void *) (md->outputs[i]));
+                lo_server_add_method(md->tcp_server,
                                      path,
                                      "iiN",
                                      handler_signal_instance, (void *) (md->outputs[i]));
@@ -1227,7 +1357,12 @@ void mdev_start_server(mapper_device md, int starting_port)
             }
             if (md->outputs[i]->instance_event_handler &&
                 (md->outputs[i]->instance_event_flags & IN_DOWNSTREAM_RELEASE)) {
-                lo_server_add_method(md->server,
+                lo_server_add_method(md->udp_server,
+                                     md->outputs[i]->props.name,
+                                     "iiF",
+                                     handler_instance_release_request,
+                                     (void *) (md->outputs[i]));
+                lo_server_add_method(md->tcp_server,
                                      md->outputs[i]->props.name,
                                      "iiF",
                                      handler_instance_release_request,
@@ -1313,9 +1448,14 @@ void mdev_remove_property(mapper_device dev, const char *property)
     table_remove_key(dev->props.extra, property, 1);
 }
 
-lo_server mdev_get_lo_server(mapper_device md)
+lo_server mdev_get_lo_server_udp(mapper_device md)
 {
-    return md->server;
+    return md->udp_server;
+}
+
+lo_server mdev_get_lo_server_tcp(mapper_device md)
+{
+    return md->tcp_server;
 }
 
 void mdev_now(mapper_device dev, mapper_timetag_t *timetag)

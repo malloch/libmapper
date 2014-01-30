@@ -18,7 +18,11 @@ mapper_receiver mapper_receiver_new(mapper_device device, const char *host,
     r->props.src_host = strdup(host);
     r->props.src_port = port;
     sprintf(str, "%d", port);
-    r->remote_addr = lo_address_new(host, str);
+
+    r->remote_addr_udp = lo_address_new(host, str);
+    r->remote_addr_tcp = lo_address_new_with_proto(LO_TCP, host, str);
+    lo_address_set_tcp_nodelay(r->remote_addr_tcp, 1);
+
     r->props.src_name = strdup(name);
     r->props.src_name_hash = crc32(0L, (const Bytef *)name, strlen(name));
     r->props.dest_name = strdup(mdev_name(device));
@@ -34,7 +38,7 @@ mapper_receiver mapper_receiver_new(mapper_device device, const char *host,
     r->signals = 0;
     r->n_connections = 0;
 
-    if (!r->remote_addr) {
+    if (!r->remote_addr_udp || !r->remote_addr_tcp) {
         mapper_receiver_free(r);
         return 0;
     }
@@ -50,8 +54,10 @@ void mapper_receiver_free(mapper_receiver r)
             free(r->props.src_name);
         if (r->props.src_host)
             free(r->props.src_host);
-        if (r->remote_addr)
-            lo_address_free(r->remote_addr);
+        if (r->remote_addr_udp)
+            lo_address_free(r->remote_addr_udp);
+        if (r->remote_addr_tcp)
+            lo_address_free(r->remote_addr_tcp);
         if (r->props.dest_name)
             free(r->props.dest_name);
         while (r->signals && r->signals->connections) {
@@ -162,7 +168,7 @@ void mapper_receiver_send_update(mapper_receiver r,
                                  int instance_index,
                                  mapper_timetag_t tt)
 {
-    int i, count=0;
+    int i, count=0, send_tcp;
     mapper_id_map map = sig->id_maps[instance_index].map;
 
     // find the signal connection
@@ -242,9 +248,14 @@ void mapper_receiver_send_update(mapper_receiver r,
                 lo_bundle_add_message(b, c->props.query_name, m);
             }
         }
+        if (c->props.protocol == LO_TCP)
+            send_tcp = 1;
         c = c->next;
     }
-    lo_send_bundle(r->remote_addr, b);
+    if (send_tcp)
+        lo_send_bundle_from(r->remote_addr_tcp, r->device->tcp_server, b);
+    else
+        lo_send_bundle_from(r->remote_addr_udp, r->device->udp_server, b);
     lo_bundle_free_messages(b);
 }
 
@@ -281,8 +292,9 @@ void mapper_receiver_send_released(mapper_receiver r, mapper_signal sig,
         c = c->next;
     }
 
+    // always send using TCP??
     if (lo_bundle_count(b))
-        lo_send_bundle_from(r->remote_addr, r->device->server, b);
+        lo_send_bundle_from(r->remote_addr_tcp, r->device->tcp_server, b);
 
     lo_bundle_free_messages(b);
 }

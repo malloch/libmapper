@@ -599,8 +599,9 @@ void mapper_monitor_connection_modify(mapper_monitor mon,
                            (props_flags & CONNECTION_MUTED)
                            ? AT_MUTE : -1, props->muted,
                            (props_flags & CONNECTION_SEND_AS_INSTANCE)
-                           ? AT_SEND_AS_INSTANCE : -1,
-                           props->send_as_instance);
+                           ? AT_SEND_AS_INSTANCE : -1, props->send_as_instance,
+                           (props_flags & CONNECTION_PROTOCOL)
+                           ? AT_PROTOCOL : -1, props->protocol );
         /* We cannot depend on string arguments sticking around for liblo to
          * serialize later: trigger immediate dispatch. */
         mapper_admin_send_bundle(mon->admin);
@@ -643,8 +644,9 @@ void mapper_monitor_connect(mapper_monitor mon,
                            (props_flags & CONNECTION_MUTED)
                            ? AT_MUTE : -1, props->muted,
                            (props_flags & CONNECTION_SEND_AS_INSTANCE)
-                           ? AT_SEND_AS_INSTANCE : -1,
-                           props->send_as_instance );
+                           ? AT_SEND_AS_INSTANCE : -1, props->send_as_instance,
+                           (props_flags & CONNECTION_PROTOCOL)
+                           ? AT_PROTOCOL : -1, props->protocol );
     }
     else
         mapper_admin_send( mon->admin, ADM_CONNECT, 0, "ss",

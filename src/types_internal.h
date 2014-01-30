@@ -207,13 +207,15 @@ typedef struct _mapper_link_signal {
 typedef struct _mapper_queue {
     mapper_timetag_t tt;
     lo_bundle bundle;
+    int send_tcp;
     struct _mapper_queue *next;
 } *mapper_queue;
 
 /*! The link structure is a linked list of links each associated
  *  with a destination address that belong to a controller device. */
 typedef struct _mapper_link {
-    lo_address remote_addr;         //!< Network address of remote endpoint
+    lo_address remote_addr_udp;     //!< Network address of remote endpoint
+    lo_address remote_addr_tcp;     //!< Network address of remote endpoint
     mapper_db_link_t props;         //!< Properties.
     struct _mapper_device *device;  /*!< The device associated with
                                      *   this link */

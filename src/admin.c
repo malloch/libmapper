@@ -451,7 +451,7 @@ void mapper_admin_send_bundle(mapper_admin admin)
         return;
 
     lo_send_bundle_from(admin->admin_addr,
-                        admin->device ? admin->device->server : NULL,
+                        admin->device ? admin->device->udp_server : NULL,
                         admin->bundle);
     lo_bundle_free_messages(admin->bundle);
     admin->bundle = 0;

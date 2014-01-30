@@ -986,6 +986,20 @@ int mapper_connection_set_from_message(mapper_connection c,
         updated++;
     }
 
+    /* Protocol. */
+    const char *proto = mapper_msg_get_param_if_string(msg, AT_PROTOCOL);
+    if (proto) {
+        int proto_type;
+        if (strcmp(proto, "osc.tcp")==0)
+            proto_type = LO_TCP;
+        else
+            proto_type = LO_UDP;
+        if (proto_type != c->props.protocol) {
+            c->props.protocol = proto_type;
+            updated++;
+        }
+    }
+
     /* Expression. */
     const char *expr = mapper_msg_get_param_if_string(msg, AT_EXPRESSION);
     if (expr && (!c->props.expression || strcmp(c->props.expression, expr))) {

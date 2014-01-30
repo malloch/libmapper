@@ -13,7 +13,8 @@
 static void mapper_router_send_or_bundle_message(mapper_router router,
                                                  const char *path,
                                                  lo_message m,
-                                                 mapper_timetag_t tt);
+                                                 mapper_timetag_t tt,
+                                                 int send_tcp);
 
 mapper_router mapper_router_new(mapper_device device, const char *host,
                                 int port, const char *name)
@@ -24,7 +25,11 @@ mapper_router mapper_router_new(mapper_device device, const char *host,
     r->props.dest_host = strdup(host);
     r->props.dest_port = port;
     sprintf(str, "%d", port);
-    r->remote_addr = lo_address_new(host, str);
+
+    r->remote_addr_udp = lo_address_new(host, str);
+    r->remote_addr_tcp = lo_address_new_with_proto(LO_TCP, host, str);
+    lo_address_set_tcp_nodelay(r->remote_addr_tcp, 1);
+
     r->props.dest_name = strdup(name);
     r->props.dest_name_hash = crc32(0L, (const Bytef *)name, strlen(name));
 
@@ -39,7 +44,7 @@ mapper_router mapper_router_new(mapper_device device, const char *host,
     r->signals = 0;
     r->n_connections = 0;
 
-    if (!r->remote_addr) {
+    if (!r->remote_addr_udp || !r->remote_addr_tcp) {
         mapper_router_free(r);
         return 0;
     }
@@ -57,8 +62,10 @@ void mapper_router_free(mapper_router r)
             free(r->props.dest_host);
         if (r->props.dest_name)
             free(r->props.dest_name);
-        if (r->remote_addr)
-            lo_address_free(r->remote_addr);
+        if (r->remote_addr_udp)
+            lo_address_free(r->remote_addr_udp);
+        if (r->remote_addr_tcp)
+            lo_address_free(r->remote_addr_tcp);
         while (r->signals && r->signals->connections) {
             // router_signal is freed with last child connection
             mapper_router_remove_connection(r, r->signals->connections);
@@ -287,7 +294,7 @@ void mapper_router_send_update(mapper_router r,
                                lo_blob blob)
 {
     int i;
-    if (!r->remote_addr)
+    if (!r->remote_addr_udp || !r->remote_addr_tcp)
         return;
 
     lo_message m = lo_message_new();
@@ -324,7 +331,8 @@ void mapper_router_send_update(mapper_router r,
         lo_message_add_nil(m);
     }
 
-    mapper_router_send_or_bundle_message(r, c->props.dest_name, m, tt);
+    mapper_router_send_or_bundle_message(r, c->props.dest_name, m, tt,
+                                         c->props.protocol == LO_TCP);
 }
 
 int mapper_router_send_query(mapper_router r,
@@ -351,7 +359,8 @@ int mapper_router_send_query(mapper_router r,
         if (!m)
             continue;
         lo_message_add_string(m, response_string);
-        mapper_router_send_or_bundle_message(r, c->props.query_name, m, tt);
+        mapper_router_send_or_bundle_message(r, c->props.query_name, m, tt,
+                                             c->props.protocol == LO_TCP);
         count++;
         c = c->next;
     }
@@ -363,10 +372,9 @@ int mapper_router_send_query(mapper_router r,
 // path: not owned, will not be freed (assumed is signal name, owned
 //       by signal)
 // message: will be owned, will be freed when done
-void mapper_router_send_or_bundle_message(mapper_router r,
-                                          const char *path,
-                                          lo_message m,
-                                          mapper_timetag_t tt)
+void mapper_router_send_or_bundle_message(mapper_router r, const char *path,
+                                          lo_message m, mapper_timetag_t tt,
+                                          int send_tcp)
 {
     // Check if a matching bundle exists
     mapper_queue q = r->queues;
@@ -379,12 +387,17 @@ void mapper_router_send_or_bundle_message(mapper_router r,
     if (q) {
         // Add message to existing bundle
         lo_bundle_add_message(q->bundle, path, m);
+        q->send_tcp += send_tcp;
     }
     else {
         // Send message immediately
         lo_bundle b = lo_bundle_new(tt);
         lo_bundle_add_message(b, path, m);
-        lo_send_bundle_from(r->remote_addr, r->device->server, b);
+
+        if (send_tcp)
+            lo_send_bundle_from(r->remote_addr_tcp, r->device->tcp_server, b);
+        else
+            lo_send_bundle_from(r->remote_addr_udp, r->device->udp_server, b);
         lo_bundle_free_messages(b);
     }
 }
@@ -405,6 +418,7 @@ void mapper_router_start_queue(mapper_router r,
     q = malloc(sizeof(struct _mapper_queue));
     memcpy(&q->tt, &tt, sizeof(mapper_timetag_t));
     q->bundle = lo_bundle_new(tt);
+    q->send_tcp = 0;
     q->next = r->queues;
     r->queues = q;
 }
@@ -434,10 +448,15 @@ void mapper_router_send_queue(mapper_router r,
     }
     if (q) {
 #ifdef HAVE_LIBLO_BUNDLE_COUNT
-        if (lo_bundle_count(q->bundle))
+        if (lo_bundle_count(q->bundle)) {
 #endif
-            lo_send_bundle_from(r->remote_addr,
-                                r->device->server, q->bundle);
+            if (q->send_tcp)
+                lo_send_bundle_from(r->remote_addr_tcp, r->device->tcp_server,
+                                    q->bundle);
+            else
+                lo_send_bundle_from(r->remote_addr_udp, r->device->udp_server,
+                                    q->bundle);
+        }
         lo_bundle_free_messages(q->bundle);
         mapper_router_release_queue(r, q);
     }
