@@ -162,9 +162,15 @@ void loop()
         mapper_monitor_link(mon, mdev_name(source),
                             mdev_name(destination), 0, 0);
 
+        /* OSX may delay applications access to network while waiting for user
+           confirmation, so send link message again if necessary. */
         while (!source->routers) {
-            mdev_poll(source, 10);
-            mdev_poll(destination, 10);
+            mapper_monitor_link(mon, mdev_name(source),
+                                mdev_name(destination), 0, 0);
+            for (i=0; i<100 && !source->routers; i++) {
+                mdev_poll(source, 10);
+                mdev_poll(destination, 10);
+            }
         }
 
         msig_full_name(sendsig_1, src_name, 1024);
