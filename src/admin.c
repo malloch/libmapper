@@ -523,7 +523,7 @@ void mapper_admin_send_bundle(mapper_admin admin)
                 continue;
             }
             if ((*s)->flags & admin->message_type) {
-                lo_send_bundle((*s)->address, admin->bundle);
+                lo_send_bundle_from((*s)->address, admin->mesh_server, admin->bundle);
             }
             s = &(*s)->next;
         }
@@ -533,7 +533,7 @@ void mapper_admin_send_bundle(mapper_admin admin)
     }
     else {
         // specific mesh destination stored in admin->bundle_dest
-        lo_send_bundle(admin->bundle_dest, admin->bundle);
+        lo_send_bundle_from(admin->bundle_dest, admin->mesh_server, admin->bundle);
     }
     lo_bundle_free_messages(admin->bundle);
     admin->bundle = 0;
