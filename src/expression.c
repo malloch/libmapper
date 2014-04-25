@@ -294,6 +294,7 @@ typedef struct _token {
         TOK_COMMA           = 0x0800,
         TOK_COLON           = 0x1000,
         TOK_ASSIGNMENT      = 0x2000,
+        TOK_TIMETAG         = 0x4000,
         TOK_VECTORIZE,
         TOK_END,
     } toktype;
@@ -326,7 +327,7 @@ typedef struct _variable {
     int vector_length;
     char datatype;
     char casttype;
-    char history_size;
+    char history_size;          // limited to 100 in parser anyway
     char vector_length_locked;
     char assigned;
 } mapper_variable_t, *mapper_variable;
@@ -397,14 +398,20 @@ static int expr_lex(const char *str, int index, mapper_token_t *tok)
     switch (c) {
     case '.':
         c = str[++index];
-        if (!isdigit(c) && c!='e' && integer_found) {
-            tok->toktype = TOK_CONST;
-            tok->f = (float)n;
-            tok->datatype = 'f';
-            return index;
+        if (integer_found) {
+            if (!isdigit(c) && c!='e') {
+                tok->toktype = TOK_CONST;
+                tok->f = (float)n;
+                tok->datatype = 'f';
+                return index;
+            }
         }
-        if (!isdigit(c) && c!='e')
-            break;
+        else if (c == 't' && (c = str[++index]) && c == 't') {
+            // variable timetag syntax
+            tok->toktype = TOK_TIMETAG;
+            return ++index;
+        }
+        else break;
         do {
             c = str[++index];
         } while (c && isdigit(c));
@@ -665,6 +672,13 @@ void printtoken(mapper_token_t tok)
                                    tok.datatype, tok.vector_length,
                                    tok.history_index, tok.vector_index);
         else                printf("var%d_%c%d{%d}[%d]", tok.var-N_VARS,
+                                   tok.datatype, tok.vector_length,
+                                   tok.history_index, tok.vector_index);break;
+    case TOK_TIMETAG:
+        if (tok.var<N_VARS) printf("%s.tt_%c%d{%d}[%d]", var_strings[tok.var],
+                                   tok.datatype, tok.vector_length,
+                                   tok.history_index, tok.vector_index);
+        else                printf("var%d_%c%d{%d}[%d].tt", tok.var-N_VARS,
                                    tok.datatype, tok.vector_length,
                                    tok.history_index, tok.vector_index);break;
     case TOK_FUNC:          printf("FUNC(%s)%c%d", function_table[tok.func].name,
@@ -971,8 +985,10 @@ static int check_types_and_lengths(mapper_token_t *stack, int top)
     mapper_signal_history_t h;
     // TODO: this variable should not be mapper_signal_value_t?
     mapper_signal_value_t v;
+    mapper_timetag_t tt;
     h.type = stack[top].datatype;
     h.value = &v;
+    h.timetag = &tt;
     h.position = -1;
     h.length = 1;
     h.size = 1;
@@ -1124,8 +1140,14 @@ mapper_expr mapper_expr_new_from_string(const char *str,
     while (str[lex_index]) {
         GET_NEXT_TOKEN(tok);
         if (variable && tok.toktype != TOK_OPEN_SQUARE
-            && tok.toktype != TOK_OPEN_CURLY)
+            && tok.toktype != TOK_OPEN_CURLY && tok.toktype != TOK_TIMETAG)
+        {
+            // check that 'y' has not been used with implicit {0} history index
+            if (!assigning && outstack[outstack_index].var == VAR_Y &&
+                outstack[outstack_index].history_index > -1)
+                {FAIL("Output history index cannot be > -1.");}
             variable = 0;
+        }
         if (!((tok.toktype & allow_toktype & (assigning ? assign_mask : 0xFFFF))
               | (assigning ? TOK_ASSIGNMENT : 0))) {
             {FAIL("Illegal token sequence.");}
@@ -1193,9 +1215,9 @@ mapper_expr mapper_expr_new_from_string(const char *str,
                 tok.vector_index = 0;
                 PUSH_TO_OUTPUT(tok);
                 // variables can have vector and history indices
-                variable = TOK_OPEN_SQUARE | TOK_OPEN_CURLY;
+                variable = TOK_OPEN_SQUARE | TOK_OPEN_CURLY | TOK_TIMETAG;
                 allow_toktype = TOK_OP | TOK_CLOSE_PAREN | TOK_CLOSE_SQUARE |
-                                TOK_COMMA | TOK_COLON |
+                                TOK_COMMA | TOK_COLON | TOK_TIMETAG |
                                 variable | (assigning ? TOK_ASSIGNMENT : 0);
                 break;
             case TOK_FUNC:
@@ -1419,7 +1441,6 @@ mapper_expr mapper_expr_new_from_string(const char *str,
                 break;
             case TOK_ASSIGNMENT:
                 // assignment to variable
-                // for now we assume variable is output (VAR_Y)
                 if (!assigning)
                     {FAIL("Misplaced assignment operator.");}
                 if (opstack_index >= 0 || outstack_index < 0)
@@ -1491,6 +1512,16 @@ mapper_expr mapper_expr_new_from_string(const char *str,
                     {FAIL("Malformed expression left of assignment.");}
                 assigning = 0;
                 allow_toktype = 0xFFFF;
+                break;
+            case TOK_TIMETAG:
+                // only applicable if we are dealing with a variable
+                if (!(variable & TOK_TIMETAG)) // history index already set
+                    {FAIL("Misplaced timetag property.");}
+                // convert preceding TOK_VAR to TOK_TIMETAG
+                outstack[outstack_index].toktype = TOK_TIMETAG;
+                outstack[outstack_index].datatype = 'd';
+                variable &= ~TOK_TIMETAG;
+                allow_toktype = TOK_OP | TOK_CLOSE_PAREN | TOK_COMMA | TOK_COLON;
                 break;
             default:
                 {FAIL("Unknown token type.");}
@@ -1726,6 +1757,39 @@ int mapper_expr_evaluate(mapper_expr expr,
                     for (i = 0; i < tok->vector_length; i++)
                         stack[top][i].d = v[i+tok->vector_index];
                 }
+            }
+            break;
+        case TOK_TIMETAG:
+            {
+                ++top;
+                dims[top] = tok->vector_length;
+                mapper_signal_history_t *h;
+                int idx;
+                if (tok->var == VAR_X) {
+                    h = from;
+                    idx = ((tok->history_index + from->position
+                            + from->size) % from->size);
+                }
+                else if (tok->var == VAR_Y) {
+                    h = to;
+                    idx = ((tok->history_index + to->position
+                            + to->size) % to->size);
+                }
+                else if (tok->var > expr->num_variables + N_VARS)
+                    goto error;
+                else {
+                    h = *expr_vars + (tok->var - N_VARS);
+                    mapper_variable var = &expr->variables[tok->var - N_VARS];
+                    idx = ((tok->history_index + h->position
+                            + var->history_size) % var->history_size);
+                }
+                mapper_timetag_t *tt = h->timetag + idx * sizeof(mapper_timetag_t);
+                double ttd = mapper_timetag_get_double(*tt);
+                for (i = 0; i < tok->vector_length; i++)
+                    stack[top][i].d = ttd;
+#if TRACING
+                printf("storing timetag %f\n", ttd);
+#endif
             }
             break;
         case TOK_OP:
@@ -2294,6 +2358,11 @@ int mapper_expr_evaluate(mapper_expr expr,
                         typestring[i] = tok->datatype;
                     }
                 }
+
+                // Also copy timetag from input
+                mapper_timetag_t *ttfrom = msig_history_tt_pointer(*from);
+                mapper_timetag_t *ttto = to->timetag + idx * sizeof(mapper_timetag_t);
+                memcpy(ttto, ttfrom, sizeof(mapper_timetag_t));
             }
             else if (tok->var >= 0 && tok->var < expr->num_variables + N_VARS) {
                 // passed the address of an array of mapper_signal_history structs
@@ -2402,12 +2471,6 @@ int mapper_expr_evaluate(mapper_expr expr,
         if (to->position < 0)
             to->position = to->size - 1;
         return 0;
-    }
-    else if (from) {
-        // Also copy timetag from input
-        mapper_timetag_t *ttfrom = msig_history_tt_pointer(*from);
-        mapper_timetag_t *ttto = msig_history_tt_pointer(*to);
-        memcpy(ttto, ttfrom, sizeof(mapper_timetag_t));
     }
 
     return 1;
