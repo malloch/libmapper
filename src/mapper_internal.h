@@ -899,7 +899,7 @@ inline static void* msig_history_value_pointer(mapper_signal_history_t h)
 /*! Helper to find the pointer to the current timetag in a mapper_signal_history_t. */
 inline static void* msig_history_tt_pointer(mapper_signal_history_t h)
 {
-    return h.timetag + h.position * sizeof(mapper_timetag_t);
+    return &h.timetag[h.position];
 }
 
 #endif // __MAPPER_INTERNAL_H__

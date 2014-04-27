@@ -411,7 +411,8 @@ static int expr_lex(const char *str, int index, mapper_token_t *tok)
             tok->toktype = TOK_TIMETAG;
             return ++index;
         }
-        else break;
+        else if (!isdigit(c))
+            break;
         do {
             c = str[++index];
         } while (c && isdigit(c));
@@ -1646,9 +1647,9 @@ static void print_stack_vector(mapper_signal_value_t *stack, char type,
             break;
     }
     if (vector_length > 1)
-        printf("\b\b]");
+        printf("\b\b] ");
     else
-        printf("\b\b");
+        printf("\b\b ");
 }
 #endif
 
@@ -1676,14 +1677,6 @@ int mapper_expr_evaluate(mapper_expr expr,
         case TOK_CONST:
             ++top;
             dims[top] = tok->vector_length;
-#if TRACING
-            if (tok->datatype == 'f')
-                printf("storing const %f\n", tok->f);
-            else if (tok->datatype == 'i')
-                printf("storing const %i\n", tok->i);
-            else if (tok->datatype == 'd')
-                printf("storing const %f\n", tok->d);
-#endif
             if (tok->datatype == 'f') {
                 for (i = 0; i < tok->vector_length; i++)
                     stack[top][i].f = tok->f;
@@ -1696,6 +1689,11 @@ int mapper_expr_evaluate(mapper_expr expr,
                 for (i = 0; i < tok->vector_length; i++)
                     stack[top][i].i32 = tok->i;
             }
+#if TRACING
+            printf("loading constant ");
+            print_stack_vector(stack[top], tok->datatype, tok->vector_length);
+            printf("\n");
+#endif
             break;
         case TOK_VAR:
             {
@@ -1721,6 +1719,15 @@ int mapper_expr_evaluate(mapper_expr expr,
                         for (i = 0; i < tok->vector_length; i++)
                             stack[top][i].i32 = v[i+tok->vector_index];
                     }
+#if TRACING
+                    printf("loading variable x{%d}[%d", tok->history_index,
+                           tok->vector_index);
+                    if (tok->vector_length > 1)
+                        printf(":%d", tok->vector_length + tok->vector_index - 1);
+                    printf("]: ");
+                    print_stack_vector(stack[top], from->type, tok->vector_length);
+                    printf("\n");
+#endif
                     break;
                 case VAR_Y:
                     ++top;
@@ -1742,6 +1749,15 @@ int mapper_expr_evaluate(mapper_expr expr,
                         for (i = 0; i < tok->vector_length; i++)
                             stack[top][i].i32 = v[i+tok->vector_index];
                     }
+#if TRACING
+                    printf("loading variable y{%d}[%d", tok->history_index,
+                           tok->vector_index);
+                    if (tok->vector_length > 1)
+                        printf(":%d", tok->vector_length + tok->vector_index - 1);
+                    printf("]: ");
+                    print_stack_vector(stack[top], to->type, tok->vector_length);
+                    printf("\n");
+#endif
                     break;
                 default:
                     // TODO: allow other data types?
@@ -1756,6 +1772,15 @@ int mapper_expr_evaluate(mapper_expr expr,
                     double *v = h->value + idx * var->vector_length * mapper_type_size(var->datatype);
                     for (i = 0; i < tok->vector_length; i++)
                         stack[top][i].d = v[i+tok->vector_index];
+#if TRACING
+                    printf("loading variable %s{%d}[%d", var->name,
+                           tok->history_index, tok->vector_index);
+                    if (tok->vector_length > 1)
+                        printf(":%d", tok->vector_length + tok->vector_index - 1);
+                    printf("]: ");
+                    print_stack_vector(stack[top], 'd', tok->vector_length);
+                    printf("\n");
+#endif
                 }
             }
             break;
@@ -1783,12 +1808,12 @@ int mapper_expr_evaluate(mapper_expr expr,
                     idx = ((tok->history_index + h->position
                             + var->history_size) % var->history_size);
                 }
-                mapper_timetag_t *tt = h->timetag + idx * sizeof(mapper_timetag_t);
-                double ttd = mapper_timetag_get_double(*tt);
+                mapper_timetag_t tt = h->timetag[idx];
+                double ttd = mapper_timetag_get_double(tt);
                 for (i = 0; i < tok->vector_length; i++)
                     stack[top][i].d = ttd;
 #if TRACING
-                printf("storing timetag %f\n", ttd);
+                printf("loading NTP timetag as double %f\n", ttd);
 #endif
             }
             break;
@@ -1800,23 +1825,23 @@ int mapper_expr_evaluate(mapper_expr expr,
                 tok->op == OP_CONDITIONAL_IF_THEN_ELSE) {
                 printf("IF ");
                 print_stack_vector(stack[top], tok->datatype, tok->vector_length);
-                printf(" THEN ");
+                printf("THEN ");
                 if (tok->op == OP_CONDITIONAL_IF_ELSE) {
                     print_stack_vector(stack[top], tok->datatype, tok->vector_length);
-                    printf(" ELSE ");
+                    printf("ELSE ");
                     print_stack_vector(stack[top+1], tok->datatype, tok->vector_length);
                 }
                 else {
                     print_stack_vector(stack[top+1], tok->datatype, tok->vector_length);
                     if (tok->op == OP_CONDITIONAL_IF_THEN_ELSE) {
-                        printf(" ELSE ");
+                        printf("ELSE ");
                         print_stack_vector(stack[top+2], tok->datatype, tok->vector_length);
                     }
                 }
             }
             else {
                 print_stack_vector(stack[top], tok->datatype, tok->vector_length);
-                printf(" %s%c ", op_table[tok->op].name, tok->datatype);
+                printf("%s%c ", op_table[tok->op].name, tok->datatype);
                 print_stack_vector(stack[top+1], tok->datatype, tok->vector_length);
             }
 #endif
@@ -1899,6 +1924,10 @@ int mapper_expr_evaluate(mapper_expr expr,
                                     tok++;
                                     count++;
                                 }
+#if TRACING
+                                printf("= ABORT!\n");
+#endif
+                                goto skip_typecast;
                             }
                         }
                         break;
@@ -1996,6 +2025,10 @@ int mapper_expr_evaluate(mapper_expr expr,
                                     tok++;
                                     count++;
                                 }
+#if TRACING
+                                printf("= ABORT!\n");
+#endif
+                                goto skip_typecast;
                             }
                         }
                         break;
@@ -2113,6 +2146,10 @@ int mapper_expr_evaluate(mapper_expr expr,
                                     tok++;
                                     count++;
                                 }
+#if TRACING
+                                printf("= ABORT!\n");
+#endif
+                                goto skip_typecast;
                             }
                         }
                         break;
@@ -2134,9 +2171,9 @@ int mapper_expr_evaluate(mapper_expr expr,
                 }
             }
 #if TRACING
-            printf(" = ");
+            printf("= ");
             print_stack_vector(stack[top], tok->datatype, tok->vector_length);
-            printf(" \n");
+            printf("\n");
 #endif
             break;
         case TOK_FUNC:
@@ -2202,9 +2239,9 @@ int mapper_expr_evaluate(mapper_expr expr,
                 }
             }
 #if TRACING
-            printf(" = ");
+            printf("= ");
             print_stack_vector(stack[top], tok->datatype, tok->vector_length);
-            printf(" \n");
+            printf("\n");
 #endif
             break;
         case TOK_VFUNC:
@@ -2284,9 +2321,9 @@ int mapper_expr_evaluate(mapper_expr expr,
             }
             dims[top] = tok->vector_length;
 #if TRACING
-            printf(" = ");
+            printf("= ");
             print_stack_vector(stack[top], tok->datatype, tok->vector_length);
-            printf(" \n");
+            printf("\n");
 #endif
             break;
         case TOK_VECTORIZE:
@@ -2315,21 +2352,10 @@ int mapper_expr_evaluate(mapper_expr expr,
 #if TRACING
             printf("built %i-element vector: ", tok->vector_length);
             print_stack_vector(stack[top], tok->datatype, tok->vector_length);
-            printf(" \n");
+            printf("\n");
 #endif
             break;
         case TOK_ASSIGNMENT:
-#if TRACING
-            if (tok->var < N_VARS)
-                printf("assigning values to %s_%c%d{%i}[%i]\n",
-                       var_strings[tok->var], tok->datatype, tok->vector_length,
-                       tok->history_index, tok->vector_index);
-            else
-                printf("assigning values to var%d_%c%d{%i}[%i]\n",
-                       tok->var - N_VARS, tok->datatype, tok->vector_length,
-                       tok->history_index, tok->vector_index);
-#endif
-            updated++;
             if (tok->var == VAR_Y) {
                 int idx = (tok->history_index + to->position + to->size);
                 if (idx < 0)
@@ -2361,8 +2387,19 @@ int mapper_expr_evaluate(mapper_expr expr,
 
                 // Also copy timetag from input
                 mapper_timetag_t *ttfrom = msig_history_tt_pointer(*from);
-                mapper_timetag_t *ttto = to->timetag + idx * sizeof(mapper_timetag_t);
+                mapper_timetag_t *ttto = &to->timetag[idx];
                 memcpy(ttto, ttfrom, sizeof(mapper_timetag_t));
+
+                // Mark updated flag for tracking output history index increment
+                updated++;
+
+#if TRACING
+                printf("assigning values to variable y{%d}[%d",
+                       tok->history_index, tok->vector_index);
+                if (tok->vector_length > 1)
+                    printf(":%d", tok->vector_length + tok->vector_index - 1);
+                printf("]\n");
+#endif
             }
             else if (tok->var >= 0 && tok->var < expr->num_variables + N_VARS) {
                 // passed the address of an array of mapper_signal_history structs
@@ -2381,6 +2418,14 @@ int mapper_expr_evaluate(mapper_expr expr,
                 mapper_timetag_t *ttfrom = msig_history_tt_pointer(*from);
                 mapper_timetag_t *ttvar = msig_history_tt_pointer(*h);
                 memcpy(ttvar, ttfrom, sizeof(mapper_timetag_t));
+
+#if TRACING
+                printf("assigning values to variable %s{%d}[%d", var->name,
+                       tok->history_index, tok->vector_index);
+                if (tok->vector_length > 1)
+                    printf(":%d", tok->vector_length + tok->vector_index - 1);
+                printf("]\n");
+#endif
             }
 
             /* If assignment was history initialization, move expression start
@@ -2436,6 +2481,7 @@ int mapper_expr_evaluate(mapper_expr expr,
                 }
             }
         }
+    skip_typecast:
         tok++;
         count++;
     }
