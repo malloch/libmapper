@@ -146,3 +146,23 @@ Just like the output variable `y` we can initialize past values of user-defined 
 2. `y=ema*2` — set output variable `y` to equal the **current** value of `ema` multiplied by `2`. The current value of `ema` is `0` since it has not yet been set.
 3. `ema=ema{-1}*0.9+x*0.1` — set the current value of `ema` using current value of `x` and the past value of `ema`
 
+Accessing Variable Timetags
+===========================
+
+The precise time at which a variable is updated is always tracked by libmapper and communicated over connections with the data value. In the background this information can be used for discarding out-of-order packets, jitter mitigation but it may also be useful in your expressions.
+
+Currently variable timetags can be accessed using the syntax `<variable_name>.tt` – for example the time associated with the current sample `x` is `x.tt`, and the timetag associated with the last update of a hypothetical user-defined variable `foo` would be `foo.tt`. This syntax can be used anywhere in your expressions:
+
+* `y=x.tt` — output the timetag of the input instead of its value
+* `y=x.tt-x{-1}.tt` — output the time interval between subsequent updates
+
+This functionality can be used to limit the output rate:
+
+* `y=(x.tt-y{-1}.tt)>0.5?x` — only output if more than 0.5 seconds has elapsed since the last output, otherwise discard input sample
+
+Here's a more complex example in which the rate is limited but incoming samples are averaged instead of discarding them
+
+    output = (x.tt - y{-1}.tt) > 0.1;
+    y = output ? aggregate / nsamps;
+    aggregate = !output * aggregate + x;
+    nsamps = output ? 1 : nsamps + 1;
