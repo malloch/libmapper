@@ -489,6 +489,16 @@ int main()
     result += parse_and_eval();
     printf("Expected: 1 or NULL\n");
 
+    /* 46) Expression for limiting rate with smoothed output */
+    snprintf(str, 256,
+             "output=(x.tt-y{-1}.tt)>0.1,"
+             "y=output?agg/samps,"
+             "agg=!output*agg+x,"
+             "samps=output?1:samps+1");
+    setup_test('i', 1, src_int, 'i', 1, dest_int);
+    result += parse_and_eval();
+    printf("Expected: 1 or NULL\n");
+
     printf("**********************************\n");
     printf("Failed %d tests\n", result);
     return result;
