@@ -137,6 +137,22 @@ typedef struct _mapper_clock_t {
     mapper_sync_timetag_t remote;
 } mapper_clock_t, *mapper_clock;
 
+/* A structure that holds a linked list of possible interfaces. */
+typedef struct _mapper_interface {
+    int status;                     /*!< Status of this interface. */
+    uint32_t next_ping;             /*!< Next scheduled ping time (sec). */
+
+    struct in_addr ip;              /*!< The IP address of interface. */
+    char *name;                     /*!< The name of the network
+                                     *   interface for receiving
+                                     *   messages. */
+    lo_server_thread bus_server;    /*!< LibLo server thread for the
+                                     *   admin bus. */
+    lo_address bus_addr;            /*!< LibLo address for the admin
+                                     *   bus. */
+    struct _mapper_interface  *next;
+} mapper_interface_t, *mapper_interface;
+
 typedef struct _mapper_admin_subscriber {
     lo_address                      address;
     uint32_t                        lease_expiration_sec;
@@ -146,26 +162,23 @@ typedef struct _mapper_admin_subscriber {
 
 /*! A structure that keeps information about a device. */
 typedef struct _mapper_admin {
-    int random_id;                    /*!< Random ID for allocation
-                                           speedup. */
-    lo_server_thread bus_server;      /*!< LibLo server thread for the
-                                       *   admin bus. */
-    lo_address bus_addr;              /*!< LibLo address for the admin
-                                       *   bus. */
-    lo_server_thread mesh_server;     /*!< LibLo server thread for the
-                                       *   admin mesh. */
-    char *interface_name;             /*!< The name of the network
-                                       *   interface for receiving
-                                       *   messages. */
-    struct in_addr interface_ip;      /*!< The IP address of interface. */
-    struct _mapper_device *device;    /*!< Device that this admin is
-                                       *   in charge of. */
-    struct _mapper_monitor *monitor;  /*!< Monitor that this admin is
-                                       *   in charge of. */
-    mapper_clock_t clock;             /*!< Clock for providing global
-                                       *   time syncronization. */
-    lo_bundle bundle;                 /*!< Bundle pointer for sending
-                                       *   messages on the admin bus. */
+    int random_id;                      /*!< Random ID for allocation
+                                        speedup. */
+
+    lo_server_thread mesh_server;       /*!< LibLo server thread for the
+                                        * admin mesh. */
+
+    struct _mapper_interface *interfaces;
+    char *force_interface;
+
+    struct _mapper_device *device;      /*!< Device that this admin is
+                                        * in charge of. */
+    struct _mapper_monitor *monitor;    /*!< Monitor that this admin is
+                                        * in charge of. */
+    mapper_clock_t clock;               /*!< Clock for providing global
+                                        * time syncronization. */
+    lo_bundle bundle;                   /*!< Bundle pointer for sending
+                                        * messages on the admin bus. */
     lo_address bundle_dest;
     int message_type;
     mapper_admin_subscriber subscribers; /*!< Linked-list of subscribed peers. */

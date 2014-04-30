@@ -214,10 +214,23 @@ static void handler_error(int num, const char *msg, const char *where)
 static int check_collisions(mapper_admin admin,
                             mapper_admin_allocated_t *resource);
 
-/*! Local function to get the IP address of a network interface. */
-static int get_interface_addr(const char* pref,
-                              struct in_addr* addr, char **iface)
+//static int check_interfaces(mapper_admin admin)
+//{
+//    // if admin->preferred_iface == 0 try all interfaces
+//
+//    // check if new interface has been added
+//    // check if interface has been removed
+//        // are we linked to any devices through this interface?
+//        // remove link
+//    // return current number of interfaces
+//}
+
+/* Local function to get the IP addresses of network interfaces. If a network
+ * interface is provided as an argument we will only use that interface,
+ * otherwise we will try to listen on all available network interfaces */
+static int check_interfaces(mapper_admin admin)
 {
+    int found = 0;
     struct in_addr zero;
     struct sockaddr_in *sa;
 
@@ -227,7 +240,7 @@ static int get_interface_addr(const char* pref,
 
     struct ifaddrs *ifaphead;
     struct ifaddrs *ifap;
-    struct ifaddrs *iflo=0, *ifchosen=0;
+    struct ifaddrs *iflo=0;
 
     if (getifaddrs(&ifaphead) != 0)
         return 1;
@@ -243,32 +256,82 @@ static int get_interface_addr(const char* pref,
         // Note, we could also check for IFF_MULTICAST-- however this
         // is the data-sending port, not the admin bus port.
 
-        if (sa->sin_family == AF_INET && ifap->ifa_flags & IFF_UP
+        if (sa->sin_family == AF_INET
             && memcmp(&sa->sin_addr, &zero, sizeof(struct in_addr))!=0)
         {
-            ifchosen = ifap;
-            if (pref && strcmp(ifap->ifa_name, pref)==0)
-                break;
-            else if (ifap->ifa_flags & IFF_LOOPBACK)
+            if ((!admin->force_interface
+                 || strcmp(ifap->ifa_name, admin->force_interface)==0)
+#ifdef HAVE_LIBLO_SET_IFACE
+#ifdef HAVE_LIBLO_SERVER_IFACE
+                ) {
+#else
+                && ifap->ifa_flags & IFF_UP) {
+#endif
+#else
+                && ifap->ifa_flags & IFF_UP) {
+#endif
+                // Check if iface already in list
+                mapper_interface iface = admin->interfaces;
+                while (iface) {
+                    if (strcmp(iface->name, ifap->ifa_name)==0)
+                        break;
+                    iface = iface->next;
+                }
+                if (!iface) {
+                    printf("adding interface %s to list\n", ifap->ifa_name);
+                    // Allocate a new mapper_interface_t struct
+                    iface = (mapper_interface) malloc(sizeof(struct _mapper_interface));
+                    iface->name = strdup(ifap->ifa_name);
+                    sa = (struct sockaddr_in *) ifap->ifa_addr;
+                    iface->ip = sa->sin_addr;
+                    if (ifap->ifa_flags & IFF_UP)
+                        iface->status = 0;
+                    else
+                        iface->status = -1;
+                    iface->next = admin->interfaces;
+                    admin->interfaces = iface;
+                    found++;
+                    if (admin->force_interface) {
+                        freeifaddrs(ifaphead);
+                        return found;
+                    }
+                }
+#ifndef HAVE_LIBLO_SET_IFACE
+                return found;
+#endif
+#ifndef HAVE_LIBLO_SERVER_IFACE
+                return found;
+#endif
+            }
+            if (ifap->ifa_flags & IFF_LOOPBACK)
                 iflo = ifap;
         }
         ifap = ifap->ifa_next;
     }
 
-    // Default to loopback address in case user is working locally.
-    if (!ifchosen)
-        ifchosen = iflo;
-
-    if (ifchosen) {
-        if (*iface) free(*iface);
-        *iface = strdup(ifchosen->ifa_name);
-        sa = (struct sockaddr_in *) ifchosen->ifa_addr;
-        *addr = sa->sin_addr;
-        freeifaddrs(ifaphead);
-        return 0;
+    // Include loopback address in case user is working locally?
+    if (!admin->force_interface || strcmp(admin->force_interface, "lo0")==0) {
+        mapper_interface iface = admin->interfaces;
+        while (iface) {
+            if (strcmp(iface->name, "lo0")==0)
+                break;
+            iface = iface->next;
+        }
+        if (!iface) {
+            // Allocate a new mapper_interface_t struct
+            mapper_interface iface = (mapper_interface) malloc(sizeof(struct _mapper_interface));
+            iface->name = strdup(iflo->ifa_name);
+            sa = (struct sockaddr_in *) iflo->ifa_addr;
+            iface->ip = sa->sin_addr;
+            iface->status = 0;
+            iface->next = admin->interfaces;
+            admin->interfaces = iface;
+            found++;
+        }
     }
 
     freeifaddrs(ifaphead);
+    return found;
 
 #else // !HAVE_GETIFADDRS
 
@@ -286,41 +349,50 @@ static int get_interface_addr(const char* pref,
         rc = GetAdaptersAddresses(AF_INET, 0, 0, paa, &size);
     }
     if (rc!=ERROR_SUCCESS)
-        return 2;
+        return 0;
 
     PIP_ADAPTER_ADDRESSES loaa=0, aa = paa;
     PIP_ADAPTER_UNICAST_ADDRESS lopua=0;
     while (aa && rc==ERROR_SUCCESS) {
         PIP_ADAPTER_UNICAST_ADDRESS pua = aa->FirstUnicastAddress;
-	// Skip adapters that are not "Up".
-        if (pua && aa->OperStatus == IfOperStatusUp) {
+        // Skip adapters that are not "Up".
+        if (pua) {
             if (aa->IfType == IF_TYPE_SOFTWARE_LOOPBACK) {
                 loaa = aa;
                 lopua = pua;
             }
             else {
-		// Skip addresses starting with 0.X.X.X or 169.X.X.X.
+                // Skip addresses starting with 0.X.X.X or 169.X.X.X.
                 sa = (struct sockaddr_in *) pua->Address.lpSockaddr;
-		unsigned char prefix = sa->sin_addr.s_addr&0xFF;
-		if (prefix!=0xA9 && prefix!=0) {
-		    if (*iface) free(*iface);
-		    *iface = strdup(aa->AdapterName);
-		    *addr = sa->sin_addr;
-		    free(paa);
-		    return 0;
-		}
+                unsigned char prefix = sa->sin_addr.s_addr&0xFF;
+                if (prefix!=0xA9 && prefix!=0) {
+                    // Allocate a new mapper_interface_t struct
+                    mapper_interface iface = (mapper_interface) malloc(sizeof(struct _mapper_interface));
+                    iface->name = strdup(aa->AdapterName);
+                    iface->ip = sa->sin_addr;
+                    if (aa->OperStatus == IfOperStatusUp)
+                        iface->status = 0;
+                    else
+                        iface->status = -1;
+                    iface->next = admin->interfaces;
+                    admin->interfaces = iface;
+                    found++;
+                }
             }
         }
         aa = aa->Next;
     }
 
     if (loaa && lopua) {
-        if (*iface) free(*iface);
-        *iface = strdup(loaa->AdapterName);
+        // Allocate a new mapper_interface_t struct
+        mapper_interface iface = (mapper_interface) malloc(sizeof(struct _mapper_interface));
+        iface->name = strdup(loaa->AdapterName);
         sa = (struct sockaddr_in *) lopua->Address.lpSockaddr;
-        *addr = sa->sin_addr;
-        free(paa);
-        return 0;
+        iface->ip = sa->sin_addr;
+        iface->status = 0;
+        iface->next = admin->interfaces;
+        admin->interfaces = iface;
+        return ++found;
     }
 
     if (paa) free(paa);
@@ -332,7 +404,7 @@ static int get_interface_addr(const char* pref,
 #endif // HAVE_LIBIPHLPAPI
 #endif // !HAVE_GETIFADDRS
 
-    return 2;
+    return found;
 }
 
 /*! A helper function to seed the random number generator. */
@@ -362,15 +434,21 @@ static void mapper_admin_add_device_methods(mapper_admin admin,
 {
     int i;
     char fullpath[256];
+    mapper_interface iface;
     for (i=0; i < N_DEVICE_BUS_HANDLERS; i++)
     {
         snprintf(fullpath, 256,
                  admin_msg_strings[device_bus_handlers[i].str_index],
                  mdev_name(admin->device));
-        lo_server_add_method(admin->bus_server, fullpath,
-                             device_bus_handlers[i].types,
-                             device_bus_handlers[i].h,
-                             admin);
+        iface = admin->interfaces;
+        while (iface) {
+            if (iface->bus_server)
+                lo_server_add_method(iface->bus_server, fullpath,
+                                     device_bus_handlers[i].types,
+                                     device_bus_handlers[i].h,
+                                     admin);
+            iface = iface->next;
+        }
     }
     for (i=0; i < N_DEVICE_MESH_HANDLERS; i++)
     {
@@ -382,23 +460,34 @@ static void mapper_admin_add_device_methods(mapper_admin admin,
                              device_mesh_handlers[i].h,
                              admin);
         // add them for bus also
-        lo_server_add_method(admin->bus_server, fullpath,
-                             device_mesh_handlers[i].types,
-                             device_mesh_handlers[i].h,
-                             admin);
+        iface = admin->interfaces;
+        while (iface) {
+            if (iface->bus_server)
+                lo_server_add_method(iface->bus_server, fullpath,
+                                     device_mesh_handlers[i].types,
+                                     device_mesh_handlers[i].h,
+                                     admin);
+            iface = iface->next;
+        }
     }
 }
 
 static void mapper_admin_add_monitor_methods(mapper_admin admin)
 {
     int i;
+    mapper_interface iface;
     for (i=0; i < N_MONITOR_BUS_HANDLERS; i++)
     {
-        lo_server_add_method(admin->bus_server,
-                             admin_msg_strings[monitor_bus_handlers[i].str_index],
-                             monitor_bus_handlers[i].types,
-                             monitor_bus_handlers[i].h,
-                             admin);
+        iface = admin->interfaces;
+        while (iface) {
+            if (iface->bus_server)
+                lo_server_add_method(iface->bus_server,
+                                     admin_msg_strings[monitor_bus_handlers[i].str_index],
+                                     monitor_bus_handlers[i].types,
+                                     monitor_bus_handlers[i].h,
+                                     admin);
+            iface = iface->next;
+        }
     }
     for (i=0; i < N_MONITOR_MESH_HANDLERS; i++)
     {
@@ -408,41 +497,55 @@ static void mapper_admin_add_monitor_methods(mapper_admin admin)
                              monitor_mesh_handlers[i].h,
                              admin);
         // add them for bus also
-        lo_server_add_method(admin->bus_server,
-                             admin_msg_strings[monitor_mesh_handlers[i].str_index],
-                             monitor_mesh_handlers[i].types,
-                             monitor_mesh_handlers[i].h,
-                             admin);
+        iface = admin->interfaces;
+        while (iface) {
+            if (iface->bus_server)
+                lo_server_add_method(iface->bus_server,
+                                     admin_msg_strings[monitor_mesh_handlers[i].str_index],
+                                     monitor_mesh_handlers[i].types,
+                                     monitor_mesh_handlers[i].h,
+                                     admin);
+            iface = iface->next;
+        }
     }
 }
 
 static void mapper_admin_remove_monitor_methods(mapper_admin admin)
 {
     int i;
+    mapper_interface iface;
     for (i=0; i < N_MONITOR_BUS_HANDLERS; i++)
     {
-        lo_server_del_method(admin->bus_server,
-                             admin_msg_strings[monitor_bus_handlers[i].str_index],
-                             monitor_bus_handlers[i].types);
+        iface = admin->interfaces;
+        while (iface) {
+            if (iface->bus_server)
+                lo_server_del_method(iface->bus_server,
+                                     admin_msg_strings[monitor_bus_handlers[i].str_index],
+                                     monitor_bus_handlers[i].types);
+            iface = iface->next;
+        }
     }
     for (i=0; i < N_MONITOR_MESH_HANDLERS; i++)
     {
         lo_server_del_method(admin->mesh_server,
                              admin_msg_strings[monitor_mesh_handlers[i].str_index],
                              monitor_mesh_handlers[i].types);
-        lo_server_del_method(admin->bus_server,
-                             admin_msg_strings[monitor_mesh_handlers[i].str_index],
-                             monitor_mesh_handlers[i].types);
+        iface = admin->interfaces;
+        while (iface) {
+            if (iface->bus_server)
+                lo_server_del_method(iface->bus_server,
+                                     admin_msg_strings[monitor_mesh_handlers[i].str_index],
+                                     monitor_mesh_handlers[i].types);
+            iface = iface->next;
+        }
     }
 }
 
-mapper_admin mapper_admin_new(const char *iface, const char *group, int port)
+mapper_admin mapper_admin_new(const char *iface_name, const char *group, int port)
 {
     mapper_admin admin = (mapper_admin)calloc(1, sizeof(mapper_admin_t));
     if (!admin)
         return NULL;
-
-    admin->interface_name = 0;
 
     /* Default standard ip and port is group 224.0.1.3, port 7570 */
     char port_str[10], *s_port = port_str;
@@ -453,40 +556,50 @@ mapper_admin mapper_admin_new(const char *iface, const char *group, int port)
         snprintf(port_str, 10, "%d", port);
 
     /* Initialize interface information. */
-    if (get_interface_addr(iface, &admin->interface_ip,
-                           &admin->interface_name))
-        trace("no interface found\n");
+    // TODO: occasionally rescan interfaces to check if they are up
+    if (iface_name)
+        admin->force_interface = strdup(iface_name);
+    if (!check_interfaces(admin))
+        trace("no network interfaces found!\n");
 
-    /* Open address */
-    admin->bus_addr = lo_address_new(group, s_port);
-    if (!admin->bus_addr) {
-        free(admin);
-        return NULL;
-    }
+    // TODO: move to function check_interfaces()
+    mapper_interface iface = admin->interfaces;
+    while (iface) {
+        /* Open address */
+        iface->bus_addr = lo_address_new(group, s_port);
+        if (!iface->bus_addr) {
+            iface->status = 0;
+        }
+        else {
+            /* Set TTL for packet to 1 -> local subnet */
+            lo_address_set_ttl(iface->bus_addr, 1);
 
-    /* Set TTL for packet to 1 -> local subnet */
-    lo_address_set_ttl(admin->bus_addr, 1);
-
-    /* Specify the interface to use for multicasting */
+            /* Specify the interface to use for multicasting */
 #ifdef HAVE_LIBLO_SET_IFACE
-    lo_address_set_iface(admin->bus_addr,
-                         admin->interface_name, 0);
+            lo_address_set_iface(iface->bus_addr,
+                                 iface->name, 0);
 #endif
 
-    /* Open server for multicast group 224.0.1.3, port 7570 */
-    admin->bus_server =
+            /* Open server for multicast group 224.0.1.3, port 7570 */
+            iface->bus_server =
 #ifdef HAVE_LIBLO_SERVER_IFACE
-        lo_server_new_multicast_iface(group, s_port,
-                                      admin->interface_name, 0,
-                                      handler_error);
+                lo_server_new_multicast_iface(group, s_port,
+                                              iface->name, 0,
+                                              handler_error);
 #else
-        lo_server_new_multicast(group, s_port, handler_error);
+                lo_server_new_multicast(group, s_port, handler_error);
 #endif
-
-    if (!admin->bus_server) {
-        lo_address_free(admin->bus_addr);
-        free(admin);
-        return NULL;
+            if (iface->bus_server) {
+                // Disable liblo message queueing.
+                lo_server_enable_queue(iface->bus_server, 0, 1);
+            }
+            else {
+                lo_address_free(iface->bus_addr);
+                iface->bus_addr = 0;
+                iface->status = 0;
+            }
+        }
+        iface = iface->next;
     }
 
     // Also open address/server for mesh-style admin communications
@@ -494,7 +607,6 @@ mapper_admin mapper_admin_new(const char *iface, const char *group, int port)
     while (!(admin->mesh_server = lo_server_new(0, liblo_error_handler))) {}
 
     // Disable liblo message queueing.
-    lo_server_enable_queue(admin->bus_server, 0, 1);
     lo_server_enable_queue(admin->mesh_server, 0, 1);
 
     return admin;
@@ -526,7 +638,14 @@ void mapper_admin_send_bundle(mapper_admin admin)
         }
     }
     else if (admin->bundle_dest == 0) {
-        lo_send_bundle_from(admin->bus_addr, admin->mesh_server, admin->bundle);
+        // send on all active interfaces
+        mapper_interface iface = admin->interfaces;
+        while (iface) {
+            if (iface->bus_addr)
+                lo_send_bundle_from(iface->bus_addr, admin->mesh_server,
+                                    admin->bundle);
+            iface = iface->next;
+        }
     }
     else {
         lo_send_bundle_from(admin->bundle_dest, admin->mesh_server, admin->bundle);
@@ -590,17 +709,24 @@ void mapper_admin_free(mapper_admin admin)
     // send out any cached messages
     mapper_admin_send_bundle(admin);
 
-    if (admin->interface_name)
-        free(admin->interface_name);
+    mapper_interface iface = admin->interfaces;
+    while (iface) {
+        mapper_interface next = iface->next;
+        if (iface->name)
+            free(iface->name);
+        if (iface->bus_server)
+            lo_server_free(iface->bus_server);
+        if (iface->bus_addr)
+            lo_address_free(iface->bus_addr);
+        free(iface);
+        iface = next;
+    }
 
-    if (admin->bus_server)
-        lo_server_free(admin->bus_server);
+    if (admin->force_interface)
+        free(admin->force_interface);
 
     if (admin->mesh_server)
         lo_server_free(admin->mesh_server);
-
-    if (admin->bus_addr)
-        lo_address_free(admin->bus_addr);
 
     mapper_admin_subscriber s;
     while (admin->subscribers) {
@@ -634,10 +760,16 @@ void mapper_admin_add_device(mapper_admin admin, mapper_device dev)
         /* Add methods for admin bus.  Only add methods needed for
          * allocation here. Further methods are added when the device is
          * registered. */
-        lo_server_add_method(admin->bus_server, "/name/probe", NULL,
-                             handler_device_name_probe, admin);
-        lo_server_add_method(admin->bus_server, "/name/registered", NULL,
-                             handler_device_name_registered, admin);
+        mapper_interface iface = admin->interfaces;
+        while (iface) {
+            if (iface->bus_server) {
+                lo_server_add_method(iface->bus_server, "/name/probe", NULL,
+                                     handler_device_name_probe, admin);
+                lo_server_add_method(iface->bus_server, "/name/registered", NULL,
+                                     handler_device_name_registered, admin);
+            }
+            iface = iface->next;
+        }
 
         /* Probe potential name to admin bus. */
         mapper_admin_probe_device_name(admin, dev);
@@ -682,7 +814,15 @@ static void mapper_admin_maybe_send_ping(mapper_admin admin, int force)
                                   mapper_timetag_difference(clock->now,
                                                             clock->remote.timetag) : 0);
             lo_bundle_add_message(b, "/sync", m);
-            lo_send_bundle(admin->bus_addr, b);
+
+            mapper_interface iface = admin->interfaces;
+            while (iface) {
+                // TODO: send different rates
+                if (iface->bus_addr)
+                    lo_send_bundle(iface->bus_addr, b);
+                iface = iface->next;
+            }
+
             clock->local[clock->local_index].message_id = clock->message_id;
             clock->local[clock->local_index].timetag.sec = clock->now.sec;
             clock->local[clock->local_index].timetag.frac = clock->now.frac;
@@ -699,7 +839,7 @@ static void mapper_admin_maybe_send_ping(mapper_admin admin, int force)
  */
 int mapper_admin_poll(mapper_admin admin)
 {
-    int count = 0, status;
+    int count = 0, recvd = 1, status;
     mapper_device md = admin->device;
 
     // send out any cached messages
@@ -708,8 +848,21 @@ int mapper_admin_poll(mapper_admin admin)
     if (md)
         md->flags &= ~FLAGS_SENT_ALL_DEVICE_MESSAGES;
 
-    while (count < 10 && (lo_server_recv_noblock(admin->bus_server, 0)
-           + lo_server_recv_noblock(admin->mesh_server, 0))) {
+//    while (count < 10 && (lo_server_recv_noblock(admin->bus_server, 0)
+//           + lo_server_recv_noblock(admin->mesh_server, 0))) {
+//        count++;
+//    }
+    // TODO: need to use select() here instead for efficiency
+    mapper_interface iface;
+    while (count < 10 && recvd) {
+        recvd = 0;
+        iface = admin->interfaces;
+        while (iface) {
+            if (iface->bus_server)
+                recvd += lo_server_recv_noblock(iface->bus_server, 0);
+            iface = iface->next;
+        }
+        recvd += lo_server_recv_noblock(admin->mesh_server, 0);
         count++;
     }
 
@@ -732,8 +885,13 @@ int mapper_admin_poll(mapper_admin admin)
             mdev_registered(md);
 
             /* Send registered msg. */
-            lo_send(admin->bus_addr, "/name/registered",
-                    "s", mdev_name(md));
+            iface = admin->interfaces;
+            while (iface) {
+                if (iface->bus_server)
+                    lo_send(iface->bus_addr, "/name/registered",
+                            "s", mdev_name(md));
+                iface = iface->next;
+            }
 
             mapper_admin_add_device_methods(admin, md);
             mapper_admin_maybe_send_ping(admin, 1);
@@ -755,7 +913,7 @@ int mapper_admin_poll(mapper_admin admin)
  */
 void mapper_admin_probe_device_name(mapper_admin admin, mapper_device device)
 {
-    device->ordinal.collision_count = -1;
+    device->ordinal.collision_count = 0;
     device->ordinal.count_time = get_current_time();
 
     /* Note: mdev_name() would refuse here since the
@@ -770,8 +928,16 @@ void mapper_admin_probe_device_name(mapper_admin admin, mapper_device device)
 
     /* For the same reason, we can't use mapper_admin_send()
      * here. */
-    lo_send(admin->bus_addr, "/name/probe", "si",
-            name, admin->random_id);
+    mapper_interface iface = admin->interfaces;
+    while (iface) {
+        if (iface->bus_addr) {
+            lo_send(iface->bus_addr, "/name/probe", "si",
+                    name, admin->random_id);
+            device->ordinal.collision_count--;
+        }
+        iface = iface->next;
+    }
+    printf(">> STARTING WITH COLLISION_COUNT %d\n", device->ordinal.collision_count);
 }
 
 /*! Algorithm for checking collisions and allocating resources. */
@@ -1601,12 +1767,18 @@ static int handler_device_name_probe(const char *path, const char *types,
             }
             /* Name may not yet be registered, so we can't use
              * mapper_admin_send() here. */
-            lo_send(admin->bus_addr, "/name/registered",
-                    "sii", name, temp_id,
-                    (md->ordinal.value+i+1));
+            mapper_interface iface = admin->interfaces;
+            while (iface) {
+                if (iface->bus_addr)
+                    lo_send(iface->bus_addr, "/name/registered",
+                            "sii", name, temp_id,
+                            (md->ordinal.value+i+1));
+                iface = iface->next;
+            }
         }
         else {
             md->ordinal.collision_count++;
+            printf(">> COLLISION %d\n", md->ordinal.collision_count);
             md->ordinal.count_time = get_current_time();
         }
     }

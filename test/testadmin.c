@@ -33,8 +33,12 @@ int test_admin()
 
     printf("Device structure initialized.\n");
 
-    printf("Found interface %s has IP %s\n", my_admin->interface_name,
-           inet_ntoa(my_admin->interface_ip));
+    mapper_interface iface = my_admin->interfaces;
+    while (iface) {
+        printf("Found interface %s with IP %s and status %d\n", iface->name,
+               inet_ntoa(iface->ip), iface->status);
+        iface = iface->next;
+    }
 
     while (!my_device->registered) {
         usleep(10000);

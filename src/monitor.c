@@ -264,7 +264,12 @@ void mapper_monitor_link(mapper_monitor mon,
         mapper_monitor_set_bundle_dest(mon, dest_device);
 
         // TODO: switch scopes to regular props
-        lo_send_message(mon->admin->bus_addr, "/link", m);
+        mapper_interface iface = mon->admin->interfaces;
+        while (iface) {
+            if (iface->bus_addr)
+                lo_send_message(iface->bus_addr, "/link", m);
+            iface = iface->next;
+        }
         free(m);
     }
     else {

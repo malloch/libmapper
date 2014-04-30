@@ -930,25 +930,27 @@ int mdev_num_fds(mapper_device md)
 
 int mdev_get_fds(mapper_device md, int *fds, int num)
 {
-    if (num > 0)
-        fds[0] = lo_server_get_socket_fd(md->admin->bus_server);
-    if (num > 1)
-        fds[1] = lo_server_get_socket_fd(md->admin->mesh_server);
-    if (num > 2)
-        fds[2] = lo_server_get_socket_fd(md->server);
-    else
-        return 1;
-    return 2;
+    int i = 0;
+    mapper_interface iface = md->admin->interfaces;
+    while (iface && i++ < num) {
+        fds[i] = lo_server_get_socket_fd(iface->bus_server);
+        iface = iface->next;
+    }
+    if (i++ < num)
+        fds[i] = lo_server_get_socket_fd(md->admin->mesh_server);
+    if (i++ < num)
+        fds[i] = lo_server_get_socket_fd(md->server);
+    return i;
 }
 
 void mdev_service_fd(mapper_device md, int fd)
 {
     // TODO: separate fds for bus and mesh comms
-    if (fd == lo_server_get_socket_fd(md->admin->bus_server))
-        mapper_admin_poll(md->admin);
-    else if (md->server
-             && fd == lo_server_get_socket_fd(md->server))
+    if (md->server
+        && fd == lo_server_get_socket_fd(md->server))
         lo_server_recv_noblock(md->server, 0);
+    else
+        mapper_admin_poll(md->admin);
 }
 
 void mdev_num_instances_changed(mapper_device md,
@@ -1307,15 +1309,20 @@ unsigned int mdev_port(mapper_device md)
 
 const struct in_addr *mdev_ip4(mapper_device md)
 {
-    if (md->registered)
-        return &md->admin->interface_ip;
+    // TODO return list of interface IPs?
+    if (md->registered && md->admin->interfaces)
+        return &md->admin->interfaces->ip;
     else
         return 0;
 }
 
 const char *mdev_interface(mapper_device md)
 {
-    return md->admin->interface_name;
+    // TODO return list of interfaces?
+    if (md->admin->interfaces)
+        return md->admin->interfaces->name;
+    else
+        return 0;
 }
 
 unsigned int mdev_ordinal(mapper_device md)
