@@ -154,6 +154,7 @@ typedef struct _mapper_interface {
 } mapper_interface_t, *mapper_interface;
 
 typedef struct _mapper_admin_subscriber {
+    char                            *name;
     lo_address                      address;
     uint32_t                        lease_expiration_sec;
     int                             flags;
@@ -232,7 +233,7 @@ typedef struct _mapper_queue {
 } *mapper_queue;
 
 /*! The link structure is a linked list of links each associated
- *  with a destination address that belong to a controller device. */
+ *  with a destination address that belongs to a controller device. */
 typedef struct _mapper_link {
     lo_address admin_addr;          //!< Network address of remote endpoint
     lo_address data_addr;           //!< Network address of remote endpoint
@@ -303,6 +304,16 @@ typedef struct _mapper_monitor_subscription {
 } *mapper_monitor_subscription;
 
 typedef struct _mapper_monitor {
+    mapper_admin_allocated_t ordinal;   /*!< A unique ordinal for this
+                                         *   monitor instance. */
+    int registered;                     /*!< Non-zero if this monitor has
+                                         *   been registered. */
+
+    char *name;                         /*!< The full name for this
+                                         *   monitor, or zero. */
+    uint32_t name_hash;     /*!< CRC-32 hash of full device name
+                             *   in the form /monitor.<ordinal> */
+
     mapper_admin      admin;    //<! Admin for this monitor.
 
     /*! Non-zero if this monitor is the sole owner of this admin, i.e.,

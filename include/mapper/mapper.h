@@ -1304,6 +1304,26 @@ mapper_monitor mapper_monitor_new(mapper_admin admin, int autosubscribe_flags);
 /*! Free a network monitor. */
 void mapper_monitor_free(mapper_monitor mon);
 
+/*! Detect whether a monitor is completely initialized.
+ *  \return Non-zero if monitor is completely initialized, i.e., has an
+ *          allocated receiving port and unique network name.  Zero
+ *          otherwise. */
+int mapper_monitor_ready(mapper_monitor mon);
+
+/*! Return an allocated ordinal identifying thsi monitor instance
+ *  In general the results of this function are not valid unless
+ *  mapper_monitor_ready() returns non-zero.
+ *  \param mon The monitor to query.
+ *  \return    A positive ordinal unique to this monitor. */
+unsigned int mapper_monitor_ordinal(mapper_monitor mon);
+
+/*! Return a string indicating the monitor's full name, if it is
+ *  registered.  The returned string must not be externally modified.
+ *  \param dev The device to query.
+ *  \return    String containing the monitor's full name, or zero if it is
+ *             not available. */
+const char *mapper_monitor_name(mapper_monitor mon);
+
 /*! Poll a network monitor.
  *  \param mon      The monitor to poll.
  *  \param block_ms The number of milliseconds to block, or 0 for

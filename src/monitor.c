@@ -81,6 +81,37 @@ void mapper_monitor_free(mapper_monitor mon)
     free(mon);
 }
 
+int mapper_monitor_ready(mapper_monitor mon)
+{
+    if (!mon)
+        return 0;
+
+    return mon->registered;
+}
+
+unsigned int mapper_monitor_ordinal(mapper_monitor mon)
+{
+    if (mon->registered)
+        return mon->ordinal.value;
+    else
+        return 0;
+}
+
+const char *mapper_monitor_name(mapper_monitor mon)
+{
+    if (!mon->registered || !mon->ordinal.locked)
+        return 0;
+
+    if (mon->name)
+        return mon->name;
+
+    unsigned int len = 14;  // strlen("/monitor") + 6;
+    mon->name = (char *) malloc(len);
+    mon->name[0] = 0;
+    snprintf(mon->name, len, "/monitor.%d", mon->ordinal.value);
+    return mon->name;
+}
+
 int mapper_monitor_poll(mapper_monitor mon, int block_ms)
 {
     int admin_count = mapper_admin_poll(mon->admin);
@@ -129,12 +160,18 @@ static void mapper_monitor_set_bundle_dest(mapper_monitor mon, const char *name)
 static void monitor_subscribe_internal(mapper_monitor mon, const char *device_name,
                                        int subscribe_flags, int timeout)
 {
+    if (!mon->registered) {
+        trace("Can't subscribe until monitor has registered name!");
+        return;
+    }
+
     char cmd[1024];
     snprintf(cmd, 1024, "%s/subscribe", device_name);
 
     mapper_monitor_set_bundle_dest(mon, device_name);
     lo_message m = lo_message_new();
     if (m) {
+        lo_message_add_string(m, mon->name);
         lo_message_add_int32(m, timeout);
         if (subscribe_flags & SUB_DEVICE_ALL)
             lo_message_add_string(m, "all");

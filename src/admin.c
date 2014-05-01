@@ -98,20 +98,20 @@ static int handler_device(const char *, const char *, lo_arg **,
                           int, lo_message, void *);
 static int handler_logout(const char *, const char *, lo_arg **,
                           int, lo_message, void *);
-static int handler_device_subcribe(const char *, const char *, lo_arg **,
-                                   int, lo_message, void *);
-static int handler_device_unsubcribe(const char *, const char *, lo_arg **,
-                                     int, lo_message, void *);
+static int handler_device_subscribe(const char *, const char *, lo_arg **,
+                                    int, lo_message, void *);
+static int handler_device_unsubscribe(const char *, const char *, lo_arg **,
+                                      int, lo_message, void *);
 static int handler_signal_info(const char *, const char *, lo_arg **,
                                int, lo_message, void *);
 static int handler_input_signal_removed(const char *, const char *, lo_arg **,
                                         int, lo_message, void *);
 static int handler_output_signal_removed(const char *, const char *, lo_arg **,
                                          int, lo_message, void *);
-static int handler_device_name_probe(const char *, const char *, lo_arg **,
-                                     int, lo_message, void *);
-static int handler_device_name_registered(const char *, const char *, lo_arg **,
-                                          int, lo_message, void *);
+static int handler_name_probe(const char *, const char *, lo_arg **,
+                              int, lo_message, void *);
+static int handler_name_registered(const char *, const char *, lo_arg **,
+                                   int, lo_message, void *);
 static int handler_device_link(const char *, const char *, lo_arg **, int,
                                lo_message, void *);
 static int handler_device_linkTo(const char *, const char *, lo_arg **,
@@ -156,8 +156,8 @@ static struct handler_method_assoc device_bus_handlers[] = {
     {ADM_LINK_MODIFY,           NULL,       handler_device_link_modify},
     {ADM_UNLINK,                NULL,       handler_device_unlink},
     {ADM_UNLINKED,              NULL,       handler_device_unlinked},
-    {ADM_SUBSCRIBE,             NULL,       handler_device_subcribe},
-    {ADM_UNSUBSCRIBE,           NULL,       handler_device_unsubcribe},
+    {ADM_SUBSCRIBE,             NULL,       handler_device_subscribe},
+    {ADM_UNSUBSCRIBE,           NULL,       handler_device_unsubscribe},
     {ADM_CONNECT,               NULL,       handler_signal_connect},
     {ADM_CONNECT_TO,            NULL,       handler_signal_connectTo},
     {ADM_CONNECTED,             NULL,       handler_signal_connected},
@@ -171,8 +171,8 @@ const int N_DEVICE_BUS_HANDLERS =
 static struct handler_method_assoc device_mesh_handlers[] = {
     {ADM_LINKED,                 NULL,      handler_device_linked},
     {ADM_UNLINKED,               NULL,      handler_device_unlinked},
-    {ADM_SUBSCRIBE,              NULL,      handler_device_subcribe},
-    {ADM_UNSUBSCRIBE,            NULL,      handler_device_unsubcribe},
+    {ADM_SUBSCRIBE,              NULL,      handler_device_subscribe},
+    {ADM_UNSUBSCRIBE,            NULL,      handler_device_unsubscribe},
     {ADM_CONNECT_TO,             NULL,      handler_signal_connectTo},
     {ADM_CONNECTED,              NULL,      handler_signal_connected},
     {ADM_DISCONNECTED,           "ss",      handler_signal_disconnected},
@@ -278,7 +278,6 @@ static int check_interfaces(mapper_admin admin)
                     iface = iface->next;
                 }
                 if (!iface) {
-                    printf("adding interface %s to list\n", ifap->ifa_name);
                     // Allocate a new mapper_interface_t struct
                     iface = (mapper_interface) malloc(sizeof(struct _mapper_interface));
                     iface->name = strdup(ifap->ifa_name);
@@ -472,7 +471,8 @@ static void mapper_admin_add_device_methods(mapper_admin admin,
     }
 }
 
-static void mapper_admin_add_monitor_methods(mapper_admin admin)
+static void mapper_admin_add_monitor_methods(mapper_admin admin,
+                                             mapper_monitor mon)
 {
     int i;
     mapper_interface iface;
@@ -546,6 +546,11 @@ mapper_admin mapper_admin_new(const char *iface_name, const char *group, int por
     mapper_admin admin = (mapper_admin)calloc(1, sizeof(mapper_admin_t));
     if (!admin)
         return NULL;
+
+    mapper_clock_init(&admin->clock);
+
+    /* Seed the random number generator. */
+    seed_srand();
 
     /* Default standard ip and port is group 224.0.1.3, port 7570 */
     char port_str[10], *s_port = port_str;
@@ -740,19 +745,27 @@ void mapper_admin_free(mapper_admin admin)
     free(admin);
 }
 
+static void mapper_admin_add_probe_methods(mapper_admin admin)
+{
+    mapper_interface iface = admin->interfaces;
+    while (iface) {
+        if (iface->bus_server) {
+            lo_server_add_method(iface->bus_server, "/name/probe", NULL,
+                                 handler_name_probe, admin);
+            lo_server_add_method(iface->bus_server, "/name/registered", NULL,
+                                 handler_name_registered, admin);
+        }
+        iface = iface->next;
+    }
+}
+
 /*! Add an uninitialized device to this admin. */
 void mapper_admin_add_device(mapper_admin admin, mapper_device dev)
 {
     /* Initialize data structures */
-    if (dev)
+    if (dev && !admin->device)
     {
         admin->device = dev;
-
-        // TODO: should we init clocks for monitors also?
-        mapper_clock_init(&admin->clock);
-
-        /* Seed the random number generator. */
-        seed_srand();
 
         /* Choose a random ID for allocation speedup */
         admin->random_id = rand();
@@ -760,19 +773,10 @@ void mapper_admin_add_device(mapper_admin admin, mapper_device dev)
         /* Add methods for admin bus.  Only add methods needed for
          * allocation here. Further methods are added when the device is
          * registered. */
-        mapper_interface iface = admin->interfaces;
-        while (iface) {
-            if (iface->bus_server) {
-                lo_server_add_method(iface->bus_server, "/name/probe", NULL,
-                                     handler_device_name_probe, admin);
-                lo_server_add_method(iface->bus_server, "/name/registered", NULL,
-                                     handler_device_name_registered, admin);
-            }
-            iface = iface->next;
-        }
+        mapper_admin_add_probe_methods(admin);
 
         /* Probe potential name to admin bus. */
-        mapper_admin_probe_device_name(admin, dev);
+        mapper_admin_probe_name(admin);
     }
 }
 
@@ -780,11 +784,16 @@ void mapper_admin_add_device(mapper_admin admin, mapper_device dev)
 void mapper_admin_add_monitor(mapper_admin admin, mapper_monitor mon)
 {
     /* Initialize monitor methods. */
-    if (mon) {
+    if (mon && !admin->monitor) {
         admin->monitor = mon;
-        mapper_admin_add_monitor_methods(admin);
-        mapper_admin_set_bundle_dest_bus(admin);
-        mapper_admin_bundle_message(admin, ADM_WHO, 0, "");
+
+        /* Add methods for admin bus.  Only add methods needed for
+         * allocation here. Further methods are added when the device is
+         * registered. */
+        mapper_admin_add_probe_methods(admin);
+
+        /* Probe potential name to admin bus. */
+        mapper_admin_probe_name(admin);
     }
 }
 
@@ -841,6 +850,7 @@ int mapper_admin_poll(mapper_admin admin)
 {
     int count = 0, recvd = 1, status;
     mapper_device md = admin->device;
+    mapper_monitor mon = admin->monitor;
 
     // send out any cached messages
     mapper_admin_send_bundle(admin);
@@ -848,10 +858,6 @@ int mapper_admin_poll(mapper_admin admin)
     if (md)
         md->flags &= ~FLAGS_SENT_ALL_DEVICE_MESSAGES;
 
-//    while (count < 10 && (lo_server_recv_noblock(admin->bus_server, 0)
-//           + lo_server_recv_noblock(admin->mesh_server, 0))) {
-//        count++;
-//    }
     // TODO: need to use select() here instead for efficiency
     mapper_interface iface;
     while (count < 10 && recvd) {
@@ -866,78 +872,140 @@ int mapper_admin_poll(mapper_admin admin)
         count++;
     }
 
-    if (!md)
+    if (!md && !mon)
         return count;
 
     /* If the ordinal is not yet locked, process collision timing.
      * Once the ordinal is locked it won't change. */
-    if (!md->registered) {
-        status = check_collisions(admin, &md->ordinal);
-        if (status == 1) {
-            /* If the ordinal has changed, re-probe the new name. */
-            mapper_admin_probe_device_name(admin, md);
-        }
-
-        /* If we are ready to register the device, add the needed message
-         * handlers. */
-        if (md->ordinal.locked)
-        {
-            mdev_registered(md);
-
-            /* Send registered msg. */
-            iface = admin->interfaces;
-            while (iface) {
-                if (iface->bus_server)
-                    lo_send(iface->bus_addr, "/name/registered",
-                            "s", mdev_name(md));
-                iface = iface->next;
+    if (md) {
+        if (!md->registered) {
+            status = check_collisions(admin, &md->ordinal);
+            if (status == 1) {
+                /* If the ordinal has changed, re-probe the new name. */
+                mapper_admin_probe_name(admin);
             }
 
-            mapper_admin_add_device_methods(admin, md);
-            mapper_admin_maybe_send_ping(admin, 1);
+            /* If we are ready to register the device, add the needed message
+             * handlers. */
+            if (md->ordinal.locked)
+            {
+                mdev_registered(md);
 
-            trace("</%s.?::%p> registered as <%s>\n",
-                  md->props.identifier, admin, mdev_name(md));
-            md->flags |= FLAGS_DEVICE_ATTRIBS_CHANGED;
+                /* Send registered msg. */
+                iface = admin->interfaces;
+                while (iface) {
+                    if (iface->bus_server)
+                        lo_send(iface->bus_addr, "/name/registered",
+                                "s", mdev_name(md));
+                    iface = iface->next;
+                }
+
+                mapper_admin_maybe_send_ping(admin, 1);
+                mapper_admin_add_device_methods(admin, md);
+
+                trace("</%s.?::%p> registered as <%s>\n",
+                      md->props.identifier, admin, mdev_name(md));
+                md->flags |= FLAGS_DEVICE_ATTRIBS_CHANGED;
+            }
+        }
+        else {
+            // Send out clock sync messages occasionally or if newly registered
+            mapper_admin_maybe_send_ping(admin, 0);
         }
     }
-    else {
-        // Send out clock sync messages occasionally
-        mapper_admin_maybe_send_ping(admin, 0);
+    if (mon) {
+        if (!mon->registered) {
+            status = check_collisions(admin, &mon->ordinal);
+            if (status == 1) {
+                /* If the ordinal has changed, re-probe the new name. */
+                mapper_admin_probe_name(admin);
+            }
+            
+            /* If we are ready to register the device, add the needed message
+             * handlers. */
+            if (mon->ordinal.locked)
+            {
+                mon->registered = 1;
+                
+                /* Send registered msg. */
+                iface = admin->interfaces;
+                while (iface) {
+                    if (iface->bus_server)
+                        lo_send(iface->bus_addr, "/name/registered",
+                                "s", mapper_monitor_name(mon));
+                    iface = iface->next;
+                }
+                
+                mapper_admin_add_monitor_methods(admin, mon);
+                
+                trace("</%s.?::%p> registered as <%s>\n",
+                      md->props.identifier, admin, mdev_name(md));
+                md->flags |= FLAGS_DEVICE_ATTRIBS_CHANGED;
+            }
+        }
     }
+
     return count;
 }
 
 /*! Probe the admin bus to see if a device's proposed name.ordinal is
  *  already taken.
  */
-void mapper_admin_probe_device_name(mapper_admin admin, mapper_device device)
+void mapper_admin_probe_name(mapper_admin admin)
 {
-    device->ordinal.collision_count = 0;
-    device->ordinal.count_time = get_current_time();
+    mapper_device md = admin->device;
+    mapper_monitor mon = admin->monitor;
 
-    /* Note: mdev_name() would refuse here since the
-     * ordinal is not yet locked, so we have to build it manually at
-     * this point. */
-    char name[256];
-    trace("</%s.?::%p> probing name\n", device->props.identifier, admin);
-    snprintf(name, 256, "/%s.%d", device->props.identifier, device->ordinal.value);
+    if (md && !md->ordinal.locked) {
+        md->ordinal.collision_count = 0;
+        md->ordinal.count_time = get_current_time();
 
-    /* Calculate a hash from the name and store it in id.value */
-    device->props.name_hash = crc32(0L, (const Bytef *)name, strlen(name));
+        /* Note: mdev_name() would refuse here since the
+         * ordinal is not yet locked, so we have to build it manually at
+         * this point. */
+        char name[256];
+        trace("</%s.?::%p> probing name\n", md->props.identifier, admin);
+        snprintf(name, 256, "/%s.%d", md->props.identifier, md->ordinal.value);
 
-    /* For the same reason, we can't use mapper_admin_send()
-     * here. */
-    mapper_interface iface = admin->interfaces;
-    while (iface) {
-        if (iface->bus_addr) {
-            lo_send(iface->bus_addr, "/name/probe", "si",
-                    name, admin->random_id);
-            device->ordinal.collision_count--;
+        /* Calculate a hash from the name. */
+        md->props.name_hash = crc32(0L, (const Bytef *)name, strlen(name));
+
+        /* For the same reason, we can't use mapper_admin_send() here. */
+        mapper_interface iface = admin->interfaces;
+        while (iface) {
+            if (iface->bus_addr) {
+                lo_send(iface->bus_addr, "/name/probe", "si",
+                        name, admin->random_id);
+                md->ordinal.collision_count--;
+            }
+            iface = iface->next;
         }
-        iface = iface->next;
     }
-    printf(">> STARTING WITH COLLISION_COUNT %d\n", device->ordinal.collision_count);
+    if (mon && !mon->ordinal.locked) {
+        mon->ordinal.collision_count = 0;
+        mon->ordinal.count_time = get_current_time();
+
+        /* Note: mapper_monitor_name() would refuse here since the
+         * ordinal is not yet locked, so we have to build it manually at
+         * this point. */
+        char name[256];
+        trace("</monitor.?::%p> probing name\n", admin);
+        snprintf(name, 256, "/monitor.%d", mon->ordinal.value);
+
+        /* Calculate a hash from the name. */
+        mon->name_hash = crc32(0L, (const Bytef *)name, strlen(name));
+
+        /* For the same reason, we can't use mapper_admin_send() here. */
+        mapper_interface iface = admin->interfaces;
+        while (iface) {
+            if (iface->bus_addr) {
+                lo_send(iface->bus_addr, "/name/probe", "si",
+                        name, admin->random_id);
+                mon->ordinal.collision_count--;
+            }
+            iface = iface->next;
+        }
+    }
 }
 
 /*! Algorithm for checking collisions and allocating resources. */
@@ -957,7 +1025,6 @@ static int check_collisions(mapper_admin admin,
             resource->on_lock(admin->device, resource);
         return 2;
     }
-
     else if (timediff >= 0.5 && resource->collision_count > 0) {
         /* If resource collisions were found within 500 milliseconds of the
          * last probe, add a random number based on the number of
@@ -1394,10 +1461,11 @@ static int handler_logout(const char *path, const char *types,
 }
 
 // Add/renew/remove a monitor subscription.
-static void mapper_admin_manage_subscriber(mapper_admin admin, lo_address address,
-                                           int flags, int timeout_seconds,
-                                           int revision)
+static void mapper_admin_manage_subscriber(mapper_admin admin, const char *name,
+                                           lo_address address, int flags,
+                                           int timeout_seconds, int revision)
 {
+    // TODO: do we need to tell apart subsequent monitors with the same name?
     mapper_admin_subscriber *s = &admin->subscribers;
     const char *ip = lo_address_get_hostname(address);
     const char *port = lo_address_get_port(address);
@@ -1408,8 +1476,7 @@ static void mapper_admin_manage_subscriber(mapper_admin admin, lo_address addres
     mapper_clock_now(clock, &clock->now);
 
     while (*s) {
-        if (strcmp(ip, lo_address_get_hostname((*s)->address))==0 &&
-            strcmp(port, lo_address_get_port((*s)->address))==0) {
+        if (strcmp(name, (*s)->name)==0) {
             // subscriber already exists
             if (!flags || !timeout_seconds) {
                 // remove subscription
@@ -1418,6 +1485,8 @@ static void mapper_admin_manage_subscriber(mapper_admin admin, lo_address addres
                 *s = temp->next;
                 if (temp->address)
                     lo_address_free(temp->address);
+                if (temp->name)
+                    free(temp->name);
                 free(temp);
                 if (!flags || !(flags &= ~prev_flags))
                     return;
@@ -1442,6 +1511,7 @@ static void mapper_admin_manage_subscriber(mapper_admin admin, lo_address addres
     if (!(*s)) {
         // add new subscriber
         mapper_admin_subscriber sub = malloc(sizeof(struct _mapper_admin_subscriber));
+        sub->name = strdup(name);
         sub->address = lo_address_new(ip, port);
         sub->lease_expiration_sec = clock->now.sec + timeout_seconds;
         sub->flags = flags;
@@ -1471,24 +1541,29 @@ static void mapper_admin_manage_subscriber(mapper_admin admin, lo_address addres
 }
 
 /*! Respond to /subscribe message by adding or renewing a subscription. */
-static int handler_device_subcribe(const char *path, const char *types,
-                                   lo_arg **argv, int argc, lo_message msg,
-                                   void *user_data)
+static int handler_device_subscribe(const char *path, const char *types,
+                                    lo_arg **argv, int argc, lo_message msg,
+                                    void *user_data)
 {
     mapper_admin admin = (mapper_admin) user_data;
     mapper_device md = admin->device;
+    lo_address a;
     int version = -1;
 
-    lo_address a  = lo_message_get_source(msg);
-    if (!a || !argc) return 0;
+    if (argc < 3 || (types[0] != 's' && types[0] != 'S')
+        || (types[2] !='s' && types[2] != 'S'))
+        return 0;
+
+    if (!(a = lo_message_get_source(msg)))
+        return 0;
 
     int timeout_seconds;
-    if (types[0] == 'i')
-        timeout_seconds = argv[0]->i;
-    else if (types[0] == 'f')
-        timeout_seconds = (int)argv[0]->f;
-    else if (types[0] == 'd')
-        timeout_seconds = (int)argv[0]->d;
+    if (types[1] == 'i')
+        timeout_seconds = argv[1]->i;
+    else if (types[1] == 'f')
+        timeout_seconds = (int)argv[1]->f;
+    else if (types[1] == 'd')
+        timeout_seconds = (int)argv[1]->d;
     else {
         trace("<%s> error parsing message parameters in /subscribe.\n",
               mdev_name(md));
@@ -1501,7 +1576,7 @@ static int handler_device_subcribe(const char *path, const char *types,
         flags = SUB_DEVICE_ALL;
     }
     else {
-        for (i = 1; i < argc; i++) {
+        for (i = 2; i < argc; i++) {
             if (types[i] != 's' && types[i] != 'S')
                 break;
             else if (strcmp(&argv[i]->s, "all")==0)
@@ -1534,23 +1609,28 @@ static int handler_device_subcribe(const char *path, const char *types,
     }
 
     // add or renew subscription
-    mapper_admin_manage_subscriber(admin, a, flags, timeout_seconds, version);
+    mapper_admin_manage_subscriber(admin, &argv[0]->s, a, flags,
+                                   timeout_seconds, version);
 
     return 0;
 }
 
 /*! Respond to /unsubscribe message by removing a subscription. */
-static int handler_device_unsubcribe(const char *path, const char *types,
-                                     lo_arg **argv, int argc, lo_message msg,
-                                     void *user_data)
+static int handler_device_unsubscribe(const char *path, const char *types,
+                                      lo_arg **argv, int argc, lo_message msg,
+                                      void *user_data)
 {
     mapper_admin admin = (mapper_admin) user_data;
+    lo_address a;
 
-    lo_address a  = lo_message_get_source(msg);
-    if (!a) return 0;
+    if (!argc || (types[0] != 's' && types[0] != 'S'))
+        return 0;
+
+    if (!(a = lo_message_get_source(msg)))
+        return 0;
 
     // remove subscription
-    mapper_admin_manage_subscriber(admin, a, 0, 0, 0);
+    mapper_admin_manage_subscriber(admin, &argv[0]->s, a, 0, 0, 0);
 
     return 0;
 }
@@ -1661,12 +1741,13 @@ static int handler_output_signal_removed(const char *path, const char *types,
 }
 
 /*! Repond to name collisions during allocation, help suggest IDs once allocated. */
-static int handler_device_name_registered(const char *path, const char *types,
-                                          lo_arg **argv, int argc,
-                                          lo_message msg, void *user_data)
+static int handler_name_registered(const char *path, const char *types,
+                                   lo_arg **argv, int argc,
+                                   lo_message msg, void *user_data)
 {
     mapper_admin admin = (mapper_admin) user_data;
     mapper_device md = admin->device;
+    mapper_monitor mon = admin->monitor;
     char *name, *s;
     int hash, ordinal, diff;
     int temp_id = -1, suggestion = -1;
@@ -1679,48 +1760,93 @@ static int handler_device_name_registered(const char *path, const char *types,
 
     name = &argv[0]->s;
 
-    trace("</%s.?::%p> got /name/registered %s %i \n",
-          md->props.identifier, admin, name, temp_id);
+    if (mon && strncmp(name, "/monitor", 8)==0) {
+        if (mon->ordinal.locked) {
+            trace("<%s> got /name/registered %s %i \n",
+                  mapper_monitor_name(mon), name, temp_id);
 
-    if (md->ordinal.locked) {
-        /* Parse the ordinal from the complete name which is in the
-         * format: /<name>.<n> */
-        s = name;
-        if (*s != '/')
-            return 0;
-        s = strrchr(s, '.');
-        if (!s)
-            return 0;
-        ordinal = atoi(s+1);
-        *s = 0;
+            /* Parse the ordinal from the complete name which is in the
+             * format: /monitor.<n> */
+            ordinal = atoi(name+8);
 
-        // If device name matches
-        if (strcmp(name+1, md->props.identifier) == 0) {
             // if id is locked and registered id is within my block, store it
-            diff = ordinal - md->ordinal.value;
+            diff = ordinal - mon->ordinal.value;
             if (diff > 0 && diff < 9) {
-                md->ordinal.suggestion[diff-1] = -1;
+                mon->ordinal.suggestion[diff-1] = -1;
+            }
+        }
+        else {
+            trace("</monitor.?::%p> got /name/registered %s %i \n",
+                  admin, name, temp_id);
+
+            hash = crc32(0L, (const Bytef *)name, strlen(name));
+            if (hash == mon->name_hash) {
+                if (argc > 1) {
+                    if (types[1] == 'i')
+                        temp_id = argv[1]->i;
+                    if (types[2] == 'i')
+                        suggestion = argv[2]->i;
+                }
+                if (temp_id == admin->random_id &&
+                    suggestion != mon->ordinal.value && suggestion > 0) {
+                    mon->ordinal.value = suggestion;
+                    mapper_admin_probe_name(admin);
+                }
+                else {
+                    /* Count ordinal collisions. */
+                    mon->ordinal.collision_count++;
+                    mon->ordinal.count_time = get_current_time();
+                }
             }
         }
     }
-    else {
-        hash = crc32(0L, (const Bytef *)name, strlen(name));
-        if (hash == md->props.name_hash) {
-            if (argc > 1) {
-                if (types[1] == 'i')
-                    temp_id = argv[1]->i;
-                if (types[2] == 'i')
-                    suggestion = argv[2]->i;
+    if (md) {
+        if (md->ordinal.locked) {
+            trace("<%s> got /name/registered %s %i \n",
+                  mdev_name(md), name, temp_id);
+
+            /* Parse the ordinal from the complete name which is in the
+             * format: /<name>.<n> */
+            s = name;
+            if (*s != '/')
+                return 0;
+            s = strrchr(s, '.');
+            if (!s)
+                return 0;
+            ordinal = atoi(s+1);
+            *s = 0;
+
+            // If device name matches
+            if (strcmp(name+1, md->props.identifier) == 0) {
+                // if id is locked and registered id is within my block, store it
+                diff = ordinal - md->ordinal.value;
+                if (diff > 0 && diff < 9) {
+                    md->ordinal.suggestion[diff-1] = -1;
+                }
             }
-            if (temp_id == admin->random_id &&
-                suggestion != md->ordinal.value && suggestion > 0) {
-                md->ordinal.value = suggestion;
-                mapper_admin_probe_device_name(admin, md);
-            }
-            else {
-                /* Count ordinal collisions. */
-                md->ordinal.collision_count++;
-                md->ordinal.count_time = get_current_time();
+        }
+        else {
+            trace("</%s.?::%p> got /name/registered %s %i \n",
+                  md->props.identifier, admin, name, temp_id);
+
+            hash = crc32(0L, (const Bytef *)name, strlen(name));
+            if (hash == md->props.name_hash) {
+                if (argc > 1) {
+                    if (types[1] == 'i')
+                        temp_id = argv[1]->i;
+                    if (types[2] == 'i')
+                        suggestion = argv[2]->i;
+                }
+                if (temp_id == admin->random_id &&
+                    suggestion != md->ordinal.value && suggestion > 0) {
+                    md->ordinal.value = suggestion;
+                    mapper_admin_probe_name(admin);
+                }
+                else {
+                    /* Count ordinal collisions. */
+                    md->ordinal.collision_count++;
+                    md->ordinal.count_time = get_current_time();
+                }
             }
         }
     }
@@ -1728,12 +1854,13 @@ static int handler_device_name_registered(const char *path, const char *types,
 }
 
 /*! Repond to name probes during allocation, help suggest names once allocated. */
-static int handler_device_name_probe(const char *path, const char *types,
-                                     lo_arg **argv, int argc,
-                                     lo_message msg, void *user_data)
+static int handler_name_probe(const char *path, const char *types,
+                              lo_arg **argv, int argc,
+                              lo_message msg, void *user_data)
 {
     mapper_admin admin = (mapper_admin) user_data;
     mapper_device md = admin->device;
+    mapper_monitor mon = admin->monitor;
     char *name;
     double current_time;
     int hash, temp_id = -1, i;
@@ -1750,36 +1877,73 @@ static int handler_device_name_probe(const char *path, const char *types,
             temp_id = (int) argv[1]->f;
     }
 
-    trace("</%s.?::%p> got /name/probe %s %i \n",
-          md->props.identifier, admin, name, temp_id);
+    if (md || mon)
+        hash = crc32(0L, (const Bytef *)name, strlen(name));
+    else
+        return 0;
 
-    hash = crc32(0L, (const Bytef *)name, strlen(name));
-    if (hash == md->props.name_hash) {
-        if (md->ordinal.locked) {
-            current_time = get_current_time();
-            for (i=0; i<8; i++) {
-                if (md->ordinal.suggestion[i] >= 0
-                    && (current_time - md->ordinal.suggestion[i]) > 2.0) {
-                    // reserve suggested ordinal
-                    md->ordinal.suggestion[i] = get_current_time();
-                    break;
+    if (md) {
+        trace("</%s.?::%p> got /name/probe %s %i \n",
+              md->props.identifier, admin, name, temp_id);
+
+        if (hash == md->props.name_hash) {
+            if (md->ordinal.locked) {
+                current_time = get_current_time();
+                for (i=0; i<8; i++) {
+                    if (md->ordinal.suggestion[i] >= 0
+                        && (current_time - md->ordinal.suggestion[i]) > 2.0) {
+                        // reserve suggested ordinal
+                        md->ordinal.suggestion[i] = get_current_time();
+                        break;
+                    }
+                }
+                /* Name may not yet be registered, so we can't use
+                 * mapper_admin_send() here. */
+                mapper_interface iface = admin->interfaces;
+                while (iface) {
+                    if (iface->bus_addr)
+                        lo_send(iface->bus_addr, "/name/registered",
+                                "sii", name, temp_id,
+                                (md->ordinal.value+i+1));
+                    iface = iface->next;
                 }
             }
-            /* Name may not yet be registered, so we can't use
-             * mapper_admin_send() here. */
-            mapper_interface iface = admin->interfaces;
-            while (iface) {
-                if (iface->bus_addr)
-                    lo_send(iface->bus_addr, "/name/registered",
-                            "sii", name, temp_id,
-                            (md->ordinal.value+i+1));
-                iface = iface->next;
+            else {
+                md->ordinal.collision_count++;
+                md->ordinal.count_time = get_current_time();
             }
         }
-        else {
-            md->ordinal.collision_count++;
-            printf(">> COLLISION %d\n", md->ordinal.collision_count);
-            md->ordinal.count_time = get_current_time();
+    }
+    if (mon) {
+        trace("</monitor.?::%p> got /name/probe %s %i \n",
+              admin, name, temp_id);
+
+        if (hash == mon->name_hash) {
+            if (mon->ordinal.locked) {
+                current_time = get_current_time();
+                for (i=0; i<8; i++) {
+                    if (mon->ordinal.suggestion[i] >= 0
+                        && (current_time - mon->ordinal.suggestion[i]) > 2.0) {
+                        // reserve suggested ordinal
+                        mon->ordinal.suggestion[i] = get_current_time();
+                        break;
+                    }
+                }
+                /* Name may not yet be registered, so we can't use
+                 * mapper_admin_send() here. */
+                mapper_interface iface = admin->interfaces;
+                while (iface) {
+                    if (iface->bus_addr)
+                        lo_send(iface->bus_addr, "/name/registered",
+                                "sii", name, temp_id,
+                                (md->ordinal.value+i+1));
+                    iface = iface->next;
+                }
+            }
+            else {
+                mon->ordinal.collision_count++;
+                mon->ordinal.count_time = get_current_time();
+            }
         }
     }
     return 0;

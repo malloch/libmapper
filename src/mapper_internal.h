@@ -164,7 +164,7 @@ void mapper_admin_send_signal(mapper_admin admin, mapper_device md,
 void mapper_admin_send_signal_removed(mapper_admin admin, mapper_device md,
                                       mapper_signal sig);
 
-void mapper_admin_probe_device_name(mapper_admin admin, mapper_device dev);
+void mapper_admin_probe_name(mapper_admin admin);
 
 /*! Macro for calling message-sending function. */
 #define mapper_admin_bundle_message(...)                                    \
