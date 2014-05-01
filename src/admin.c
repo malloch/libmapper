@@ -920,13 +920,13 @@ int mapper_admin_poll(mapper_admin admin)
                 /* If the ordinal has changed, re-probe the new name. */
                 mapper_admin_probe_name(admin);
             }
-            
+
             /* If we are ready to register the device, add the needed message
              * handlers. */
             if (mon->ordinal.locked)
             {
                 mon->registered = 1;
-                
+
                 /* Send registered msg. */
                 iface = admin->interfaces;
                 while (iface) {
@@ -935,16 +935,14 @@ int mapper_admin_poll(mapper_admin admin)
                                 "s", mapper_monitor_name(mon));
                     iface = iface->next;
                 }
-                
+
                 mapper_admin_add_monitor_methods(admin, mon);
-                
-                trace("</%s.?::%p> registered as <%s>\n",
-                      md->props.identifier, admin, mdev_name(md));
-                md->flags |= FLAGS_DEVICE_ATTRIBS_CHANGED;
+
+                trace("</monitor.?::%p> registered as <%s>\n",
+                      admin, mapper_monitor_name(mon));
             }
         }
     }
-
     return count;
 }
 
@@ -1936,7 +1934,7 @@ static int handler_name_probe(const char *path, const char *types,
                     if (iface->bus_addr)
                         lo_send(iface->bus_addr, "/name/registered",
                                 "sii", name, temp_id,
-                                (md->ordinal.value+i+1));
+                                (mon->ordinal.value+i+1));
                     iface = iface->next;
                 }
             }
