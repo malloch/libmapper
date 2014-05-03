@@ -41,6 +41,8 @@ static double get_current_time()
 #endif
 }
 
+#define RESCAN_SECONDS 10   // Number of second between rescanning network interfaces
+
 /* Note: any call to liblo where get_liblo_error will be called
  * afterwards must lock this mutex, otherwise there is a race
  * condition on receiving this information.  Could be fixed by the
@@ -214,16 +216,55 @@ static void handler_error(int num, const char *msg, const char *where)
 static int check_collisions(mapper_admin admin,
                             mapper_admin_allocated_t *resource);
 
-//static int check_interfaces(mapper_admin admin)
-//{
-//    // if admin->preferred_iface == 0 try all interfaces
-//
-//    // check if new interface has been added
-//    // check if interface has been removed
-//        // are we linked to any devices through this interface?
-//        // remove link
-//    // return current number of interfaces
-//}
+static void add_interface(mapper_admin admin, char *name, struct in_addr ip)
+{
+    printf("adding interface %s\n", name);
+    mapper_interface iface;
+
+    // Allocate a new mapper_interface_t struct
+    iface = (mapper_interface) malloc(sizeof(struct _mapper_interface));
+    iface->name = strdup(name);
+    iface->ip = ip;
+    iface->status = 0;
+    iface->next = admin->interfaces;
+    admin->interfaces = iface;
+
+    /* Open address */
+    iface->bus_addr = lo_address_new(admin->group, admin->port);
+    if (!iface->bus_addr) {
+        iface->status = 0;
+    }
+    else {
+        /* Set TTL for packet to 1 -> local subnet */
+        lo_address_set_ttl(iface->bus_addr, 1);
+
+        /* Specify the interface to use for multicasting */
+#ifdef HAVE_LIBLO_SET_IFACE
+        lo_address_set_iface(iface->bus_addr,
+                             iface->name, 0);
+#endif
+
+        /* Open server for multicast group 224.0.1.3, port 7570 */
+        iface->bus_server =
+#ifdef HAVE_LIBLO_SERVER_IFACE
+            lo_server_new_multicast_iface(admin->group, admin->port,
+                                          iface->name, 0,
+                                          handler_error);
+#else
+            lo_server_new_multicast(admin->group, admin->port, handler_error);
+#endif
+        if (iface->bus_server) {
+            // Disable liblo message queueing.
+            lo_server_enable_queue(iface->bus_server, 0, 1);
+        }
+        else {
+            lo_address_free(iface->bus_addr);
+            iface->bus_addr = 0;
+            iface->status = 0;
+        }
+    }
+    iface = iface->next;
+}
 
 /* Local function to get the IP addresses of network interfaces. If a network
  * interface is provided as an argument we will only use that interface,
@@ -231,6 +272,9 @@ static int check_collisions(mapper_admin admin,
 static int check_interfaces(mapper_admin admin)
 {
     int found = 0;
+    mapper_clock_t *clock = &admin->clock;
+    mapper_clock_now(clock, &clock->now);
+    admin->rescan_schedule = clock->now.sec + RESCAN_SECONDS;
     struct in_addr zero;
     struct sockaddr_in *sa;
 
@@ -240,7 +284,6 @@ static int check_interfaces(mapper_admin admin)
 
     struct ifaddrs *ifaphead;
     struct ifaddrs *ifap;
-    struct ifaddrs *iflo=0;
 
     if (getifaddrs(&ifaphead) != 0)
         return 1;
@@ -278,17 +321,7 @@ static int check_interfaces(mapper_admin admin)
                     iface = iface->next;
                 }
                 if (!iface) {
-                    // Allocate a new mapper_interface_t struct
-                    iface = (mapper_interface) malloc(sizeof(struct _mapper_interface));
-                    iface->name = strdup(ifap->ifa_name);
-                    sa = (struct sockaddr_in *) ifap->ifa_addr;
-                    iface->ip = sa->sin_addr;
-                    if (ifap->ifa_flags & IFF_UP)
-                        iface->status = 0;
-                    else
-                        iface->status = -1;
-                    iface->next = admin->interfaces;
-                    admin->interfaces = iface;
+                    add_interface(admin, ifap->ifa_name, sa->sin_addr);
                     found++;
                     if (admin->force_interface) {
                         freeifaddrs(ifaphead);
@@ -302,31 +335,8 @@ static int check_interfaces(mapper_admin admin)
                 return found;
 #endif
             }
-            if (ifap->ifa_flags & IFF_LOOPBACK)
-                iflo = ifap;
         }
         ifap = ifap->ifa_next;
-    }
-
-    // Include loopback address in case user is working locally?
-    if (!admin->force_interface || strcmp(admin->force_interface, "lo0")==0) {
-        mapper_interface iface = admin->interfaces;
-        while (iface) {
-            if (strcmp(iface->name, "lo0")==0)
-                break;
-            iface = iface->next;
-        }
-        if (!iface) {
-            // Allocate a new mapper_interface_t struct
-            mapper_interface iface = (mapper_interface) malloc(sizeof(struct _mapper_interface));
-            iface->name = strdup(iflo->ifa_name);
-            sa = (struct sockaddr_in *) iflo->ifa_addr;
-            iface->ip = sa->sin_addr;
-            iface->status = 0;
-            iface->next = admin->interfaces;
-            admin->interfaces = iface;
-            found++;
-        }
     }
 
     freeifaddrs(ifaphead);
@@ -356,42 +366,15 @@ static int check_interfaces(mapper_admin admin)
         PIP_ADAPTER_UNICAST_ADDRESS pua = aa->FirstUnicastAddress;
         // Skip adapters that are not "Up".
         if (pua) {
-            if (aa->IfType == IF_TYPE_SOFTWARE_LOOPBACK) {
-                loaa = aa;
-                lopua = pua;
-            }
-            else {
-                // Skip addresses starting with 0.X.X.X or 169.X.X.X.
-                sa = (struct sockaddr_in *) pua->Address.lpSockaddr;
-                unsigned char prefix = sa->sin_addr.s_addr&0xFF;
-                if (prefix!=0xA9 && prefix!=0) {
-                    // Allocate a new mapper_interface_t struct
-                    mapper_interface iface = (mapper_interface) malloc(sizeof(struct _mapper_interface));
-                    iface->name = strdup(aa->AdapterName);
-                    iface->ip = sa->sin_addr;
-                    if (aa->OperStatus == IfOperStatusUp)
-                        iface->status = 0;
-                    else
-                        iface->status = -1;
-                    iface->next = admin->interfaces;
-                    admin->interfaces = iface;
-                    found++;
-                }
+            // Skip addresses starting with 0.X.X.X or 169.X.X.X.
+            sa = (struct sockaddr_in *) pua->Address.lpSockaddr;
+            unsigned char prefix = sa->sin_addr.s_addr&0xFF;
+            if (prefix!=0xA9 && prefix!=0) {
+                add_interface(admin, aa->AdapterName, sa->sin_addr);
+                found++;
             }
         }
         aa = aa->Next;
-    }
-
-    if (loaa && lopua) {
-        // Allocate a new mapper_interface_t struct
-        mapper_interface iface = (mapper_interface) malloc(sizeof(struct _mapper_interface));
-        iface->name = strdup(loaa->AdapterName);
-        sa = (struct sockaddr_in *) lopua->Address.lpSockaddr;
-        iface->ip = sa->sin_addr;
-        iface->status = 0;
-        iface->next = admin->interfaces;
-        admin->interfaces = iface;
-        return ++found;
     }
 
     if (paa) free(paa);
@@ -552,60 +535,25 @@ mapper_admin mapper_admin_new(const char *iface_name, const char *group, int por
     /* Seed the random number generator. */
     seed_srand();
 
-    /* Default standard ip and port is group 224.0.1.3, port 7570 */
-    char port_str[10], *s_port = port_str;
-    if (!group) group = "224.0.1.3";
-    if (port==0)
-        s_port = "7570";
-    else
-        snprintf(port_str, 10, "%d", port);
-
     /* Initialize interface information. */
-    // TODO: occasionally rescan interfaces to check if they are up
     if (iface_name)
         admin->force_interface = strdup(iface_name);
+
+    /* Default standard ip and port is group 224.0.1.3, port 7570 */
+    if (group)
+        admin->group = strdup(group);
+    else
+        admin->group = strdup("224.0.1.3");
+    if (port == 0)
+        admin->port = strdup("7570");
+    else {
+        char port_str[10];
+        snprintf(port_str, 10, "%d", port);
+        admin->port = strdup(port_str);
+    }
+
     if (!check_interfaces(admin))
         trace("no network interfaces found!\n");
-
-    // TODO: move to function check_interfaces()
-    mapper_interface iface = admin->interfaces;
-    while (iface) {
-        /* Open address */
-        iface->bus_addr = lo_address_new(group, s_port);
-        if (!iface->bus_addr) {
-            iface->status = 0;
-        }
-        else {
-            /* Set TTL for packet to 1 -> local subnet */
-            lo_address_set_ttl(iface->bus_addr, 1);
-
-            /* Specify the interface to use for multicasting */
-#ifdef HAVE_LIBLO_SET_IFACE
-            lo_address_set_iface(iface->bus_addr,
-                                 iface->name, 0);
-#endif
-
-            /* Open server for multicast group 224.0.1.3, port 7570 */
-            iface->bus_server =
-#ifdef HAVE_LIBLO_SERVER_IFACE
-                lo_server_new_multicast_iface(group, s_port,
-                                              iface->name, 0,
-                                              handler_error);
-#else
-                lo_server_new_multicast(group, s_port, handler_error);
-#endif
-            if (iface->bus_server) {
-                // Disable liblo message queueing.
-                lo_server_enable_queue(iface->bus_server, 0, 1);
-            }
-            else {
-                lo_address_free(iface->bus_addr);
-                iface->bus_addr = 0;
-                iface->status = 0;
-            }
-        }
-        iface = iface->next;
-    }
 
     // Also open address/server for mesh-style admin communications
     // TODO: use TCP instead?
@@ -808,7 +756,6 @@ void mapper_admin_remove_monitor(mapper_admin admin, mapper_monitor mon)
 static void mapper_admin_maybe_send_ping(mapper_admin admin, int force)
 {
     mapper_clock_t *clock = &admin->clock;
-    mapper_clock_now(clock, &clock->now);
     if (force || (clock->now.sec >= clock->next_ping)) {
         lo_bundle b = lo_bundle_new(clock->now);
         lo_message m = lo_message_new();
@@ -848,7 +795,7 @@ static void mapper_admin_maybe_send_ping(mapper_admin admin, int force)
  */
 int mapper_admin_poll(mapper_admin admin)
 {
-    int count = 0, recvd = 1, status;
+    int count = 0, recvd, status;
     mapper_device md = admin->device;
     mapper_monitor mon = admin->monitor;
 
@@ -860,7 +807,7 @@ int mapper_admin_poll(mapper_admin admin)
 
     // TODO: need to use select() here instead for efficiency
     mapper_interface iface;
-    while (count < 10 && recvd) {
+    do {
         recvd = 0;
         iface = admin->interfaces;
         while (iface) {
@@ -869,11 +816,15 @@ int mapper_admin_poll(mapper_admin admin)
             iface = iface->next;
         }
         recvd += lo_server_recv_noblock(admin->mesh_server, 0);
-        count++;
-    }
+    } while (recvd && count++ < 10);
 
     if (!md && !mon)
         return count;
+
+    mapper_clock_t *clock = &admin->clock;
+    mapper_clock_now(clock, &clock->now);
+    if (admin->rescan_schedule < clock->now.sec)
+        check_interfaces(admin);
 
     /* If the ordinal is not yet locked, process collision timing.
      * Once the ordinal is locked it won't change. */
@@ -1489,7 +1440,9 @@ static void mapper_admin_manage_subscriber(mapper_admin admin, const char *name,
                 if (!flags || !(flags &= ~prev_flags))
                     return;
             }
-            else {
+            else if (strcmp(ip, lo_address_get_hostname((*s)->address))==0 &&
+                     strcmp(port, lo_address_get_port((*s)->address))==0) {
+                // TODO: switch interface to lo0  if available?
                 // reset timeout
                 (*s)->lease_expiration_sec = clock->now.sec + timeout_seconds;
                 if ((*s)->flags == flags)
@@ -1497,6 +1450,10 @@ static void mapper_admin_manage_subscriber(mapper_admin admin, const char *name,
                 int temp = flags;
                 flags &= ~(*s)->flags;
                 (*s)->flags = temp;
+            }
+            else {
+                // we have a running subscription on another network interface
+                return;
             }
             break;
         }
@@ -1515,6 +1472,7 @@ static void mapper_admin_manage_subscriber(mapper_admin admin, const char *name,
         sub->flags = flags;
         sub->next = admin->subscribers;
         admin->subscribers = sub;
+        s = &sub;
     }
 
     if (revision == admin->device->props.version)

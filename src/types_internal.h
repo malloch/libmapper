@@ -169,8 +169,12 @@ typedef struct _mapper_admin {
     lo_server_thread mesh_server;       /*!< LibLo server thread for the
                                         * admin mesh. */
 
-    struct _mapper_interface *interfaces;
+    char *group;
+    char *port;
     char *force_interface;
+    struct _mapper_interface *interfaces;
+    uint32_t rescan_schedule;           /*!< Time at which to recheck network
+                                         *   interfaces */
 
     struct _mapper_device *device;      /*!< Device that this admin is
                                         * in charge of. */
