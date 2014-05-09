@@ -462,7 +462,10 @@ int main()
 
     /* 42) Moving average of inter-sample period */
     // tricky! we need to skip the first tt diff, but y{-1} needs to be 0
-    snprintf(str, 256, "period=counter?x.tt-x{-1}.tt:0, y=y{-1}*0.9+period*0.1, counter=counter+1");
+    snprintf(str, 256,
+             "period=counter?x.tt-x{-1}.tt:0,"
+             "y=y{-1}*0.9+period*0.1,"
+             "counter=counter+1");
     setup_test('i', 1, src_int, 'd', 1, dest_double);
     result += parse_and_eval();
     printf("Expected: ????\n");
@@ -484,7 +487,10 @@ int main()
     printf("Expected: FAILURE\n");
 
     /* 45) Expression for limiting output rate */
-    snprintf(str, 256, "diff=x.tt-y{-1}.tt, y=!counter||(diff>0.1)?x, counter=counter+1");
+    snprintf(str, 256,
+             "diff=x.tt-y{-1}.tt,"
+             "y=!counter||(diff>0.1)?x,"
+             "counter=counter+1");
     setup_test('i', 1, src_int, 'i', 1, dest_int);
     result += parse_and_eval();
     printf("Expected: 1 or NULL\n");
