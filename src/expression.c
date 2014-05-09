@@ -15,6 +15,9 @@
 #define TRACING 0
 #endif
 
+#define lex_error trace
+#define parse_error trace
+
 static int mini(int x, int y)
 {
     if (y < x) return y;
@@ -277,6 +280,12 @@ typedef double func_double_arity0();
 typedef double func_double_arity1(double);
 typedef double func_double_arity2(double,double);
 
+typedef union _mapper_signal_value {
+    float f;
+    double d;
+    int i32;
+} mapper_signal_value_t, mval;
+
 typedef struct _token {
     enum {
         TOK_CONST           = 0x0001,
@@ -442,7 +451,7 @@ static int expr_lex(const char *str, int index, mapper_token_t *tok)
         }
         c = str[++index];
         if (c!='-' && c!='+' && !isdigit(c)) {
-            printf("Incomplete scientific notation `%s'.\n",str+i);
+            lex_error("Incomplete scientific notation `%s'.\n", str+i);
             break;
         }
         if (c=='-' || c=='+')
@@ -601,7 +610,7 @@ static int expr_lex(const char *str, int index, mapper_token_t *tok)
         return ++index;
     default:
         if (!isalpha(c)) {
-            printf("unknown character '%c' in lexer\n", c);
+            lex_error("unknown character '%c' in lexer\n", c);
             break;
         }
         while (c && (isalpha(c) || isdigit(c)))
@@ -632,6 +641,7 @@ struct _mapper_expr
     int output_history_size;
     mapper_variable variables;
     int num_variables;
+    int constant_output;
 };
 
 void mapper_expr_free(mapper_expr expr)
@@ -652,72 +662,90 @@ void mapper_expr_free(mapper_expr expr)
 
 void printtoken(mapper_token_t tok)
 {
-    int locked = tok.vector_length_locked;
+    int i;
+    char tokstr[32];
     switch (tok.toktype) {
-    case TOK_CONST:
-        switch (tok.datatype) {
-            case 'f':       printf("%f_f%d", tok.f, tok.vector_length); break;
-            case 'd':       printf("%f_d%d", tok.d, tok.vector_length); break;
-            case 'i':       printf("%d_i%d", tok.i, tok.vector_length); break;
-        }                                                               break;
-    case TOK_OP:            printf("%s_%c%d%s", op_table[tok.op].name,
-                                   tok.datatype, tok.vector_length,
-                                   locked ? "'" : "");                  break;
-    case TOK_OPEN_CURLY:    printf("{");                                break;
-    case TOK_OPEN_PAREN:    printf("(");                                break;
-    case TOK_CLOSE_PAREN:   printf(")");                                break;
-    case TOK_OPEN_SQUARE:   printf("[");                                break;
-    case TOK_CLOSE_SQUARE:  printf("]");                                break;
-    case TOK_VAR:
-        if (tok.var<N_VARS) printf("%s_%c%d{%d}[%d]", var_strings[tok.var],
-                                   tok.datatype, tok.vector_length,
-                                   tok.history_index, tok.vector_index);
-        else                printf("var%d_%c%d{%d}[%d]", tok.var-N_VARS,
-                                   tok.datatype, tok.vector_length,
-                                   tok.history_index, tok.vector_index);break;
-    case TOK_TIMETAG:
-        if (tok.var<N_VARS) printf("%s.tt_%c%d{%d}[%d]", var_strings[tok.var],
-                                   tok.datatype, tok.vector_length,
-                                   tok.history_index, tok.vector_index);
-        else                printf("var%d_%c%d{%d}[%d].tt", tok.var-N_VARS,
-                                   tok.datatype, tok.vector_length,
-                                   tok.history_index, tok.vector_index);break;
-    case TOK_FUNC:          printf("FUNC(%s)%c%d", function_table[tok.func].name,
-                                   tok.datatype, tok.vector_length);    break;
-    case TOK_COMMA:         printf(",");                                break;
-    case TOK_COLON:         printf(":");                                break;
-    case TOK_VECTORIZE:     printf("VECT%c%d(%d)", tok.datatype,
-                                   tok.vector_length, tok.vectorizer_arity);
-                                                                        break;
-    case TOK_NEGATE:        printf("-");                                break;
-    case TOK_VFUNC:         printf("VFUNC(%s)%c%d", vfunc_strings[tok.func],
-                                   tok.datatype, tok.vector_length);    break;
-    case TOK_ASSIGNMENT:
-        if (tok.var<N_VARS) printf("ASSIGN_TO:%s_%c%d{%d}[%d]->[%d]",
-                                   var_strings[tok.var], tok.datatype,
-                                   tok.vector_length, tok.history_index,
-                                   tok.assignment_offset, tok.vector_index);
-        else                printf("ASSIGN_TO:var%d_%c%d{%d}[%d]->[%d]",
-                                   tok.var-N_VARS, tok.datatype,
-                                   tok.vector_length, tok.history_index,
-                                   tok.assignment_offset, tok.vector_index);
-                                                                        break;
-    case TOK_END:           printf("END");                              break;
-    default:                printf("(unknown token)");                  break;
+        case TOK_CONST:
+            switch (tok.datatype) {
+                case 'f':   snprintf(tokstr, 32, "%f", tok.f);  break;
+                case 'd':   snprintf(tokstr, 32, "%f", tok.d);  break;
+                case 'i':   snprintf(tokstr, 32, "%d", tok.i);  break;
+            }                                                   break;
+        case TOK_OP:
+            snprintf(tokstr, 32, "%s", op_table[tok.op].name);  break;
+        case TOK_OPEN_CURLY:    snprintf(tokstr, 32, "{");      break;
+        case TOK_OPEN_PAREN:    snprintf(tokstr, 32, "(");      break;
+        case TOK_OPEN_SQUARE:   snprintf(tokstr, 32, "[");      break;
+        case TOK_CLOSE_CURLY:   snprintf(tokstr, 32, "}");      break;
+        case TOK_CLOSE_PAREN:   snprintf(tokstr, 32, ")");      break;
+        case TOK_CLOSE_SQUARE:  snprintf(tokstr, 32, "]");      break;
+        case TOK_VAR:
+            if (tok.var<N_VARS)
+                snprintf(tokstr, 32, "%s{%d}[%d]", var_strings[tok.var],
+                         tok.history_index, tok.vector_index);
+            else
+                snprintf(tokstr, 32, "var%d{%d}[%d]", tok.var-N_VARS,
+                         tok.history_index, tok.vector_index);
+            break;
+        case TOK_TIMETAG:
+            if (tok.var<N_VARS)
+                snprintf(tokstr, 32, "%s.tt{%d}[%d]", var_strings[tok.var],
+                         tok.history_index, tok.vector_index);
+            else
+                snprintf(tokstr, 32, "var%d.tt{%d}[%d]", tok.var-N_VARS,
+                         tok.history_index, tok.vector_index);
+            break;
+        case TOK_FUNC:
+            snprintf(tokstr, 32, "%s()", function_table[tok.func].name);
+            break;
+        case TOK_COMMA:         snprintf(tokstr, 32, ",");      break;
+        case TOK_COLON:         snprintf(tokstr, 32, ":");      break;
+        case TOK_VECTORIZE:
+            snprintf(tokstr, 32, "VECT(%d)", tok.vectorizer_arity);
+            break;
+        case TOK_NEGATE:        snprintf(tokstr, 32, "-");      break;
+        case TOK_VFUNC:
+            snprintf(tokstr, 32, "%s()", vfunc_strings[tok.func]);
+            break;
+        case TOK_ASSIGNMENT:
+            if (tok.var<N_VARS)
+                snprintf(tokstr, 32, "ASSIGN_TO:%s{%d}[%d]->[%d]",
+                         var_strings[tok.var], tok.history_index,
+                         tok.assignment_offset, tok.vector_index);
+            else
+                snprintf(tokstr, 32, "ASSIGN_TO:var%d{%d}[%d]->[%d]",
+                         tok.var-N_VARS, tok.history_index,
+                         tok.assignment_offset, tok.vector_index);
+            break;
+        case TOK_END:       printf("END\n");                    return;
+        default:            printf("(unknown token)");          return;
     }
+    printf("%s", tokstr);
+    // indent
+    int len = strlen(tokstr);
+    for (i = len; i < 30; i++) {
+        printf(" ");
+    }
+    printf("%c[%d]", tok.datatype, tok.vector_length);
     if (tok.vector_length_locked)
-        printf("'");
+        printf("L");
     if (tok.casttype)
         printf("->%c", tok.casttype);
+    printf("\n");
 }
 
 void printstack(const char *s, mapper_token_t *stack, int top)
 {
-    int i;
+    int i, j, indent = 0;
     printf("%s ", s);
+    if (s)
+        indent = strlen(s) + 1;
     for (i=0; i<=top; i++) {
+        if (i != 0) {
+            for (j=0; j<indent; j++)
+                printf(" ");
+        }
         printtoken(stack[i]);
-        printf(" ");
     }
     printf("\n");
 }
@@ -919,8 +947,8 @@ static int check_types_and_lengths(mapper_token_t *stack, int top)
                 if (!stack[i].vector_length_locked) {
                     if (stack[i].toktype == TOK_VFUNC) {
                         if (stack[i].vector_length != vector_length) {
-                            printf("Vector length mismatch (%d != %d).\n",
-                                   stack[i].vector_length, vector_length);
+                            parse_error("Vector length mismatch (%d != %d).\n",
+                                        stack[i].vector_length, vector_length);
                             return -1;
                         }
                     }
@@ -928,8 +956,8 @@ static int check_types_and_lengths(mapper_token_t *stack, int top)
                         stack[i].vector_length = vector_length;
                 }
                 else if (stack[i].vector_length != vector_length) {
-                    printf("Vector length mismatch (%d != %d).\n",
-                           stack[i].vector_length, vector_length);
+                    parse_error("Vector length mismatch (%d != %d).\n",
+                                stack[i].vector_length, vector_length);
                     return -1;
                 }
             }
@@ -964,8 +992,8 @@ static int check_types_and_lengths(mapper_token_t *stack, int top)
                 stack[top].vector_length = vector_length;
         }
         else if (stack[top].vector_length != vector_length) {
-            printf("Vector length mismatch (%d != %d).\n",
-                   stack[top].vector_length, vector_length);
+            parse_error("Vector length mismatch (%d != %d).\n",
+                        stack[top].vector_length, vector_length);
             return -1;
         }
     }
@@ -1022,19 +1050,19 @@ static int check_assignment_types_and_lengths(mapper_token_t *stack, int top)
 
     while (i >= 0 && stack[i].toktype == TOK_ASSIGNMENT) {
         if (stack[i].var != var) {
-            printf("Cannot mix variable references in assignment\n");
+            parse_error("Cannot mix variable references in assignment\n");
             return -1;
         }
         vector_length += stack[i].vector_length;
         i--;
     }
     if (i < 0) {
-        printf("Malformed expression");
+        parse_error("Malformed expression");
         return -1;
     }
     if (stack[i].vector_length != vector_length) {
-        printf("Vector length mismatch (%d != %d).\n",
-               stack[i].vector_length, vector_length);
+        parse_error("Vector length mismatch (%d != %d).\n",
+                    stack[i].vector_length, vector_length);
         return -1;
     }
     promote_token_datatype(&stack[i], stack[top].datatype);
@@ -1065,7 +1093,7 @@ static int check_assignment_types_and_lengths(mapper_token_t *stack, int top)
 
 /* Macros to help express stack operations in parser. */
 #define FAIL(msg) {                                                 \
-    printf("%s\n", msg);                                            \
+    parse_error("%s\n", msg);                                       \
     while (--num_variables >= 0)                                    \
         free(variables[num_variables].name);                        \
     return 0;                                                       \
@@ -1120,6 +1148,7 @@ mapper_expr mapper_expr_new_from_string(const char *str,
     int vectorizing = 0;
     int variable = 0;
     int allow_toktype = 0xFFFF;
+    int constant_output = 1;
 
     mapper_variable_t variables[VAR_SIZE];
     int num_variables = 0;
@@ -1166,6 +1195,7 @@ mapper_expr mapper_expr_new_from_string(const char *str,
                     tok.datatype = input_type;
                     tok.vector_length = input_vector_size;
                     tok.vector_length_locked = 1;
+                    constant_output = 0;
                 }
                 else if (tok.var == VAR_Y) {
                     tok.datatype = output_type;
@@ -1235,6 +1265,8 @@ mapper_expr mapper_expr_new_from_string(const char *str,
                 else
                     allow_toktype = TOK_OP | TOK_CLOSE_PAREN | TOK_CLOSE_SQUARE |
                                     TOK_COMMA | TOK_COLON;
+                if (tok.func >= FUNC_UNIFORM)
+                    constant_output = 0;
                 break;
             case TOK_VFUNC:
                 PUSH_TO_OPERATOR(tok);
@@ -1581,6 +1613,7 @@ mapper_expr mapper_expr_new_from_string(const char *str,
     expr->vector_size = max_vector;
     expr->input_history_size = -oldest_input+1;
     expr->output_history_size = -oldest_output+1;
+    expr->constant_output = constant_output;
 
     if (num_variables) {
         // copy user-defined variables
@@ -1621,6 +1654,13 @@ int mapper_expr_variable_vector_length(mapper_expr expr, int index)
         return 0;
     else
         return expr->variables[index].vector_length;
+}
+
+int mapper_expr_constant_output(mapper_expr expr)
+{
+    if (expr->constant_output)
+        return 1;
+    return 0;
 }
 
 #if TRACING
