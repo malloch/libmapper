@@ -6,6 +6,7 @@
 #include <time.h>
 #include <sys/time.h>
 #include <string.h>
+#include <inttypes.h>
 
 #define DEST_ARRAY_LEN 6
 #define MAX_VARS 5
@@ -195,7 +196,7 @@ int parse_and_eval()
     if (verbose) {
         printf("Got:      ");
         print_value(typestring, outh.length, outh.value, outh.position);
-        printf(" \n");
+        printf(" at time {%"PRIu32", %"PRIu32"}\n", tt_out.sec, tt_in.frac);
     }
 
     mapper_expr_free(e);
@@ -514,6 +515,14 @@ int run_tests()
     setup_test('i', 1, src_int, 'i', 1, dest_int);
     result += parse_and_eval();
     eprintf("Expected: 1 or NULL\n");
+
+    /* 47) Manipulate timetag directly */
+    snprintf(str, 256, "y=x, y.tt=x.tt+10");
+    setup_test('i', 1, src_int, 'i', 1, dest_int);
+    result += parse_and_eval();
+    eprintf("Expected: 1 at time {%"PRIu32", %"PRIu32"}\n", tt_in.sec+10, tt_in.frac);
+    // add timetag result
+    result += (tt_out.sec == (tt_in.sec + 10)) && (tt_out.frac == tt_in.frac);
 
     return result;
 }

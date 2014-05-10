@@ -303,7 +303,8 @@ typedef struct _token {
         TOK_COMMA           = 0x0800,
         TOK_COLON           = 0x1000,
         TOK_ASSIGNMENT      = 0x2000,
-        TOK_TIMETAG         = 0x4000,
+        TOK_TT_ASSIGNMENT   = 0x4000,
+        TOK_TIMETAG         = 0x8000,
         TOK_VECTORIZE,
         TOK_END,
     } toktype;
@@ -689,11 +690,11 @@ void printtoken(mapper_token_t tok)
             break;
         case TOK_TIMETAG:
             if (tok.var<N_VARS)
-                snprintf(tokstr, 32, "%s.tt{%d}[%d]", var_strings[tok.var],
-                         tok.history_index, tok.vector_index);
+                snprintf(tokstr, 32, "%s{%d}.tt", var_strings[tok.var],
+                         tok.history_index);
             else
-                snprintf(tokstr, 32, "var%d.tt{%d}[%d]", tok.var-N_VARS,
-                         tok.history_index, tok.vector_index);
+                snprintf(tokstr, 32, "var%d{%d}.tt", tok.var-N_VARS,
+                         tok.history_index);
             break;
         case TOK_FUNC:
             snprintf(tokstr, 32, "%s()", function_table[tok.func].name);
@@ -716,6 +717,14 @@ void printtoken(mapper_token_t tok)
                 snprintf(tokstr, 32, "ASSIGN_TO:var%d{%d}[%d]->[%d]",
                          tok.var-N_VARS, tok.history_index,
                          tok.assignment_offset, tok.vector_index);
+            break;
+        case TOK_TT_ASSIGNMENT:
+            if (tok.var<N_VARS)
+                snprintf(tokstr, 32, "ASSIGN_TO:%s{%d}.tt",
+                         var_strings[tok.var], tok.history_index);
+            else
+                snprintf(tokstr, 32, "ASSIGN_TO:var%d{%d}.tt",
+                         tok.var-N_VARS, tok.history_index);
             break;
         case TOK_END:       printf("END\n");                    return;
         default:            printf("(unknown token)");          return;
@@ -871,6 +880,7 @@ static int check_types_and_lengths(mapper_token_t *stack, int top)
             can_precompute = 0;
             break;
         case TOK_ASSIGNMENT:
+        case TOK_TT_ASSIGNMENT:
             arity = 1;
             can_precompute = 0;
             break;
@@ -1048,7 +1058,8 @@ static int check_assignment_types_and_lengths(mapper_token_t *stack, int top)
     int i = top, vector_length = 0;
     expr_var_t var = stack[top].var;
 
-    while (i >= 0 && stack[i].toktype == TOK_ASSIGNMENT) {
+    while (i >= 0 && (stack[i].toktype == TOK_ASSIGNMENT
+                      || stack[i].toktype == TOK_TT_ASSIGNMENT)) {
         if (stack[i].var != var) {
             parse_error("Cannot mix variable references in assignment\n");
             return -1;
@@ -1491,15 +1502,22 @@ mapper_expr mapper_expr_new_from_string(const char *str,
                         }
                     }
                     else if (var >= N_VARS) {
-                        if (outstack[outstack_index].history_index == 0) {
-                            if (variables[var-N_VARS].assigned)
-                                {FAIL("Variable already assigned.");}
+                        if (outstack[outstack_index].history_index == 0)
                             variables[var-N_VARS].assigned = 1;
-                        }
                     }
                     // nothing extraordinary, continue as normal
                     outstack[outstack_index].toktype = TOK_ASSIGNMENT;
                     outstack[outstack_index].assignment_offset = 0;
+                    PUSH_TO_OPERATOR(outstack[outstack_index]);
+                    outstack_index--;
+                }
+                else if (outstack[outstack_index].toktype == TOK_TIMETAG) {
+                    // assignment to variable timetag
+                    // For now we will only allow assigning to output tt
+                    if (outstack[outstack_index].var != VAR_Y)
+                        {FAIL("Only output timetag can be written.");}
+                    outstack[outstack_index].toktype = TOK_TT_ASSIGNMENT;
+                    outstack[outstack_index].datatype = 'd';
                     PUSH_TO_OPERATOR(outstack[outstack_index]);
                     outstack_index--;
                 }
@@ -1561,7 +1579,7 @@ mapper_expr mapper_expr_new_from_string(const char *str,
                 break;
         }
 #if TRACING
-        printstack("OUTPUT STACK:", outstack, outstack_index);
+        printstack("OUTPUT STACK:  ", outstack, outstack_index);
         printstack("OPERATOR STACK:", opstack, opstack_index);
 #endif
     }
@@ -2465,6 +2483,34 @@ int mapper_expr_evaluate(mapper_expr expr,
                 if (tok->vector_length > 1)
                     printf(":%d", tok->vector_length + tok->vector_index - 1);
                 printf("]\n");
+#endif
+            }
+
+            /* If assignment was history initialization, move expression start
+             * token pointer so we don't evaluate this section again. */
+            if (tok->history_index != 0) {
+                int offset = tok - expr->start + 1;
+                expr->start = tok+1;
+                expr->length -= offset;
+                count -= offset;
+            }
+            break;
+        case TOK_TT_ASSIGNMENT:
+            if (tok->var == VAR_Y) {
+                int idx = (tok->history_index + to->position + to->size);
+                if (idx < 0)
+                    idx = to->size - idx;
+                else
+                    idx %= to->size;
+
+                mapper_timetag_set_double(&to->timetag[idx], stack[top][0].d);
+
+                // Mark updated flag for tracking output history index increment
+                updated++;
+
+#if TRACING
+                printf("assigning values to variable timetag y{%d}.tt\n",
+                       tok->history_index);
 #endif
             }
 
