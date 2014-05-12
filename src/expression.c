@@ -1068,7 +1068,7 @@ static int check_assignment_types_and_lengths(mapper_token_t *stack, int top)
         i--;
     }
     if (i < 0) {
-        parse_error("Malformed expression");
+        parse_error("Malformed expression.");
         return -1;
     }
     if (stack[i].vector_length != vector_length) {
@@ -1314,7 +1314,8 @@ mapper_expr mapper_expr_new_from_string(const char *str,
                 }
                 if (opstack_index < 0) {
                     // could be starting another sub-expression
-                    if (outstack[outstack_index].toktype != TOK_ASSIGNMENT)
+                    if (outstack[outstack_index].toktype != TOK_ASSIGNMENT &&
+                        outstack[outstack_index].toktype != TOK_TT_ASSIGNMENT)
                         {FAIL("Malformed expression.");}
                     if (check_assignment_types_and_lengths(outstack, outstack_index) == -1)
                         {FAIL("Malformed expression.");}
@@ -1601,7 +1602,8 @@ mapper_expr mapper_expr_new_from_string(const char *str,
     }
     // pop assignment operator(s) to output
     while (opstack_index >= 0) {
-        if (opstack[opstack_index].toktype != TOK_ASSIGNMENT)
+        if (opstack[opstack_index].toktype != TOK_ASSIGNMENT
+            && opstack[opstack_index].toktype != TOK_TT_ASSIGNMENT)
             {FAIL("Malformed expression.");}
         PUSH_TO_OUTPUT(opstack[opstack_index]);
         POP_OPERATOR();
@@ -2493,6 +2495,9 @@ int mapper_expr_evaluate(mapper_expr expr,
                 expr->start = tok+1;
                 expr->length -= offset;
                 count -= offset;
+#if TRACING
+                printf("advancing expression start to token %d\n", offset);
+#endif
             }
             break;
         case TOK_TT_ASSIGNMENT:
@@ -2521,6 +2526,9 @@ int mapper_expr_evaluate(mapper_expr expr,
                 expr->start = tok+1;
                 expr->length -= offset;
                 count -= offset;
+#if TRACING
+                printf("advancing expression start to token %d\n", offset);
+#endif
             }
             break;
         default: goto error;

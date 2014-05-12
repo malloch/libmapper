@@ -471,21 +471,24 @@ int run_tests()
     eprintf("Expected: ????\n");
 
     /* 42) Moving average of inter-sample period */
-    // tricky! we need to skip the first tt diff, but y{-1} needs to be 0
+    /* Tricky - we need to init y{-1}.tt to x.tt or the first calculated
+     * difference will be enormous! */
     snprintf(str, 256,
-             "period=counter?x.tt-x{-1}.tt:0,"
-             "y=y{-1}*0.9+period*0.1,"
-             "counter=counter+1");
+             "y{-1}.tt=x.tt,"
+             "period=x.tt-y{-1}.tt,"
+             "y=y{-1}*0.9+period*0.1");
     setup_test('i', 1, src_int, 'd', 1, dest_double);
     result += parse_and_eval();
     eprintf("Expected: ????\n");
 
     /* 43) Moving average of inter-sample jitter */
+    /* Tricky - we need to init y{-1}.tt to x.tt or the first calculated
+     * difference will be enormous! */
     snprintf(str, 256,
-             "interval=counter?x.tt-x{-1}.tt:0,"
+             "y{-1}.tt=x.tt,"
+             "interval=x.tt-y{-1}.tt,"
              "sr=sr{-1}*0.9+interval*0.1,"
-             "y=y{-1}*0.9+(interval-sr)*0.1,"
-             "counter=counter+1");
+             "y=y{-1}*0.9+(interval-sr)*0.1");
     setup_test('i', 1, src_int, 'd', 1, dest_double);
     result += parse_and_eval();
     eprintf("Expected: ????\n");
@@ -498,20 +501,20 @@ int run_tests()
 
     /* 45) Expression for limiting output rate */
     snprintf(str, 256,
+             "y{-1}.tt=x.tt,"
              "diff=x.tt-y{-1}.tt,"
-             "y=!counter||(diff>0.1)?x,"
-             "counter=counter+1");
+             "y=(diff>0.1)?x");
     setup_test('i', 1, src_int, 'i', 1, dest_int);
     result += parse_and_eval();
     eprintf("Expected: 1 or NULL\n");
 
     /* 46) Expression for limiting rate with smoothed output */
     snprintf(str, 256,
-             "output=counter?(x.tt-y{-1}.tt)>0.1:0,"
+             "y{-1}.tt=x.tt,"
+             "output=(x.tt-y{-1}.tt)>0.1,"
              "y=output?agg/samps,"
              "agg=!output*agg+x,"
-             "samps=output?1:samps+1,"
-             "counter=counter+1");
+             "samps=output?1:samps+1");
     setup_test('i', 1, src_int, 'i', 1, dest_int);
     result += parse_and_eval();
     eprintf("Expected: 1 or NULL\n");

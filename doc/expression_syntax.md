@@ -94,23 +94,21 @@ There are two special functions that operate across all elements of the vector:
 FIR and IIR Filters
 ===================
 
-Past samples of expression input and output can be accessed using the notation
-`<variable>{<index>}`. The index specifies the history index in samples, and must be `<=0` for the input (with `0` representing the present input sample) and `<0` for the expression output ( i.e. it cannot be a value that has not been provided or computed yet ).
+Past samples of expression input and output can be accessed using the notation `<var>{-n}` where `<var>` is the variable name and `n` is the history index. The index specifies the history index in samples, and must be `<=0` for the input (with `0` representing the present input sample) and `<0` for the expression output (i.e. it cannot be a value that has not been provided or computed yet).
 
 Using only past samples of the expression *input* `x` we can create **Finite
-Impulse Response** ( FIR ) filters - here are some simple examples:
+Impulse Response** (FIR) filters - here are some simple examples:
 
 * `y = x - x{-1}` — 2-sample derivative
 * `y = x + x{-1}` — 2-sample integral
 
 Using past samples of the expression *output* `y` we can create **Infinite
-Impulse Response** ( IIR ) filters - here are some simple examples:
+Impulse Response** (IIR) filters - here are some simple examples:
 
-* `y = y{-1} * 0.9 + x * 0.1` — exponential moving average with current-sample-weight of `0.1`
+* `y = y{-1} * 0.9 + x * 0.1` — exponential moving average
 * `y = y{-1} + x - 1` — leaky integrator with a constant leak of `1`
 
-Of course the filter can contain references to past samples of both `x` and `y` -
-currently libmapper will reject expressions referring to sample delays `> 100`.
+Currently libmapper will reject expressions referring to sample delays `> 100`.
 
 Initializing filters
 --------------------
@@ -134,7 +132,7 @@ Any past values that are not explicitly initialized are given the value `0`.
 User-Declared Variables
 =======================
 
-Up to 8 additional variables can be declared as-needed in the expression. The variable names can be any string except for the reserved variable names `x` and `y` or the name of an existing function.  The values of these variables are stored with the connection context and can be accessed in subsequent calls to the evaluator. In the following example, the user-defined variable `ema` is used to keep track of the `exponential moving average` of the input signal value `x`, *independent* of the output value `y` which is set to give the difference between the current sample and the moving average:
+Additional variables can be declared as-needed in the expression (currently up to 8). The variable names can be any string except for the reserved variable names `x` and `y` or the name of an existing function.  The values of these variables are stored with the connection context and can be accessed in subsequent calls to the evaluator. In the following example, the user-defined variable `ema` is used to keep track of the `exponential moving average` of the input signal value `x`, *independent* of the output value `y` which is set to give the difference between the current sample and the moving average:
 
 * `ema = ema{-1} * 0.9 + x * 0.1`, `y = x - ema`
 
@@ -147,7 +145,7 @@ Just like the output variable `y` we can initialize past values of user-defined 
 Accessing Variable Timetags
 ===========================
 
-The precise time at which a variable is updated is always tracked by libmapper and communicated over connections with the data value. In the background this information can be used for discarding out-of-order packets, jitter mitigation but it may also be useful in your expressions.
+The precise time at which a variable is updated is always tracked by libmapper and communicated over connections with the data value. In the background this information can be used for discarding out-of-order packets and jitter mitigation but it may also be useful in your expressions.
 
 Currently variable timetags can be accessed using the syntax `<variable_name>.tt` – for example the time associated with the current sample `x` is `x.tt`, and the timetag associated with the last update of a hypothetical user-defined variable `foo` would be `foo.tt`. This syntax can be used anywhere in your expressions:
 
@@ -158,9 +156,14 @@ This functionality can be used to limit the output rate:
 
 * `y=(x.tt-y{-1}.tt)>0.5?x` — only output if more than 0.5 seconds has elapsed since the last output, otherwise discard input sample
 
-Here's a more complex example in which the rate is limited but incoming samples are averaged instead of discarding them
+Also we can calculate a moving average of the sample period:
 
-    output = (x.tt - y{-1}.tt) > 0.1;
-    y = output ? aggregate / nsamps;
-    aggregate = !output * aggregate + x;
-    nsamps = output ? 1 : nsamps + 1;
+* `y=y{-1}*0.9+(x.tt-y{-1}.tt)*0.1`
+
+Of course this moving average will start with a very large first value for `(x.tt-y{-1}.tt)` since the first value for `y{-1}.tt` will be `0`. We can easily fix this by initializing the first value for `y{-1}.tt` – remember from above that this part of the expression will only be called once so it will not adversely affect the efficiency of out expression:
+
+* `y{-1}.tt=x.tt,` `y=y{-1}*0.9+(x.tt-y{-1}.tt)*0.1`
+
+Here's a more complex example with 4 sub-expressions in which the rate is limited but incoming samples are averaged instead of discarding them:
+
+* `A=(x.tt-y{-1}.tt)>0.1,` `y=A?B/C,` `B=!A*B+x,` `C=A?1:C+1;`
