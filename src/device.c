@@ -231,6 +231,11 @@ static int handler_signal(const char *path, const char *types,
 
     mapper_signal_instance si = sig->id_maps[index].instance;
 
+    // TODO: optionally discard out-of-order messages
+    // requires timebase sync for many-to-one connections or local updates
+    //    if (sig->discard_out_of_order && out_of_order(si->timetag, tt))
+    //        return 0;
+
     if (types[0] == LO_BLOB) {
         dataptr = lo_blob_dataptr((lo_blob)argv[0]);
         count = lo_blob_datasize((lo_blob)argv[0]) /
@@ -322,6 +327,11 @@ static int handler_signal_instance(const char *path, const char *types,
 
     mapper_signal_instance si = sig->id_maps[index].instance;
     map = sig->id_maps[index].map;
+
+    // TODO: optionally discard out-of-order messages
+    // requires timebase sync for many-to-one connections or local updates
+    //    if (sig->discard_out_of_order && out_of_order(si->timetag, tt))
+    //        return 0;
 
     si->timetag.sec = tt.sec;
     si->timetag.frac = tt.frac;
@@ -924,8 +934,14 @@ int mdev_poll(mapper_device md, int block_ms)
 
 int mdev_num_fds(mapper_device md)
 {
-    // Two for the admin inputs (bus and mesh), and one for the signal input.
-    return 3;
+    // count admin mesh interfaces
+    int count = 0;
+    mapper_interface iface = md->admin->interfaces;
+    while (iface) {
+        count++;
+        iface = iface->next;
+    }
+    return count + 2; // add 1 admin bus fd and 1 device fd
 }
 
 int mdev_get_fds(mapper_device md, int *fds, int num)
@@ -933,13 +949,13 @@ int mdev_get_fds(mapper_device md, int *fds, int num)
     int i = 0;
     mapper_interface iface = md->admin->interfaces;
     while (iface && i++ < num) {
-        fds[i] = lo_server_get_socket_fd(iface->bus_server);
+        fds[i-1] = lo_server_get_socket_fd(iface->bus_server);
         iface = iface->next;
     }
     if (i++ < num)
-        fds[i] = lo_server_get_socket_fd(md->admin->mesh_server);
+        fds[i-1] = lo_server_get_socket_fd(md->admin->mesh_server);
     if (i++ < num)
-        fds[i] = lo_server_get_socket_fd(md->server);
+        fds[i-1] = lo_server_get_socket_fd(md->server);
     return i;
 }
 

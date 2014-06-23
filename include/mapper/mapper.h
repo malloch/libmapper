@@ -649,6 +649,9 @@ mapper_admin mapper_admin_new(const char *iface, const char *group, int port);
 /*! Free an admin created with mapper_admin_new(). */
 void mapper_admin_free(mapper_admin admin);
 
+/*! Get the version of libmapper */
+const char *mapper_admin_libversion(mapper_admin admin);
+
 /* @} */
 
 /**** Device database ****/
@@ -1334,6 +1337,9 @@ int mapper_monitor_poll(mapper_monitor mon, int block_ms);
 /*! Get the database associated with a monitor. This can be used as
  *  long as the monitor remains alive. */
 mapper_db mapper_monitor_get_db(mapper_monitor mon);
+
+/*! Request that all devices report in. */
+int mapper_monitor_request_devices(mapper_monitor mon);
 
 /*! Subscribe to information about a specific device.
  *  \param mon             The monitor to use.

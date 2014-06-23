@@ -163,27 +163,28 @@ typedef struct _mapper_admin_subscriber {
 
 /*! A structure that keeps information about a device. */
 typedef struct _mapper_admin {
-    int random_id;                      /*!< Random ID for allocation
-                                        speedup. */
+    int random_id;                  /*!< Random ID for allocation speedup. */
 
-    lo_server_thread mesh_server;       /*!< LibLo server thread for the
-                                        * admin mesh. */
+    lo_server_thread mesh_server;   /*!< LibLo server thread for the admin mesh. */
+    int msgs_recvd;                 /*!< Number of messages received on the
+                                     *   admin bus. */
 
-    char *group;
-    char *port;
-    char *force_interface;
+    char *group;                    /*!< Multicast group to use for admin bus. */
+    char *port;                     /*!< Multicast port to use for admin bus. */
+    char *force_interface;          /*!< User-preferred interface if any. */
+
     struct _mapper_interface *interfaces;
-    uint32_t rescan_schedule;           /*!< Time at which to recheck network
-                                         *   interfaces */
+    uint32_t rescan_schedule;       /*!< Time at which to recheck
+                                     *   network interfaces */
 
-    struct _mapper_device *device;      /*!< Device that this admin is
-                                        * in charge of. */
+    struct _mapper_device *device;  /*!< Device that this admin is
+                                     *   in charge of. */
     struct _mapper_monitor *monitor;    /*!< Monitor that this admin is
-                                        * in charge of. */
-    mapper_clock_t clock;               /*!< Clock for providing global
-                                        * time syncronization. */
-    lo_bundle bundle;                   /*!< Bundle pointer for sending
-                                        * messages on the admin bus. */
+                                         *   in charge of. */
+    mapper_clock_t clock;           /*!< Clock for providing global
+                                     *   time syncronization. */
+    lo_bundle bundle;               /*!< Bundle pointer for sending
+                                     *   messages on the admin bus. */
     lo_address bundle_dest;
     int message_type;
     mapper_admin_subscriber subscribers; /*!< Linked-list of subscribed peers. */

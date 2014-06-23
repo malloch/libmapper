@@ -3,15 +3,22 @@
 #include <mapper/mapper.h>
 #include <stdio.h>
 #include <math.h>
-
+#include <string.h>
 #include <unistd.h>
 
 #ifdef WIN32
 #define usleep(x) Sleep(x/1000)
 #endif
 
+#define eprintf(format, ...) do {               \
+    if (verbose)                                \
+        fprintf(stdout, format, ##__VA_ARGS__); \
+} while(0)
+
 mapper_admin my_admin = NULL;
 mapper_device my_device = NULL;
+
+int verbose = 1;
 
 int test_admin()
 {
@@ -19,24 +26,24 @@ int test_admin()
 
     my_admin = mapper_admin_new(0, 0, 0);
     if (!my_admin) {
-        printf("Error creating admin structure.\n");
+        eprintf("Error creating admin structure.\n");
         return 1;
     }
 
-    printf("Admin structure initialized.\n");
+    eprintf("Admin structure initialized.\n");
 
     my_device = mdev_new("tester", 0, my_admin);
     if (!my_device) {
-        printf("Error creating device structure.\n");
+        eprintf("Error creating device structure.\n");
         return 1;
     }
 
-    printf("Device structure initialized.\n");
+    eprintf("Device structure initialized.\n");
 
     mapper_interface iface = my_admin->interfaces;
     while (iface) {
-        printf("Found interface %s with IP %s and status %d\n", iface->name,
-               inet_ntoa(iface->ip), iface->status);
+        eprintf("Found interface %s with IP %s and status %d\n", iface->name,
+                inet_ntoa(iface->ip), iface->status);
         iface = iface->next;
     }
 
@@ -45,27 +52,56 @@ int test_admin()
         mapper_admin_poll(my_admin);
     }
 
-    printf("Using port %d.\n", my_device->props.port);
-    printf("Allocated ordinal %d.\n", my_device->ordinal.value);
+    eprintf("Using port %d.\n", my_device->props.port);
+    eprintf("Allocated ordinal %d.\n", my_device->ordinal.value);
 
-    printf("Delaying for 5 seconds..\n");
-    wait = 500;
-    while (wait-- >= 0) {
-        usleep(10000);
+    eprintf("Delaying for 5 seconds..\n");
+    wait = 50;
+    while (wait-- > 0) {
+        usleep(50000);
         mapper_admin_poll(my_admin);
+        if (!verbose) {
+            printf(".");
+            fflush(stdout);
+        }
     }
 
     mdev_free(my_device);
-    printf("Device structure freed.\n");
+    eprintf("Device structure freed.\n");
     mapper_admin_free(my_admin);
-    printf("Admin structure freed.\n");
+    eprintf("Admin structure freed.\n");
 
     return error;
 }
 
-int main()
+int main(int argc, char **argv)
 {
-    int result = test_admin();
+    int i, j, result = 0;
+
+    // process flags for -v verbose, -h help
+    for (i = 1; i < argc; i++) {
+        if (argv[i] && argv[i][0] == '-') {
+            int len = strlen(argv[i]);
+            for (j = 1; j < len; j++) {
+                switch (argv[i][j]) {
+                    case 'h':
+                        printf("testadmin.c: possible arguments "
+                               "-q quiet (suppress output), "
+                               "-h help\n");
+                        return 1;
+                        break;
+                    case 'q':
+                        verbose = 0;
+                        break;
+                    default:
+                        break;
+                }
+            }
+        }
+    }
+
+    result = test_admin();
+
     if (result) {
         printf("Test FAILED.\n");
         return 1;

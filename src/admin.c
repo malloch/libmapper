@@ -565,6 +565,11 @@ mapper_admin mapper_admin_new(const char *iface_name, const char *group, int por
     return admin;
 }
 
+const char *mapper_admin_libversion(mapper_admin admin)
+{
+    return PACKAGE_VERSION;
+}
+
 void mapper_admin_send_bundle(mapper_admin admin)
 {
     if (!admin->bundle)
@@ -707,6 +712,66 @@ static void mapper_admin_add_probe_methods(mapper_admin admin)
     }
 }
 
+/*! Probe the admin bus to see if a device's proposed name.ordinal is
+ *  already taken.
+ */
+static void mapper_admin_probe_name(mapper_admin admin)
+{
+    mapper_device md = admin->device;
+    mapper_monitor mon = admin->monitor;
+
+    if (md && !md->ordinal.locked) {
+        md->ordinal.collision_count = 0;
+        md->ordinal.count_time = get_current_time();
+
+        /* Note: mdev_name() would refuse here since the
+         * ordinal is not yet locked, so we have to build it manually at
+         * this point. */
+        char name[256];
+        trace("</%s.?::%p> probing name\n", md->props.identifier, admin);
+        snprintf(name, 256, "/%s.%d", md->props.identifier, md->ordinal.value);
+
+        /* Calculate a hash from the name. */
+        md->props.name_hash = crc32(0L, (const Bytef *)name, strlen(name));
+
+        /* For the same reason, we can't use mapper_admin_send() here. */
+        mapper_interface iface = admin->interfaces;
+        while (iface) {
+            if (iface->bus_addr) {
+                lo_send(iface->bus_addr, "/name/probe", "si",
+                        name, admin->random_id);
+                md->ordinal.collision_count--;
+            }
+            iface = iface->next;
+        }
+    }
+    if (mon && !mon->ordinal.locked) {
+        mon->ordinal.collision_count = 0;
+        mon->ordinal.count_time = get_current_time();
+
+        /* Note: mapper_monitor_name() would refuse here since the
+         * ordinal is not yet locked, so we have to build it manually at
+         * this point. */
+        char name[256];
+        trace("</monitor.?::%p> probing name\n", admin);
+        snprintf(name, 256, "/monitor.%d", mon->ordinal.value);
+
+        /* Calculate a hash from the name. */
+        mon->name_hash = crc32(0L, (const Bytef *)name, strlen(name));
+
+        /* For the same reason, we can't use mapper_admin_send() here. */
+        mapper_interface iface = admin->interfaces;
+        while (iface) {
+            if (iface->bus_addr) {
+                lo_send(iface->bus_addr, "/name/probe", "si",
+                        name, admin->random_id);
+                mon->ordinal.collision_count--;
+            }
+            iface = iface->next;
+        }
+    }
+}
+
 /*! Add an uninitialized device to this admin. */
 void mapper_admin_add_device(mapper_admin admin, mapper_device dev)
 {
@@ -818,6 +883,8 @@ int mapper_admin_poll(mapper_admin admin)
         recvd += lo_server_recv_noblock(admin->mesh_server, 0);
     } while (recvd && count++ < 10);
 
+    admin->msgs_recvd += count;
+
     if (!md && !mon)
         return count;
 
@@ -897,66 +964,6 @@ int mapper_admin_poll(mapper_admin admin)
     return count;
 }
 
-/*! Probe the admin bus to see if a device's proposed name.ordinal is
- *  already taken.
- */
-void mapper_admin_probe_name(mapper_admin admin)
-{
-    mapper_device md = admin->device;
-    mapper_monitor mon = admin->monitor;
-
-    if (md && !md->ordinal.locked) {
-        md->ordinal.collision_count = 0;
-        md->ordinal.count_time = get_current_time();
-
-        /* Note: mdev_name() would refuse here since the
-         * ordinal is not yet locked, so we have to build it manually at
-         * this point. */
-        char name[256];
-        trace("</%s.?::%p> probing name\n", md->props.identifier, admin);
-        snprintf(name, 256, "/%s.%d", md->props.identifier, md->ordinal.value);
-
-        /* Calculate a hash from the name. */
-        md->props.name_hash = crc32(0L, (const Bytef *)name, strlen(name));
-
-        /* For the same reason, we can't use mapper_admin_send() here. */
-        mapper_interface iface = admin->interfaces;
-        while (iface) {
-            if (iface->bus_addr) {
-                lo_send(iface->bus_addr, "/name/probe", "si",
-                        name, admin->random_id);
-                md->ordinal.collision_count--;
-            }
-            iface = iface->next;
-        }
-    }
-    if (mon && !mon->ordinal.locked) {
-        mon->ordinal.collision_count = 0;
-        mon->ordinal.count_time = get_current_time();
-
-        /* Note: mapper_monitor_name() would refuse here since the
-         * ordinal is not yet locked, so we have to build it manually at
-         * this point. */
-        char name[256];
-        trace("</monitor.?::%p> probing name\n", admin);
-        snprintf(name, 256, "/monitor.%d", mon->ordinal.value);
-
-        /* Calculate a hash from the name. */
-        mon->name_hash = crc32(0L, (const Bytef *)name, strlen(name));
-
-        /* For the same reason, we can't use mapper_admin_send() here. */
-        mapper_interface iface = admin->interfaces;
-        while (iface) {
-            if (iface->bus_addr) {
-                lo_send(iface->bus_addr, "/name/probe", "si",
-                        name, admin->random_id);
-                mon->ordinal.collision_count--;
-            }
-            iface = iface->next;
-        }
-    }
-}
-
 /*! Algorithm for checking collisions and allocating resources. */
 static int check_collisions(mapper_admin admin,
                             mapper_admin_allocated_t *resource)
@@ -968,7 +975,14 @@ static int check_collisions(mapper_admin admin,
 
     timediff = get_current_time() - resource->count_time;
 
-    if (timediff >= 2.0 && resource->collision_count <= 1) {
+    if (!admin->msgs_recvd) {
+        if (timediff >= 5.0) {
+            // reprobe with the same value
+            return 1;
+        }
+        return 0;
+    }
+    else if (timediff >= 2.0 && resource->collision_count <= 1) {
         resource->locked = 1;
         if (resource->on_lock)
             resource->on_lock(admin->device, resource);
