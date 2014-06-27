@@ -167,3 +167,11 @@ Of course this moving average will start with a very large first value for `(x.t
 Here's a more complex example with 4 sub-expressions in which the rate is limited but incoming samples are averaged instead of discarding them:
 
 * `A=(x.tt-y{-1}.tt)>0.1,` `y=A?B/C,` `B=!A*B+x,` `C=A?1:C+1;`
+
+In this case:
+
+* Variable `A` equals 1 if more than 0.1 seconds have elapsed since the last output, and 0 otherwise.
+* Variable `B` accumulates updates to `x` (our input).
+* Variable `C` is a counter tracking how many updates have been accumulated.
+* Variable `y` (our output) is updated to `B/C` (aggregate/count), but only when `A != 0`.
+* After each update to `y` (when `A == 1`) the variables `B` and `C` are reset.
