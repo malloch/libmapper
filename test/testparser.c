@@ -22,11 +22,13 @@ mapper_expr e;
 int result = 0;
 int iterations = 1000000;
 int testcounter = 1;
+int token_count = 0;
 
 int src_int[] = {1, 2, 3}, dest_int[DEST_ARRAY_LEN];
 float src_float[] = {1.0f, 2.0f, 3.0f}, dest_float[DEST_ARRAY_LEN];
 double src_double[] = {1.0, 2.0, 3.0}, dest_double[DEST_ARRAY_LEN];
 double then, now;
+double total_elapsed_time = 0;
 char typestring[3];
 
 mapper_timetag_t tt_in = {0, 0}, tt_out = {0, 0};
@@ -63,6 +65,7 @@ struct _mapper_expr
     int output_history_size;
     mapper_variable variables;
     int num_variables;
+    int constant_output;
 };
 
 /* TODO:
@@ -131,7 +134,10 @@ void setup_test(char in_type, int in_length, void *in_value,
     outh.timetag = &tt_out;
 }
 
-int parse_and_eval()
+#define EXPECT_SUCCESS 0
+#define EXPECT_FAILURE 1
+
+int parse_and_eval(int expectation)
 {
     // need a mapper_clock for testing timetags
     mapper_clock_t c;
@@ -156,14 +162,14 @@ int parse_and_eval()
     if (!(e = mapper_expr_new_from_string(str, inh.type, outh.type,
                                           inh.length, outh.length))) {
         eprintf("Parser FAILED.\n");
-        return 1;
+        goto fail;
     }
     inh.size = mapper_expr_input_history_size(e);
     outh.size = mapper_expr_output_history_size(e);
 
     if (mapper_expr_num_variables(e) > MAX_VARS) {
         eprintf("Maximum variables exceeded.\n");
-        return 1;
+        goto fail;
     }
 
     // reallocate variable value histories
@@ -177,10 +183,22 @@ int parse_and_eval()
     user_vars_p = user_vars;
 
 #ifdef DEBUG
-    if (verbose)
-        printexpr("Parser returned:", e);
+    if (verbose) {
+        char str[128];
+        snprintf(str, 128, "Parser returned %d tokens:", e->length);
+        printexpr(str, e);
+    }
 #endif
 
+    token_count += e->length;
+
+    eprintf("Try evaluation once...\n");
+    if (!mapper_expr_evaluate(e, &inh, &user_vars_p, &outh, typestring)) {
+        eprintf("Evaluation FAILED.\n");
+        goto fail;
+    }
+
+    then = get_current_time();
     eprintf("Calculate expression %i times... ", iterations);
     i = iterations;
     then = get_current_time();
@@ -192,6 +210,7 @@ int parse_and_eval()
     }
     now = get_current_time();
     eprintf("%g seconds.\n", now-then);
+    total_elapsed_time += now-then;
 
     if (verbose) {
         printf("Got:      ");
@@ -201,7 +220,10 @@ int parse_and_eval()
 
     mapper_expr_free(e);
 
-    return 0;
+    return expectation != EXPECT_SUCCESS;
+
+fail:
+    return expectation != EXPECT_FAILURE;
 }
 
 int run_tests()
@@ -211,39 +233,40 @@ int run_tests()
     /* 1) Complex string */
     snprintf(str, 256, "y=26*2/2+log10(pi)+2.*pow(2,1*(3+7*.1)*1.1+x{0}[0])*3*4+cos(2.)");
     setup_test('f', 1, src_float, 'f', 1, dest_float);
-    result += parse_and_eval();
-    eprintf("Expected: %g\n", 26*2/2+log10f(M_PI)+2.f*powf(2,1*(3+7*.1f)*1.1f+src_float[0])*3*4+cosf(2.0f));
+    result += parse_and_eval(EXPECT_SUCCESS);
+    eprintf("Expected: %g\n", 26*2/2+log10f(M_PI)+2.f
+            *powf(2,1*(3+7*.1f)*1.1f+src_float[0])*3*4+cosf(2.0f));
 
     /* 2) Building vectors, conditionals */
     snprintf(str, 256, "y=(x>1)?[1,2,3]:[2,4,6]");
     setup_test('f', 3, src_float, 'i', 3, dest_int);
-    result += parse_and_eval();
+    result += parse_and_eval(EXPECT_SUCCESS);
     eprintf("Expected: [%i, %i, %i]\n", src_float[0]>1?1:2, src_float[1]>1?2:4,
            src_float[2]>1?3:6);
 
     /* 3) Conditionals with shortened syntax */
     snprintf(str, 256, "y=x?:123");
     setup_test('f', 1, src_float, 'i', 1, dest_int);
-    result += parse_and_eval();
+    result += parse_and_eval(EXPECT_SUCCESS);
     eprintf("Expected: %i\n", (int)src_float[0]?:123);
 
     /* 4) Conditional that should be optimized */
     snprintf(str, 256, "y=1?2:123");
     setup_test('f', 1, src_float, 'i', 1, dest_int);
-    result += parse_and_eval();
+    result += parse_and_eval(EXPECT_SUCCESS);
     eprintf("Expected: 2\n");
 
     /* 5) Building vectors with variables, operations inside vector-builder */
     snprintf(str, 256, "y=[x*-2+1,0]");
     setup_test('i', 2, src_int, 'd', 3, dest_double);
-    result += parse_and_eval();
+    result += parse_and_eval(EXPECT_SUCCESS);
     eprintf("Expected: [%g, %g, %g]\n", (double)src_int[0]*-2+1,
             (double)src_int[1]*-2+1, 0.0);
 
     /* 6) Building vectors with variables, operations inside vector-builder */
     snprintf(str, 256, "y=[-99.4, -x*1.1+x]");
     setup_test('i', 2, src_int, 'd', 3, dest_double);
-    result += parse_and_eval();
+    result += parse_and_eval(EXPECT_SUCCESS);
     eprintf("Expected: [%g, %g, %g]\n", -99.4,
             (double)(-src_int[0]*1.1+src_int[0]),
             (double)(-src_int[1]*1.1+src_int[1]));
@@ -251,41 +274,41 @@ int run_tests()
     /* 7) Indexing vectors by range */
     snprintf(str, 256, "y=x[1:2]+100");
     setup_test('d', 3, src_double, 'f', 2, dest_float);
-    result += parse_and_eval();
+    result += parse_and_eval(EXPECT_SUCCESS);
     eprintf("Expected: [%g, %g]\n", (float)src_double[1]+100,
            (float)src_double[2]+100);
 
     /* 8) Typical linear scaling expression with vectors */
     snprintf(str, 256, "y=x*[0.1,3.7,-.1112]+[2,1.3,9000]");
     setup_test('f', 3, src_float, 'f', 3, dest_float);
-    result += parse_and_eval();
+    result += parse_and_eval(EXPECT_SUCCESS);
     eprintf("Expected: [%g, %g, %g]\n", src_float[0]*0.1f+2.f,
             src_float[1]*3.7f+1.3f, src_float[2]*-.1112f+9000.f);
 
     /* 9) Check type and vector length promotion of operation sequences */
     snprintf(str, 256, "y=1+2*3-4*x");
     setup_test('f', 2, src_float, 'f', 2, dest_float);
-    result += parse_and_eval();
+    result += parse_and_eval(EXPECT_SUCCESS);
     eprintf("Expected: [%g, %g]\n", 1.f+2.f*3.f-4.f*src_float[0],
             1.f+2.f*3.f-4.f*src_float[1]);
 
     /* 10) Swizzling, more pre-computation */
     snprintf(str, 256, "y=[x[2],x[0]]*0+1+12");
     setup_test('f', 3, src_float, 'f', 2, dest_float);
-    result += parse_and_eval();
+    result += parse_and_eval(EXPECT_SUCCESS);
     eprintf("Expected: [%g, %g]\n", src_float[2]*0.f+1.f+12.f,
             src_float[0]*0.f+1.f+12.f);
 
     /* 11) Logical negation */
     snprintf(str, 256, "y=!(x[1]*0)");
     setup_test('d', 3, src_double, 'i', 1, dest_int);
-    result += parse_and_eval();
+    result += parse_and_eval(EXPECT_SUCCESS);
     eprintf("Expected: %i\n", (int)!(src_double[1]*0));
 
     /* 12) any() */
     snprintf(str, 256, "y=any(x-1)");
     setup_test('d', 3, src_double, 'i', 1, dest_int);
-    result += parse_and_eval();
+    result += parse_and_eval(EXPECT_SUCCESS);
     eprintf("Expected: %i\n", ((int)src_double[0]-1)?1:0
            | ((int)src_double[1]-1)?1:0
            | ((int)src_double[2]-1)?1:0);
@@ -293,184 +316,202 @@ int run_tests()
     /* 13) all() */
     snprintf(str, 256, "y=x[2]*all(x-1)");
     setup_test('d', 3, src_double, 'i', 1, dest_int);
-    result += parse_and_eval();
+    result += parse_and_eval(EXPECT_SUCCESS);
     int temp = ((int)src_double[0]-1)?1:0 & ((int)src_double[1]-1)?1:0
                 & ((int)src_double[2]-1)?1:0;
     eprintf("Expected: %i\n", (int)src_double[2] * temp);
 
-    /* 14) pi and e, extra spaces */
+    /* 14) mean() and sum() */
+    snprintf(str, 256, "y=mean(x)==(sum(x)/3)");
+    setup_test('f', 3, src_float, 'i', 1, dest_int);
+    result += parse_and_eval(EXPECT_SUCCESS);
+    eprintf("Expected: %i\n", 1);
+
+    /* 15) vmax() and vmin() */
+    snprintf(str, 256, "y=vmax(x)-vmin(x)");
+    setup_test('f', 3, src_float, 'i', 1, dest_int);
+    result += parse_and_eval(EXPECT_SUCCESS);
+    eprintf("Expected: %i\n",
+            ((src_float[0]>src_float[1])?
+             (src_float[0]>src_float[2]?(int)src_float[0]:(int)src_float[2]):
+             (src_float[1]>src_float[2]?(int)src_float[1]:(int)src_float[2])) -
+            ((src_float[0]<src_float[1])?
+             (src_float[0]<src_float[2]?(int)src_float[0]:(int)src_float[2]):
+             (src_float[1]<src_float[2]?(int)src_float[1]:(int)src_float[2])));
+
+    /* 16) pi and e, extra spaces */
     snprintf(str, 256, "y=x + pi -     e");
     setup_test('d', 1, src_double, 'f', 1, dest_float);
-    result += parse_and_eval();
+    result += parse_and_eval(EXPECT_SUCCESS);
     eprintf("Expected: %g\n", (float)(src_double[0]+M_PI-M_E));
 
-    /* 15) bad vector notation */
+    /* 17) bad vector notation */
     snprintf(str, 256, "y=(x-2)[1]");
     setup_test('i', 1, src_int, 'i', 1, dest_int);
-    result += !parse_and_eval();
+    result += parse_and_eval(EXPECT_FAILURE);
     eprintf("Expected: FAILURE\n");
 
-    /* 16) vector index outside bounds */
+    /* 18) vector index outside bounds */
     snprintf(str, 256, "y=x[3]");
     setup_test('i', 3, src_int, 'i', 1, dest_int);
-    result += !parse_and_eval();
+    result += parse_and_eval(EXPECT_FAILURE);
     eprintf("Expected: FAILURE\n");
 
-    /* 17) vector length mismatch */
+    /* 19) vector length mismatch */
     snprintf(str, 256, "y=x[1:2]");
     setup_test('i', 3, src_int, 'i', 1, dest_int);
-    result += !parse_and_eval();
+    result += parse_and_eval(EXPECT_FAILURE);
     eprintf("Expected: FAILURE\n");
 
-    /* 18) unnecessary vector notation */
+    /* 20) unnecessary vector notation */
     snprintf(str, 256, "y=x+[1]");
     setup_test('i', 1, src_int, 'i', 1, dest_int);
-    result += parse_and_eval();
+    result += parse_and_eval(EXPECT_SUCCESS);
     eprintf("Expected: %i\n", src_int[0]+1);
 
-    /* 19) invalid history index */
+    /* 21) invalid history index */
     snprintf(str, 256, "y=x{-101}");
     setup_test('i', 1, src_int, 'i', 1, dest_int);
-    result += !parse_and_eval();
+    result += parse_and_eval(EXPECT_FAILURE);
     eprintf("Expected: FAILURE\n");
 
-    /* 20) invalid history index */
+    /* 22) invalid history index */
     snprintf(str, 256, "y=x-y{-101}");
     setup_test('i', 1, src_int, 'i', 1, dest_int);
-    result += !parse_and_eval();
+    result += parse_and_eval(EXPECT_FAILURE);
     eprintf("Expected: FAILURE\n");
 
-    /* 21) scientific notation */
+    /* 23) scientific notation */
     snprintf(str, 256, "y=x[1]*1.23e-20");
     setup_test('i', 2, src_int, 'd', 1, dest_double);
-    result += parse_and_eval();
+    result += parse_and_eval(EXPECT_SUCCESS);
     eprintf("Expected: %g\n", (double)src_int[1] * 1.23e-20);
 
-    /* 22) Vector assignment */
+    /* 24) Vector assignment */
     snprintf(str, 256, "y[1]=x[1]");
     setup_test('d', 3, src_double, 'i', 3, dest_int);
-    result += parse_and_eval();
+    result += parse_and_eval(EXPECT_SUCCESS);
     eprintf("Expected: [NULL, %i, NULL]\n", (int)src_double[1]);
 
-    /* 23) Vector assignment */
+    /* 25) Vector assignment */
     snprintf(str, 256, "y[1:2]=[x[1],10]");
     setup_test('d', 3, src_double, 'i', 3, dest_int);
-    result += parse_and_eval();
+    result += parse_and_eval(EXPECT_SUCCESS);
     eprintf("Expected: [NULL, %i, %i]\n", (int)src_double[1], 10);
 
-    /* 24) Output vector swizzling */
+    /* 26) Output vector swizzling */
     snprintf(str, 256, "[y[0],y[2]]=x[1:2]");
     setup_test('f', 3, src_float, 'd', 3, dest_double);
-    result += parse_and_eval();
+    result += parse_and_eval(EXPECT_SUCCESS);
     eprintf("Expected: [%g, NULL, %g]\n", (double)src_float[1],
             (double)src_float[2]);
 
-    /* 25) Multiple expressions */
+    /* 27) Multiple expressions */
     snprintf(str, 256, "y[0]=x*100-23.5, y[2]=100-x*6.7");
     setup_test('i', 1, src_int, 'f', 3, dest_float);
-    result += !parse_and_eval();
+    result += parse_and_eval(EXPECT_FAILURE);
     eprintf("Expected: FAILURE\n");
 
-    /* 26) Initialize filters */
+    /* 28) Initialize filters */
     snprintf(str, 256, "y=x+y{-1}, y{-1}=100");
     setup_test('i', 1, src_int, 'i', 1, dest_int);
-    result += parse_and_eval();
+    result += parse_and_eval(EXPECT_SUCCESS);
     eprintf("Expected: %i\n", src_int[0]*iterations + 100);
 
-    /* 27) Initialize filters + vector index */
+    /* 29) Initialize filters + vector index */
     snprintf(str, 256, "y=x+y{-1}, y[1]{-1}=100");
     setup_test('i', 2, src_int, 'i', 2, dest_int);
-    result += parse_and_eval();
+    result += parse_and_eval(EXPECT_SUCCESS);
     eprintf("Expected: [%i, %i]\n", src_int[0]*iterations,
             src_int[1]*iterations + 100);
 
-    /* 28) Initialize filters + vector index */
+    /* 30) Initialize filters + vector index */
     snprintf(str, 256, "y=x+y{-1}, y{-1}=[100,101]");
     setup_test('i', 2, src_int, 'i', 2, dest_int);
-    result += parse_and_eval();
+    result += parse_and_eval(EXPECT_SUCCESS);
     eprintf("Expected: [%i, %i]\n", src_int[0]*iterations + 100,
             src_int[1]*iterations + 101);
 
-    /* 29) Initialize filters */
+    /* 31) Initialize filters */
     snprintf(str, 256, "y=x+y{-1}, y[0]{-1}=100, y[2]{-1}=200");
     setup_test('i', 3, src_int, 'i', 3, dest_int);
-    result += parse_and_eval();
+    result += parse_and_eval(EXPECT_SUCCESS);
     eprintf("Expected: [%i, %i, %i]\n", src_int[0]*iterations + 100,
             src_int[1]*iterations, src_int[2]*iterations + 200);
 
-    /* 30) Initialize filters */
+    /* 32) Initialize filters */
     snprintf(str, 256, "y=x+y{-1}-y{-2}, y{-1}=[100,101], y{-2}=[100,101]");
     setup_test('i', 2, src_int, 'i', 2, dest_int);
-    result += parse_and_eval();
+    result += parse_and_eval(EXPECT_SUCCESS);
     eprintf("Expected: [1, 2]\n");
 
-    /* 31) Only initialize */
+    /* 33) Only initialize */
     snprintf(str, 256, "y{-1}=100");
     setup_test('i', 3, src_int, 'i', 1, dest_int);
-    result += !parse_and_eval();
-    eprintf("Expected: FAILURE\n");
-
-    /* 32) Bad syntax */
-    snprintf(str, 256, " ");
-    setup_test('i', 1, src_int, 'f', 3, dest_float);
-    result += !parse_and_eval();
-    eprintf("Expected: FAILURE\n");
-
-    /* 33) Bad syntax */
-    snprintf(str, 256, "y");
-    setup_test('i', 1, src_int, 'f', 3, dest_float);
-    result += !parse_and_eval();
+    result += parse_and_eval(EXPECT_FAILURE);
     eprintf("Expected: FAILURE\n");
 
     /* 34) Bad syntax */
-    snprintf(str, 256, "y=");
+    snprintf(str, 256, " ");
     setup_test('i', 1, src_int, 'f', 3, dest_float);
-    result += !parse_and_eval();
+    result += parse_and_eval(EXPECT_FAILURE);
     eprintf("Expected: FAILURE\n");
 
     /* 35) Bad syntax */
-    snprintf(str, 256, "=x");
+    snprintf(str, 256, "y");
     setup_test('i', 1, src_int, 'f', 3, dest_float);
-    result += !parse_and_eval();
+    result += parse_and_eval(EXPECT_FAILURE);
     eprintf("Expected: FAILURE\n");
 
     /* 36) Bad syntax */
+    snprintf(str, 256, "y=");
+    setup_test('i', 1, src_int, 'f', 3, dest_float);
+    result += parse_and_eval(EXPECT_FAILURE);
+    eprintf("Expected: FAILURE\n");
+
+    /* 37) Bad syntax */
+    snprintf(str, 256, "=x");
+    setup_test('i', 1, src_int, 'f', 3, dest_float);
+    result += parse_and_eval(EXPECT_FAILURE);
+    eprintf("Expected: FAILURE\n");
+
+    /* 38) Bad syntax */
     snprintf(str, 256, "sin(x)");
     setup_test('i', 1, src_int, 'f', 3, dest_float);
-    result += !parse_and_eval();
+    result += parse_and_eval(EXPECT_FAILURE);
     eprintf("Expected: FAILURE\n");
 
-    /* 37) Variable declaration */
+    /* 39) Variable declaration */
     snprintf(str, 256, "var=3.5, y=x+var");
     setup_test('i', 1, src_int, 'f', 1, dest_float);
-    result += parse_and_eval();
+    result += parse_and_eval(EXPECT_SUCCESS);
     eprintf("Expected: %g\n", (float)src_int[0] + 3.5);
 
-    /* 38) Variable declaration */
+    /* 40) Variable declaration */
     snprintf(str, 256, "ema=ema{-1}*0.9+x*0.1, y=ema*2, ema{-1}=90");
     setup_test('i', 1, src_int, 'f', 1, dest_float);
-    result += parse_and_eval();
+    result += parse_and_eval(EXPECT_SUCCESS);
     eprintf("Expected: 2\n");
 
-    /* 39) Malformed variable declaration */
+    /* 41) Malformed variable declaration */
     snprintf(str, 256, "y=x + myvariable * 10");
     setup_test('i', 1, src_int, 'f', 1, dest_float);
-    result += !parse_and_eval();
+    result += parse_and_eval(EXPECT_FAILURE);
     eprintf("Expected: FAILURE\n");
 
-    /* 40) Access timetags */
+    /* 42) Access timetags */
     snprintf(str, 256, "y=x.tt");
     setup_test('i', 1, src_int, 'd', 1, dest_double);
-    result += parse_and_eval();
+    result += parse_and_eval(EXPECT_SUCCESS);
     eprintf("Expected: ????\n");
 
-    /* 41) Access timetags from past samples */
+    /* 43) Access timetags from past samples */
     snprintf(str, 256, "y=x.tt-y{-1}.tt");
     setup_test('i', 1, src_int, 'd', 1, dest_double);
-    result += parse_and_eval();
+    result += parse_and_eval(EXPECT_SUCCESS);
     eprintf("Expected: ????\n");
 
-    /* 42) Moving average of inter-sample period */
+    /* 44) Moving average of inter-sample period */
     /* Tricky - we need to init y{-1}.tt to x.tt or the first calculated
      * difference will be enormous! */
     snprintf(str, 256,
@@ -478,10 +519,10 @@ int run_tests()
              "period=x.tt-y{-1}.tt,"
              "y=y{-1}*0.9+period*0.1");
     setup_test('i', 1, src_int, 'd', 1, dest_double);
-    result += parse_and_eval();
+    result += parse_and_eval(EXPECT_SUCCESS);
     eprintf("Expected: ????\n");
 
-    /* 43) Moving average of inter-sample jitter */
+    /* 45) Moving average of inter-sample jitter */
     /* Tricky - we need to init y{-1}.tt to x.tt or the first calculated
      * difference will be enormous! */
     snprintf(str, 256,
@@ -490,25 +531,25 @@ int run_tests()
              "sr=sr{-1}*0.9+interval*0.1,"
              "y=y{-1}*0.9+(interval-sr)*0.1");
     setup_test('i', 1, src_int, 'd', 1, dest_double);
-    result += parse_and_eval();
+    result += parse_and_eval(EXPECT_SUCCESS);
     eprintf("Expected: ????\n");
 
-    /* 44) Malformed timetag syntax */
+    /* 46) Malformed timetag syntax */
     snprintf(str, 256, "y=x.tt{-1}");
     setup_test('i', 1, src_int, 'd', 1, dest_double);
-    result += !parse_and_eval();
+    result += parse_and_eval(EXPECT_FAILURE);
     eprintf("Expected: FAILURE\n");
 
-    /* 45) Expression for limiting output rate */
+    /* 47) Expression for limiting output rate */
     snprintf(str, 256,
              "y{-1}.tt=x.tt,"
              "diff=x.tt-y{-1}.tt,"
              "y=(diff>0.1)?x");
     setup_test('i', 1, src_int, 'i', 1, dest_int);
-    result += parse_and_eval();
+    result += parse_and_eval(EXPECT_SUCCESS);
     eprintf("Expected: 1 or NULL\n");
 
-    /* 46) Expression for limiting rate with smoothed output */
+    /* 48) Expression for limiting rate with smoothed output */
     snprintf(str, 256,
              "y{-1}.tt=x.tt,"
              "output=(x.tt-y{-1}.tt)>0.1,"
@@ -516,16 +557,34 @@ int run_tests()
              "agg=!output*agg+x,"
              "samps=output?1:samps+1");
     setup_test('i', 1, src_int, 'i', 1, dest_int);
-    result += parse_and_eval();
+    result += parse_and_eval(EXPECT_SUCCESS);
     eprintf("Expected: 1 or NULL\n");
 
-    /* 47) Manipulate timetag directly */
+    /* 49) Manipulate timetag directly */
     snprintf(str, 256, "y=x, y.tt=x.tt+10");
     setup_test('i', 1, src_int, 'i', 1, dest_int);
-    result += parse_and_eval();
+    result += parse_and_eval(EXPECT_SUCCESS);
     eprintf("Expected: 1 at time {%"PRIu32", %"PRIu32"}\n", tt_in.sec+10, tt_in.frac);
     // add timetag result
     result += (tt_out.sec == (tt_in.sec + 10)) && (tt_out.frac == tt_in.frac);
+
+    /* 50) Optimization: operations by zero */
+    snprintf(str, 256, "y=0*sin(x)*200+1.1");
+    setup_test('i', 1, src_int, 'f', 1, dest_float);
+    result += parse_and_eval(EXPECT_SUCCESS);
+    eprintf("Expected: 1.1\n");
+    
+    /* 51) Optimization: operations by one */
+    snprintf(str, 256, "y=x*1");
+    setup_test('i', 1, src_int, 'f', 1, dest_float);
+    result += parse_and_eval(EXPECT_SUCCESS);
+    eprintf("Expected: 1\n");
+    
+    /* 52) Error check: division by zero */
+    snprintf(str, 256, "y=x/0");
+    setup_test('i', 1, src_int, 'f', 1, dest_float);
+    result += parse_and_eval(EXPECT_FAILURE);
+    eprintf("Expected: FAILURE\n");
 
     return result;
 }
@@ -556,6 +615,12 @@ int main(int argc, char **argv)
     }
 
     result = run_tests();
-    printf("Test %s.\n", result ? "FAILED" : "PASSED");
+    eprintf("**********************************\n");
+    printf("Test %s ", result ? "FAILED" : "PASSED");
+    if (!result)
+        printf("in %f seconds using %d tokens in total.\n",
+               total_elapsed_time, token_count);
+    else
+        printf("\n");
     return result;
 }
