@@ -157,11 +157,11 @@ void mapper_router_num_instances_changed(mapper_router r,
     for (i=rs->num_instances; i<size; i++) {
         rs->history[i].type = sig->props.type;
         rs->history[i].length = sig->props.length;
-        rs->history[i].size = sig->props.history_size;
+        rs->history[i].size = rs->history_size;
         rs->history[i].value = calloc(1, msig_vector_bytes(sig)
-                                      * sig->props.history_size);
+                                      * rs->history_size);
         rs->history[i].timetag = calloc(1, sizeof(mapper_timetag_t)
-                                        * sig->props.history_size);
+                                        * rs->history_size);
         rs->history[i].position = -1;
     }
 
@@ -211,6 +211,11 @@ void mapper_router_process_signal(mapper_router r,
 
     if (!value) {
         rs->history[id].position = -1;
+        // reset associated input memory for this instance
+        memset(rs->history[id].value, 0, rs->history_size *
+               msig_vector_bytes(rs->signal));
+        memset(rs->history[id].timetag, 0, rs->history_size *
+               sizeof(mapper_timetag_t));
         c = rs->connections;
         while (c) {
             c->history[id].position = -1;
@@ -218,6 +223,11 @@ void mapper_router_process_signal(mapper_router r,
                 (!c->props.send_as_instance || in_scope))
                 mapper_router_send_update(r, c, id, c->props.send_as_instance ?
                                           map : 0, tt, 0);
+            // also need to reset associated output memory
+            memset(c->history[id].value, 0, c->props.dest_history_size *
+                   c->props.dest_length * mapper_type_size(c->props.dest_type));
+            memset(c->history[id].timetag, 0, c->props.dest_history_size *
+                   sizeof(mapper_timetag_t));
 
             c = c->next;
         }
@@ -500,10 +510,11 @@ mapper_connection mapper_router_add_connection(mapper_router r,
     c->props.muted = 0;
     c->props.send_as_instance = (rs->num_instances > 1);
 
-    c->props.range.src_min = 0;
-    c->props.range.src_max = 0;
-    c->props.range.dest_min = 0;
-    c->props.range.dest_max = 0;
+    c->props.src_min = 0;
+    c->props.src_max = 0;
+    c->props.dest_min = 0;
+    c->props.dest_max = 0;
+    c->props.range_known = 0;
 
     c->props.extra = table_new();
 
@@ -549,14 +560,14 @@ static void mapper_router_free_connection(mapper_router r,
             free(c->props.expression);
         if (c->props.query_name)
             free(c->props.query_name);
-        if (c->props.range.src_min)
-            free(c->props.range.src_min);
-        if (c->props.range.src_max)
-            free(c->props.range.src_max);
-        if (c->props.range.dest_min)
-            free(c->props.range.dest_min);
-        if (c->props.range.dest_max)
-            free(c->props.range.dest_max);
+        if (c->props.src_min)
+            free(c->props.src_min);
+        if (c->props.src_max)
+            free(c->props.src_max);
+        if (c->props.dest_min)
+            free(c->props.dest_min);
+        if (c->props.dest_max)
+            free(c->props.dest_max);
         table_free(c->props.extra, 1);
         for (i=0; i<c->parent->num_instances; i++) {
             free(c->history[i].value);

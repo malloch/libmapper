@@ -75,6 +75,7 @@ typedef enum {
     ADM_LINK_MODIFY,
     ADM_LINK_TO,
     ADM_LINKED,
+    ADM_LINK_PING,
     ADM_LOGOUT,
     ADM_SIGNAL,
     ADM_INPUT,
@@ -150,6 +151,8 @@ typedef struct _mapper_admin {
                                            speedup. */
     lo_server_thread bus_server;      /*!< LibLo server thread for the
                                        *   admin bus. */
+    int msgs_recvd;                   /*!< Number of messages received on the
+                                           admin bus. */
     lo_address bus_addr;              /*!< LibLo address for the admin
                                        *   bus. */
     lo_server_thread mesh_server;     /*!< LibLo server thread for the
@@ -174,6 +177,7 @@ typedef struct _mapper_admin {
 /*! The handle to this device is a pointer. */
 typedef mapper_admin_t *mapper_admin;
 
+#define ADMIN_TIMEOUT_SEC 10        // timeout after 10 seconds without ping
 
 /**** Router ****/
 
@@ -206,6 +210,7 @@ typedef struct _mapper_link_signal {
     int num_instances;                      //!< Number of instances allocated.
     mapper_signal_history_t *history;       /*!< Array of value histories
                                              *   for each signal instance. */
+    int history_size;                       /*! Size of the history vector. */
     mapper_connection connections;          /*!< The first connection for
                                              *   this signal. */
     struct _mapper_link_signal *next;     /*!< The next signal connection
@@ -231,6 +236,8 @@ typedef struct _mapper_link {
     int n_connections;              //!< Number of connections in link.
     mapper_queue queues;            /*!< Linked-list of message queues
                                      *   waiting to be sent. */
+    mapper_timetag_t ping_time;     //!< Timestamp of last ping.
+    int ping_count;                 //!< Most recent ping
     struct _mapper_link *next;      //!< Next link in the list.
 } *mapper_link, *mapper_router, *mapper_receiver;
 
@@ -301,6 +308,9 @@ typedef struct _mapper_monitor {
      *  and connections should be automatically subscribed to when a
      *  new device is seen.*/
     int autosubscribe;
+
+    /*! The time after which the monitor will declare devices "unresponsive". */
+    int timeout_sec;
 
     /*! Linked-list of autorenewing device subscriptions. */
     mapper_monitor_subscription subscriptions;

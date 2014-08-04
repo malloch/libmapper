@@ -16,11 +16,31 @@
 mapper_monitor mon = 0;
 mapper_db db = 0;
 
-int port = 9000;
+int verbose = 1;
+int terminate = 0;
 int done = 0;
 int update = 0;
 
 const int polltime_ms = 100;
+
+const char *mode_strings[] =
+{
+    "undefined",
+    "bypass",
+    "linear",
+    "expression",
+    "calibrate",
+    "reverse"
+};
+
+const char *bound_strings[] =
+{
+    "none",
+    "mute",
+    "clamp",
+    "fold",
+    "wrap"
+};
 
 void dbpause()
 {
@@ -47,9 +67,21 @@ void printdevice(mapper_db_device dev)
         // already printed this
         if (strcmp(key, "name")==0)
             continue;
-
-        printf(", %s=", key);
-        mapper_prop_pp(type, length, val);
+        if (strcmp(key, "synced")==0) {
+            // check current time
+            mapper_timetag_t now;
+            mapper_monitor_now(mon, &now);
+            mapper_timetag_t *tt = (mapper_timetag_t *)val;
+            if (tt->sec == 0)
+                printf(", seconds_since_sync=unknown");
+            else
+                printf(", seconds_since_sync=%f",
+                       mapper_timetag_difference(now, *tt));
+        }
+        else if (length) {
+            printf(", %s=", key);
+            mapper_prop_pp(type, length, val);
+        }
     }
     printf("\n");
 }
@@ -76,8 +108,10 @@ void printsignal(mapper_db_signal sig)
             || strcmp(key, "direction")==0)
             continue;
 
-        printf(", %s=", key);
-        mapper_prop_pp(type, length, val);
+        if (length) {
+            printf(", %s=", key);
+            mapper_prop_pp(type, length, val);
+        }
     }
     printf("\n");
 }
@@ -101,8 +135,10 @@ void printlink(mapper_db_link link)
             || strcmp(key, "dest_name")==0)
             continue;
 
-        printf(", %s=", key);
-        mapper_prop_pp(type, length, val);
+        if (length) {
+            printf(", %s=", key);
+            mapper_prop_pp(type, length, val);
+        }
     }
     printf("\n");
 }
@@ -126,8 +162,15 @@ void printconnection(mapper_db_connection con)
             || strcmp(key, "dest_name")==0)
             continue;
 
-        printf(", %s=", key);
-        mapper_prop_pp(type, length, val);
+        if (length) {
+            printf(", %s=", key);
+            if (strcmp(key, "mode")==0)
+                printf("%s", mode_strings[*((int*)val)]);
+            else if (strncmp(key, "bound", 5)==0)
+                printf("%s", bound_strings[*((int*)val)]);
+            else
+                mapper_prop_pp(type, length, val);
+        }
     }
     printf("\n");
 }
@@ -160,7 +203,8 @@ void cleanup_monitor()
 
 void loop()
 {
-    while (!done)
+    int i = 0;
+    while ((!terminate || i++ < 200) && !done)
     {
         mapper_monitor_poll(mon, 0);
         usleep(polltime_ms * 1000);
@@ -230,6 +274,10 @@ void on_device(mapper_db_device dev, mapper_db_action_t a, void *user)
     case MDB_REMOVE:
         printf("removed.\n");
         break;
+    case MDB_UNRESPONSIVE:
+        printf("unresponsive.\n");
+        mapper_monitor_flush_db(mon, 10, 0);
+        break;
     }
     dbpause();
     update = 1;
@@ -248,6 +296,9 @@ void on_signal(mapper_db_signal sig, mapper_db_action_t a, void *user)
     case MDB_REMOVE:
         printf("removed.\n");
         break;
+    case MDB_UNRESPONSIVE:
+        printf("unresponsive.\n");
+        break;
     }
     dbpause();
     update = 1;
@@ -255,7 +306,7 @@ void on_signal(mapper_db_signal sig, mapper_db_action_t a, void *user)
 
 void on_connection(mapper_db_connection con, mapper_db_action_t a, void *user)
 {
-    printf("Connecting %s -> %s ", con->src_name, con->dest_name);
+    printf("Connection %s -> %s ", con->src_name, con->dest_name);
     switch (a) {
     case MDB_NEW:
         printf("added.\n");
@@ -265,6 +316,9 @@ void on_connection(mapper_db_connection con, mapper_db_action_t a, void *user)
         break;
     case MDB_REMOVE:
         printf("removed.\n");
+        break;
+    case MDB_UNRESPONSIVE:
+        printf("unresponsive.\n");
         break;
     }
     dbpause();
@@ -284,6 +338,9 @@ void on_link(mapper_db_link lnk, mapper_db_action_t a, void *user)
     case MDB_REMOVE:
         printf("removed.\n");
         break;
+    case MDB_UNRESPONSIVE:
+        printf("unresponsive.\n");
+        break;
     }
     dbpause();
     update = 1;
@@ -294,9 +351,35 @@ void ctrlc(int sig)
     done = 1;
 }
 
-int main()
+int main(int argc, char **argv)
 {
-    int result = 0;
+    int i, j, result = 0;
+
+    // process flags for -v verbose, -t terminate, -h help
+    for (i = 1; i < argc; i++) {
+        if (argv[i] && argv[i][0] == '-') {
+            int len = strlen(argv[i]);
+            for (j = 1; j < len; j++) {
+                switch (argv[i][j]) {
+                    case 'h':
+                        printf("testmonitor.c: possible arguments "
+                               "-q quiet (suppress output), "
+                               "-t terminate automatically, "
+                               "-h help\n");
+                        return 1;
+                        break;
+                    case 'q':
+                        verbose = 0;
+                        break;
+                    case 't':
+                        terminate = 1;
+                        break;
+                    default:
+                        break;
+                }
+            }
+        }
+    }
 
     signal(SIGINT, ctrlc);
 

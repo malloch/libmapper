@@ -164,8 +164,6 @@ void mapper_admin_send_signal(mapper_admin admin, mapper_device md,
 void mapper_admin_send_signal_removed(mapper_admin admin, mapper_device md,
                                       mapper_signal sig);
 
-void mapper_admin_probe_device_name(mapper_admin admin, mapper_device dev);
-
 /*! Macro for calling message-sending function. */
 #define mapper_admin_bundle_message(...)                                    \
     _real_mapper_admin_bundle_message(__VA_ARGS__, N_AT_PARAMS)
@@ -493,15 +491,17 @@ const char *mapper_get_mode_type_string(mapper_mode_type mode);
 
 /*! Add or update an entry in the device database using parsed message
  *  parameters.
- *  \param db          The database to operate on.
- *  \param device_name The name of the device.
- *  \param params      The parsed message parameters containing new device
- *                     information.
- *  \return            Non-zero if device was added to the database, or
- *                     zero if it was already present. */
+ *  \param db           The database to operate on.
+ *  \param device_name  The name of the device.
+ *  \param params       The parsed message parameters containing new device
+ *                      information.
+ *  \param current_time The current time.
+ *  \return             Non-zero if device was added to the database, or
+ *                      zero if it was already present. */
 int mapper_db_add_or_update_device_params(mapper_db db,
                                           const char *device_name,
-                                          mapper_message_t *params);
+                                          mapper_message_t *params,
+                                          mapper_timetag_t *current_time);
 
 /*! Add or update an entry in the signal database using parsed message
  *  parameters.
@@ -576,6 +576,13 @@ void mapper_db_remove_link(mapper_db db,
 void mapper_db_dump(mapper_db db);
 
 void mapper_db_remove_all_callbacks(mapper_db db);
+
+/*! Check device records for unresponsive devices. */
+void mapper_db_check_device_status(mapper_db db, uint32_t now_sec);
+
+/*! Flush device records for unresponsive devices. */
+int mapper_db_flush(mapper_db db, uint32_t current_time,
+                    uint32_t timeout, int quiet);
 
 /**** Links ****/
 
@@ -745,6 +752,8 @@ void printexpr(const char*, mapper_expr);
 int mapper_expr_evaluate(mapper_expr expr,
                          mapper_signal_history_t *input_history,
                          mapper_signal_history_t *output_history);
+
+int mapper_expr_constant_output(mapper_expr expr);
 
 void mapper_expr_free(mapper_expr expr);
 

@@ -24,7 +24,8 @@ static double get_current_time()
 
 // function prototypes
 static void monitor_subscribe_internal(mapper_monitor mon, const char *device_name,
-                                       int subscribe_flags, int timeout);
+                                       int subscribe_flags, int timeout,
+                                       int version);
 
 typedef enum _db_request_direction {
     DIRECTION_IN,
@@ -50,6 +51,8 @@ mapper_monitor mapper_monitor_new(mapper_admin admin, int autosubscribe_flags)
         mapper_monitor_free(mon);
         return NULL;
     }
+
+    mon->timeout_sec = ADMIN_TIMEOUT_SEC;
 
     mapper_admin_add_monitor(mon->admin, mon);
     if (autosubscribe_flags)
@@ -84,16 +87,14 @@ void mapper_monitor_free(mapper_monitor mon)
 int mapper_monitor_poll(mapper_monitor mon, int block_ms)
 {
     int admin_count = mapper_admin_poll(mon->admin);
+    mapper_clock_now(&mon->admin->clock, &mon->admin->clock.now);
 
     // check if any subscriptions need to be renewed
     mapper_monitor_subscription s = mon->subscriptions;
-    if (s) {
-        mapper_clock_now(&mon->admin->clock, &mon->admin->clock.now);
-    }
     while (s) {
         if (s->lease_expiration_sec < mon->admin->clock.now.sec) {
             monitor_subscribe_internal(mon, s->name, s->flags,
-                                       AUTOSUBSCRIBE_INTERVAL);
+                                       AUTOSUBSCRIBE_INTERVAL, -1);
             // leave 10-second buffer for subscription renewal
             s->lease_expiration_sec =
                 mon->admin->clock.now.sec + AUTOSUBSCRIBE_INTERVAL - 10;
@@ -112,6 +113,12 @@ int mapper_monitor_poll(mapper_monitor mon, int block_ms)
 #endif
         }
     }
+
+    // TODO: do not check every time poll() is called
+    // some housekeeping: check if any devices have timed out
+    mapper_db_check_device_status(&mon->db,
+                                  mon->admin->clock.now.sec - mon->timeout_sec);
+
     return admin_count;
 }
 
@@ -127,7 +134,8 @@ static void mapper_monitor_set_bundle_dest(mapper_monitor mon, const char *name)
 }
 
 static void monitor_subscribe_internal(mapper_monitor mon, const char *device_name,
-                                       int subscribe_flags, int timeout)
+                                       int subscribe_flags, int timeout,
+                                       int version)
 {
     char cmd[1024];
     snprintf(cmd, 1024, "%s/subscribe", device_name);
@@ -135,10 +143,11 @@ static void monitor_subscribe_internal(mapper_monitor mon, const char *device_na
     mapper_monitor_set_bundle_dest(mon, device_name);
     lo_message m = lo_message_new();
     if (m) {
-        lo_message_add_int32(m, timeout);
         if (subscribe_flags & SUB_DEVICE_ALL)
             lo_message_add_string(m, "all");
         else {
+            if (subscribe_flags & SUB_DEVICE)
+                lo_message_add_string(m, "device");
             if (subscribe_flags & SUB_DEVICE_SIGNALS)
                 lo_message_add_string(m, "signals");
             else if (subscribe_flags & SUB_DEVICE_INPUTS)
@@ -162,6 +171,12 @@ static void monitor_subscribe_internal(mapper_monitor mon, const char *device_na
         }
         lo_message_add_string(m, "@adminPort");
         lo_message_add_int32(m, lo_server_get_port(mon->admin->mesh_server));
+        lo_message_add_string(m, "@lease");
+        lo_message_add_int32(m, timeout);
+        if (version >= 0) {
+            lo_message_add_string(m, "@version");
+            lo_message_add_int32(m, version);
+        }
         lo_bundle_add_message(mon->admin->bundle, cmd, m);
         mapper_admin_send_bundle(mon->admin);
     }
@@ -170,6 +185,7 @@ static void monitor_subscribe_internal(mapper_monitor mon, const char *device_na
 void mapper_monitor_subscribe(mapper_monitor mon, const char *device_name,
                               int subscribe_flags, int timeout)
 {
+    mapper_db_device found = 0;
     if (timeout == -1) {
         // special case: autorenew subscription lease
         // first check if subscription already exists
@@ -177,25 +193,31 @@ void mapper_monitor_subscribe(mapper_monitor mon, const char *device_name,
         while (s) {
             if (strcmp(device_name, s->name)==0) {
                 s->flags = subscribe_flags;
-                return;
+                // subscription already exists; check if monitor has device record
+                if ((found = mapper_db_get_device_by_name(&mon->db, device_name)))
+                    return;
+                break;
             }
             s = s->next;
         }
-        // store subscription record
-        s = malloc(sizeof(struct _mapper_monitor_subscription));
-        s->name = strdup(device_name);
-        s->flags = subscribe_flags;
+        if (!found) {
+            // store subscription record
+            s = malloc(sizeof(struct _mapper_monitor_subscription));
+            s->name = strdup(device_name);
+            s->flags = subscribe_flags;
+            s->next = mon->subscriptions;
+            mon->subscriptions = s;
+        }
 
         mapper_clock_now(&mon->admin->clock, &mon->admin->clock.now);
         // leave 10-second buffer for subscription lease
         s->lease_expiration_sec =
             mon->admin->clock.now.sec + AUTOSUBSCRIBE_INTERVAL - 10;
-        s->next = mon->subscriptions;
-        mon->subscriptions = s;
+
         timeout = AUTOSUBSCRIBE_INTERVAL;
     }
 
-    monitor_subscribe_internal(mon, device_name, subscribe_flags, timeout);
+    monitor_subscribe_internal(mon, device_name, subscribe_flags, timeout, 0);
 }
 
 static void mapper_monitor_unsubscribe_internal(mapper_monitor mon,
@@ -233,6 +255,12 @@ static void mapper_monitor_unsubscribe_internal(mapper_monitor mon,
 void mapper_monitor_unsubscribe(mapper_monitor mon, const char *device_name)
 {
     mapper_monitor_unsubscribe_internal(mon, device_name, 1);
+}
+
+void mapper_monitor_request_devices(mapper_monitor mon)
+{
+    mapper_admin_set_bundle_dest_bus(mon->admin);
+    mapper_admin_bundle_message(mon->admin, ADM_WHO, 0, "");
 }
 
 void mapper_monitor_link(mapper_monitor mon,
@@ -287,6 +315,8 @@ void mapper_monitor_unlink(mapper_monitor mon,
 }
 
 void mapper_monitor_connection_modify(mapper_monitor mon,
+                                      const char *source_signal,
+                                      const char *dest_signal,
                                       mapper_db_connection_t *props,
                                       unsigned int props_flags)
 {
@@ -294,7 +324,7 @@ void mapper_monitor_connection_modify(mapper_monitor mon,
         // TODO: lookup device ip/ports, send directly?
         mapper_admin_set_bundle_dest_bus(mon->admin);
         mapper_admin_bundle_message(mon->admin, ADM_CONNECTION_MODIFY, 0, "ss",
-                                    props->src_name, props->dest_name,
+                                    source_signal, dest_signal,
                                     (props_flags & CONNECTION_BOUND_MIN)
                                     ? AT_BOUND_MIN : -1, props->bound_min,
                                     (props_flags & CONNECTION_BOUND_MAX)
@@ -418,4 +448,40 @@ void mapper_monitor_autosubscribe(mapper_monitor mon, int autosubscribe_flags)
 void mapper_monitor_now(mapper_monitor mon, mapper_timetag_t *tt)
 {
     mapper_clock_now(&mon->admin->clock, tt);
+}
+
+void mapper_monitor_set_timeout(mapper_monitor mon, int timeout_sec)
+{
+    if (timeout_sec < 0)
+        timeout_sec = ADMIN_TIMEOUT_SEC;
+    mon->timeout_sec = timeout_sec;
+}
+
+int mapper_monitor_get_timeout(mapper_monitor mon)
+{
+    return mon->timeout_sec;
+}
+
+void mapper_monitor_flush_db(mapper_monitor mon, int timeout_sec, int quiet)
+{
+    mapper_clock_now(&mon->admin->clock, &mon->admin->clock.now);
+
+    // flush expired device records
+    mapper_db_flush(&mon->db, mon->admin->clock.now.sec, timeout_sec, quiet);
+
+    // also need to remove subscriptions
+    mapper_monitor_subscription *s = &mon->subscriptions;
+    while (*s) {
+        if (!mapper_db_get_device_by_name(&mon->db, (*s)->name)) {
+            // don't bother sending '/unsubscribe' since device is unresponsive
+            // remove from subscriber list
+            mapper_monitor_subscription temp = *s;
+            *s = temp->next;
+            if (temp->name)
+                free(temp->name);
+            free(temp);
+        }
+        else
+            s = &(*s)->next;
+    }
 }

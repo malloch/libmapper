@@ -231,6 +231,11 @@ static int handler_signal(const char *path, const char *types,
 
     mapper_signal_instance si = sig->id_maps[index].instance;
 
+    // TODO: optionally discard out-of-order messages
+    // requires timebase sync for many-to-one connections or local updates
+    //    if (sig->discard_out_of_order && out_of_order(si->timetag, tt))
+    //        return 0;
+
     if (types[0] == LO_BLOB) {
         dataptr = lo_blob_dataptr((lo_blob)argv[0]);
         count = lo_blob_datasize((lo_blob)argv[0]) /
@@ -322,6 +327,11 @@ static int handler_signal_instance(const char *path, const char *types,
 
     mapper_signal_instance si = sig->id_maps[index].instance;
     map = sig->id_maps[index].map;
+
+    // TODO: optionally discard out-of-order messages
+    // requires timebase sync for many-to-one connections or local updates
+    //    if (sig->discard_out_of_order && out_of_order(si->timetag, tt))
+    //        return 0;
 
     si->timetag.sec = tt.sec;
     si->timetag.frac = tt.frac;
@@ -932,13 +942,16 @@ int mdev_get_fds(mapper_device md, int *fds, int num)
 {
     if (num > 0)
         fds[0] = lo_server_get_socket_fd(md->admin->bus_server);
-    if (num > 1)
+    if (num > 1) {
         fds[1] = lo_server_get_socket_fd(md->admin->mesh_server);
-    if (num > 2)
-        fds[2] = lo_server_get_socket_fd(md->server);
+        if (num > 2)
+            fds[2] = lo_server_get_socket_fd(md->server);
+        else
+            return 2;
+    }
     else
         return 1;
-    return 2;
+    return 3;
 }
 
 void mdev_service_fd(mapper_device md, int fd)
@@ -1332,6 +1345,11 @@ int mdev_ready(mapper_device device)
         return 0;
 
     return device->registered;
+}
+
+mapper_db_device mdev_properties(mapper_device dev)
+{
+    return &dev->props;
 }
 
 void mdev_set_property(mapper_device dev, const char *property,

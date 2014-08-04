@@ -461,6 +461,11 @@ mapper_signal mdev_get_input_by_index(mapper_device dev, int index);
  *         if not found. */
 mapper_signal mdev_get_output_by_index(mapper_device dev, int index);
 
+/*! Get a device's property structure.
+ *  \param dev  The device to operate on.
+ *  \return     A structure containing the device's properties. */
+mapper_db_device mdev_properties(mapper_device dev);
+
 /*! Set a property of a device.  Can be used to provide arbitrary
  *  metadata.  Value pointed to will be copied.
  *  \param dev       The device to operate on.
@@ -644,6 +649,9 @@ mapper_admin mapper_admin_new(const char *iface, const char *group, int port);
 /*! Free an admin created with mapper_admin_new(). */
 void mapper_admin_free(mapper_admin admin);
 
+/*! Get the version of libmapper */
+const char *mapper_admin_libversion(mapper_admin admin);
+
 /* @} */
 
 /**** Device database ****/
@@ -654,6 +662,7 @@ typedef enum {
     MDB_MODIFY,
     MDB_NEW,
     MDB_REMOVE,
+    MDB_UNRESPONSIVE,
 } mapper_db_action_t;
 
 /***** Devices *****/
@@ -1273,17 +1282,18 @@ int mapper_db_link_property_lookup(mapper_db_link link,
        general, the monitor interface is useful for building GUI
        applications to control the network. */
 
-/*! Bit flags for coordinating monitor metadata subscriptions. */
+/*! Bit flags for coordinating monitor metadata subscriptions. Subsets of
+ *  device information must also include SUB_DEVICE. */
 #define SUB_DEVICE                  0x01
-#define SUB_DEVICE_INPUTS           0x02
-#define SUB_DEVICE_OUTPUTS          0x04
-#define SUB_DEVICE_SIGNALS          0x06 // SUB_DEVICE_INPUTS & SUB_DEVICE_OUTPUTS
-#define SUB_DEVICE_LINKS_IN         0x08
-#define SUB_DEVICE_LINKS_OUT        0x10
-#define SUB_DEVICE_LINKS            0x18 // SUB_DEVICE_LINKS_IN & SUB_DEVICE_LINKS_OUT
-#define SUB_DEVICE_CONNECTIONS_IN   0x20
-#define SUB_DEVICE_CONNECTIONS_OUT  0x40
-#define SUB_DEVICE_CONNECTIONS      0x60 // SUB_DEVICE_CONNECTIONS_IN & SUB_DEVICE_CONNECTION_OUT
+#define SUB_DEVICE_INPUTS           0x03
+#define SUB_DEVICE_OUTPUTS          0x05
+#define SUB_DEVICE_SIGNALS          0x07 // SUB_DEVICE_INPUTS & SUB_DEVICE_OUTPUTS
+#define SUB_DEVICE_LINKS_IN         0x09
+#define SUB_DEVICE_LINKS_OUT        0x11
+#define SUB_DEVICE_LINKS            0x19 // SUB_DEVICE_LINKS_IN & SUB_DEVICE_LINKS_OUT
+#define SUB_DEVICE_CONNECTIONS_IN   0x21
+#define SUB_DEVICE_CONNECTIONS_OUT  0x41
+#define SUB_DEVICE_CONNECTIONS      0x61 // SUB_DEVICE_CONNECTIONS_IN & SUB_DEVICE_CONNECTION_OUT
 #define SUB_DEVICE_ALL              0xFF
 
 /*! Create a network monitor.
@@ -1309,6 +1319,28 @@ int mapper_monitor_poll(mapper_monitor mon, int block_ms);
 /*! Get the database associated with a monitor. This can be used as
  *  long as the monitor remains alive. */
 mapper_db mapper_monitor_get_db(mapper_monitor mon);
+
+/*! Set the timeout in seconds after which a monitor will declare a device
+ *  "unresponsive". Defaults to ADMIN_TIMEOUT_SEC.
+ *  \param mon      The monitor to use.
+ *  \param timeout  The timeout in seconds. */
+void mapper_monitor_set_timeout(mapper_monitor mon, int timeout);
+
+/*! Get the timeout in seconds after which a monitor will declare a device
+ *  "unresponsive". Defaults to ADMIN_TIMEOUT_SEC.
+ *  \param mon      The monitor to use.
+ *  \return The current timeout in seconds. */
+int mapper_monitor_get_timeout(mapper_monitor mon);
+
+/*! Remove unresponsive devices from the database.
+ *  \param mon         The monitor to use.
+ *  \param timeout_sec The number of seconds a device must have been
+ *                     unresponsive before removal.
+ *  \param quiet       1 to disable callbacks during db flush, 0 otherwise. */
+void mapper_monitor_flush_db(mapper_monitor mon, int timeout_sec, int quiet);
+
+/*! Request that all devices report in. */
+void mapper_monitor_request_devices(mapper_monitor mon);
 
 /*! Subscribe to information about a specific device.
  *  \param mon             The monitor to use.
@@ -1363,6 +1395,8 @@ void mapper_monitor_unlink(mapper_monitor mon,
 
 /*! Interface to modify a connection between two signals.
  *  \param mon            The monitor to use for sending the message.
+ *  \param source_signal  Source signal name.
+ *  \param dest_signal    Destination signal name.
  *  \param properties     An optional data structure specifying the
  *                        requested properties of this connection.
  *  \param property_flags Bit flags indicating which properties in the
@@ -1370,6 +1404,8 @@ void mapper_monitor_unlink(mapper_monitor mon,
  *                        applied to the new connection. See the flags
  *                        prefixed by CONNECTION_ in mapper_db.h. */
 void mapper_monitor_connection_modify(mapper_monitor mon,
+                                      const char *source_signal,
+                                      const char *dest_signal,
                                       mapper_db_connection_t *properties,
                                       unsigned int property_flags);
 
