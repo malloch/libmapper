@@ -1551,11 +1551,12 @@ static int handler_device_subscribe(const char *path, const char *types,
                       mdev_name(md));
             }
         }
+        else if (strcmp(&argv[i]->s, "@adminPort")==0) {
+            ++i;
+            if (i < argc && types[i] == 'i')
+                port = argv[i]->i;
+        }
     }
-    mapper_message_t params;
-    mapper_msg_parse_params(&params, path, &types[2],
-                            argc-2, &argv[2]);
-    mapper_msg_get_param_if_int(&params, AT_ADMIN_PORT, &port);
     char port_str[16];
     snprintf(port_str, 16, "%i", port);
 
