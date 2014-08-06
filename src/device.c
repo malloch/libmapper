@@ -80,7 +80,8 @@ void mdev_free(mapper_device md)
 
     if (md->registered) {
         // A registered device must tell the network it is leaving.
-        mapper_admin_send(md->admin, ADM_LOGOUT, 0, "s", mdev_name(md));
+        mapper_admin_set_bundle_dest_bus(md->admin);
+        mapper_admin_bundle_message(md->admin, ADM_LOGOUT, 0, "s", mdev_name(md));
     }
 
     // First release active instances
@@ -232,6 +233,11 @@ static int handler_signal(const char *path, const char *types,
 
     mapper_signal_instance si = sig->id_maps[index].instance;
 
+    // TODO: optionally discard out-of-order messages
+    // requires timebase sync for many-to-one connections or local updates
+    //    if (sig->discard_out_of_order && out_of_order(si->timetag, tt))
+    //        return 0;
+
     if (types[0] == LO_BLOB) {
         dataptr = lo_blob_dataptr((lo_blob)argv[0]);
         count = lo_blob_datasize((lo_blob)argv[0]) /
@@ -323,6 +329,11 @@ static int handler_signal_instance(const char *path, const char *types,
 
     mapper_signal_instance si = sig->id_maps[index].instance;
     map = sig->id_maps[index].map;
+
+    // TODO: optionally discard out-of-order messages
+    // requires timebase sync for many-to-one connections or local updates
+    //    if (sig->discard_out_of_order && out_of_order(si->timetag, tt))
+    //        return 0;
 
     si->timetag.sec = tt.sec;
     si->timetag.frac = tt.frac;
@@ -548,6 +559,12 @@ mapper_signal mdev_add_input(mapper_device md, const char *name, int length,
     free(type_string);
     free(signal_get);
 
+    if (md->registered) {
+        // Notify subscribers
+        mapper_admin_set_bundle_dest_subscribers(md->admin, SUB_DEVICE_INPUTS);
+        mapper_admin_send_signal(md->admin, md, sig);
+    }
+
     return sig;
 }
 
@@ -569,6 +586,13 @@ mapper_signal mdev_add_output(mapper_device md, const char *name, int length,
 
     md->outputs[md->props.n_outputs - 1] = sig;
     sig->device = md;
+
+    if (md->registered) {
+        // Notify subscribers
+        mapper_admin_set_bundle_dest_subscribers(md->admin, SUB_DEVICE_OUTPUTS);
+        mapper_admin_send_signal(md->admin, md, sig);
+    }
+
     return sig;
 }
 
@@ -729,12 +753,14 @@ void mdev_remove_input(mapper_device md, mapper_signal sig)
         while (rs) {
             if (rs->signal == sig) {
                 // need to disconnect?
+                mapper_admin_set_bundle_dest_mesh(md->admin, r->admin_addr);
                 mapper_connection c = rs->connections;
                 while (c) {
                     snprintf(str1, 1024, "%s%s", r->props.src_name,
                              c->props.src_name);
-                    mapper_admin_send(md->admin, ADM_DISCONNECT, 0, "ss",
-                                      str1, str2);
+                    // TODO: send directly to source device?
+                    mapper_admin_bundle_message(md->admin, ADM_DISCONNECT, 0,
+                                                "ss", str1, str2);
                     mapper_connection temp = c->next;
                     mapper_receiver_remove_connection(r, c);
                     c = temp;
@@ -744,6 +770,12 @@ void mdev_remove_input(mapper_device md, mapper_signal sig)
             rs = rs->next;
         }
         r = r->next;
+    }
+
+    if (md->registered) {
+        // Notify subscribers
+        mapper_admin_set_bundle_dest_subscribers(md->admin, SUB_DEVICE_INPUTS);
+        mapper_admin_send_signal_removed(md->admin, md, sig);
     }
 
     md->props.n_inputs --;
@@ -783,12 +815,14 @@ void mdev_remove_output(mapper_device md, mapper_signal sig)
         while (rs) {
             if (rs->signal == sig) {
                 // need to disconnect?
+                mapper_admin_set_bundle_dest_mesh(md->admin, r->admin_addr);
                 mapper_connection c = rs->connections;
                 while (c) {
                     snprintf(str2, 1024, "%s%s", r->props.dest_name,
                              c->props.dest_name);
-                    mapper_admin_send(md->admin, ADM_DISCONNECTED, 0, "ss",
-                                      str1, str2);
+                    // TODO: send directly to source device?
+                    mapper_admin_bundle_message(md->admin, ADM_DISCONNECTED, 0,
+                                                "ss", str1, str2);
                     mapper_connection temp = c->next;
                     mapper_router_remove_connection(r, c);
                     c = temp;
@@ -798,6 +832,12 @@ void mdev_remove_output(mapper_device md, mapper_signal sig)
             rs = rs->next;
         }
         r = r->next;
+    }
+
+    if (md->registered) {
+        // Notify subscribers
+        mapper_admin_set_bundle_dest_subscribers(md->admin, SUB_DEVICE_OUTPUTS);
+        mapper_admin_send_signal_removed(md->admin, md, sig);
     }
 
     md->props.n_outputs --;
@@ -962,18 +1002,22 @@ int mdev_poll(mapper_device md, int block_ms)
 
 int mdev_num_fds(mapper_device md)
 {
-    // One for the admin input, and one for the signal input.
-    return 2;
+    // Two for the admin inputs (bus and mesh), and one for the signal input.
+    return 3;
 }
 
 int mdev_get_fds(mapper_device md, int *fds, int num)
 {
     if (num > 0) {
-        fds[0] = lo_server_get_socket_fd(md->admin->admin_server);
+        fds[0] = lo_server_get_socket_fd(md->admin->bus_server);
         if (num > 1) {
-            fds[1] = lo_server_get_socket_fd(md->udp_server);
+            fds[1] = lo_server_get_socket_fd(md->admin->mesh_server);
             if (num > 2) {
-                fds[2] = lo_server_get_socket_fd(md->tcp_server);
+                fds[2] = lo_server_get_socket_fd(md->udp_server);
+                if (num > 3) {
+                    fds[2] = lo_server_get_socket_fd(md->tcp_server);
+                    return 4;
+                }
                 return 3;
             }
             return 2;
@@ -985,7 +1029,8 @@ int mdev_get_fds(mapper_device md, int *fds, int num)
 
 void mdev_service_fd(mapper_device md, int fd)
 {
-    if (fd == lo_server_get_socket_fd(md->admin->admin_server))
+    // TODO: separate fds for bus and mesh comms
+    if (fd == lo_server_get_socket_fd(md->admin->bus_server))
         mapper_admin_poll(md->admin);
     else if (md->udp_server
              && fd == lo_server_get_socket_fd(md->udp_server))
@@ -1434,6 +1479,11 @@ int mdev_ready(mapper_device device)
         return 0;
 
     return device->registered;
+}
+
+mapper_db_device mdev_properties(mapper_device dev)
+{
+    return &dev->props;
 }
 
 void mdev_set_property(mapper_device dev, const char *property,

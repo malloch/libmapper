@@ -36,30 +36,30 @@
     if ($2) free($2);
 }
 %typemap(in) maybePropVal %{
-    propval val;
+    propval *val = alloca(sizeof(*val));
     if ($input == Py_None)
         $1 = 0;
     else {
-        val.type = 0;
-        check_type($input, &val.type, 1, 1);
-        if (!val.type) {
+        val->type = 0;
+        check_type($input, &val->type, 1, 1);
+        if (!val->type) {
             PyErr_SetString(PyExc_ValueError,
                             "Problem determining value type.");
             return NULL;
         }
         if (PyList_Check($input))
-            val.length = PyList_Size($input);
+            val->length = PyList_Size($input);
         else
-            val.length = 1;
-        val.value = malloc(val.length * mapper_type_size(val.type));
-        val.free_value = 1;
-        if (py_to_prop($input, val.value, val.type, val.length)) {
-            free(val.value);
+            val->length = 1;
+        val->value = malloc(val->length * mapper_type_size(val->type));
+        val->free_value = 1;
+        if (py_to_prop($input, val->value, val->type, val->length)) {
+            free(val->value);
             PyErr_SetString(PyExc_ValueError,
                             "Problem parsing property value.");
             return NULL;
         }
-        $1 = &val;
+        $1 = val;
     }
 %}
 %typemap(out) maybePropVal {
@@ -98,10 +98,10 @@
  }
 
 %typemap(in) mapper_db_link_with_flags_t* %{
-    mapper_db_link_with_flags_t p;
+    mapper_db_link_with_flags_t *p = alloca(sizeof(*p));
     $1 = 0;
     if (PyDict_Check($input)) {
-        memset(&p, 0, sizeof(mapper_db_link_with_flags_t));
+        memset(p, 0, sizeof(mapper_db_link_with_flags_t));
         PyObject *keys = PyDict_Keys($input);
         if (keys) {
             int i = PyList_GET_SIZE(keys), k;
@@ -112,48 +112,48 @@
                     char *s = PyString_AsString(o);
                     if (strcmp(s, "scope_names")==0) {
                         if (PyString_Check(v)) {
-                            p.props.num_scopes = 1;
-                            p.flags |= LINK_NUM_SCOPES;
+                            p->props.num_scopes = 1;
+                            p->flags |= LINK_NUM_SCOPES;
                             char *scope = PyString_AsString(v);
-                            p.props.scope_names = &scope;
-                            p.flags |= LINK_SCOPE_NAMES;
+                            p->props.scope_names = &scope;
+                            p->flags |= LINK_SCOPE_NAMES;
                         }
                     }
                     else if (strcmp(s, "src_name")==0) {
                         if (PyString_Check(v))
-                            p.props.src_name = PyString_AsString(v);
+                            p->props.src_name = PyString_AsString(v);
                     }
                     else if (strcmp(s, "dest_name")==0) {
                         if (PyString_Check(v))
-                            p.props.dest_name = PyString_AsString(v);
+                            p->props.dest_name = PyString_AsString(v);
                     }
                     else if (strcmp(s, "num_scopes")==0) {
                         int ecode = SWIG_AsVal_int(v, &k);
                         if (SWIG_IsOK(ecode))
-                            p.props.num_scopes = k;
+                            p->props.num_scopes = k;
                     }
                     else if (strcmp(s, "src_host")==0) {
                         if (PyString_Check(v))
-                            p.props.src_host = PyString_AsString(v);
+                            p->props.src_host = PyString_AsString(v);
                     }
                     else if (strcmp(s, "src_port")==0) {
                         int ecode = SWIG_AsVal_int(v, &k);
                         if (SWIG_IsOK(ecode))
-                            p.props.src_port = k;
+                            p->props.src_port = k;
                     }
                     else if (strcmp(s, "dest_host")==0) {
                         if (PyString_Check(v))
-                            p.props.dest_host = PyString_AsString(v);
+                            p->props.dest_host = PyString_AsString(v);
                     }
                     else if (strcmp(s, "dest_port")==0) {
                         int ecode = SWIG_AsVal_int(v, &k);
                         if (SWIG_IsOK(ecode))
-                            p.props.dest_port = k;
+                            p->props.dest_port = k;
                     }
                 }
             }
             Py_DECREF(keys);
-            $1 = &p;
+            $1 = p;
         }
     }
     else {
@@ -163,14 +163,14 @@
  %}
 
 %typemap(in) mapper_db_connection_with_flags_t* %{
-    mapper_db_connection_with_flags_t p;
-    p.props.src_length = 0;
-    p.props.dest_length = 0;
-    p.props.src_type = 0;
-    p.props.dest_type = 0;
+    mapper_db_connection_with_flags_t *p = alloca(sizeof(*p));
+    p->props.src_length = 0;
+    p->props.dest_length = 0;
+    p->props.src_type = 0;
+    p->props.dest_type = 0;
     $1 = 0;
     if (PyDict_Check($input)) {
-        memset(&p, 0, sizeof(mapper_db_connection_with_flags_t));
+        memset(p, 0, sizeof(mapper_db_connection_with_flags_t));
         PyObject *keys = PyDict_Keys($input);
         if (keys) {
             // first try to retrieve src_type, dest_type if provided
@@ -182,14 +182,14 @@
                     char *s = PyString_AsString(o);
                     if (strcmp(s, "src_type")==0) {
                         if (PyString_Check(v))
-                            p.props.src_type = PyString_AsString(v)[0];
-                        if (p.props.dest_type)
+                            p->props.src_type = PyString_AsString(v)[0];
+                        if (p->props.dest_type)
                             continue;
                     }
                     else if (strcmp(s, "dest_type")==0) {
                         if (PyString_Check(v))
-                            p.props.dest_type = PyString_AsString(v)[0];
-                        if (p.props.src_type)
+                            p->props.dest_type = PyString_AsString(v)[0];
+                        if (p->props.src_type)
                             continue;
                     }
                 }
@@ -203,28 +203,28 @@
                     if (strcmp(s, "bound_max")==0) {
                         int ecode = SWIG_AsVal_int(v, &k);
                         if (SWIG_IsOK(ecode)) {
-                            p.props.bound_max = k;
-                            p.flags |= CONNECTION_BOUND_MAX;
+                            p->props.bound_max = k;
+                            p->flags |= CONNECTION_BOUND_MAX;
                         }
                     }
                     else if (strcmp(s, "bound_min")==0) {
                         int ecode = SWIG_AsVal_int(v, &k);
                         if (SWIG_IsOK(ecode)) {
-                            p.props.bound_min = k;
-                            p.flags |= CONNECTION_BOUND_MIN;
+                            p->props.bound_min = k;
+                            p->flags |= CONNECTION_BOUND_MIN;
                         }
                     }
                     else if (strcmp(s, "expression")==0) {
                         if (PyString_Check(v)) {
-                            p.props.expression = PyString_AsString(v);
-                            p.flags |= CONNECTION_EXPRESSION;
+                            p->props.expression = PyString_AsString(v);
+                            p->flags |= CONNECTION_EXPRESSION;
                         }
                     }
                     else if (strcmp(s, "mode")==0) {
                         int ecode = SWIG_AsVal_int(v, &k);
                         if (SWIG_IsOK(ecode)) {
-                            p.props.mode = k;
-                            p.flags |= CONNECTION_MODE;
+                            p->props.mode = k;
+                            p->flags |= CONNECTION_MODE;
                         }
                     }
                     else if (strcmp(s, "muted")==0) {
@@ -242,63 +242,63 @@
                                 k = -1;
                         }
                         if (k>-1) {
-                            p.props.muted = k;
-                            p.flags |= CONNECTION_MUTED;
+                            p->props.muted = k;
+                            p->flags |= CONNECTION_MUTED;
                         }
                     }
                     else if (strcmp(s, "src_name")==0) {
                         if (PyString_Check(v))
-                            p.props.src_name = PyString_AsString(v);
+                            p->props.src_name = PyString_AsString(v);
                     }
                     else if (strcmp(s, "dest_name")==0) {
                         if (PyString_Check(v))
-                            p.props.dest_name = PyString_AsString(v);
+                            p->props.dest_name = PyString_AsString(v);
                     }
                     else if (strcmp(s, "src_min")==0) {
-                        alloc_and_copy_maybe_vector(v, &p.props.src_type,
-                                                    &p.props.range.src_min,
-                                                    &p.props.src_length);
-                        if (p.props.range.src_min) {
-                            p.props.range.known |= CONNECTION_RANGE_SRC_MIN;
-                            p.flags |= CONNECTION_SRC_LENGTH;
-                            p.flags |= CONNECTION_SRC_TYPE;
+                        alloc_and_copy_maybe_vector(v, &p->props.src_type,
+                                                    &p->props.src_min,
+                                                    &p->props.src_length);
+                        if (p->props.src_min) {
+                            p->props.range_known |= CONNECTION_RANGE_SRC_MIN;
+                            p->flags |= CONNECTION_SRC_LENGTH;
+                            p->flags |= CONNECTION_SRC_TYPE;
                         }
                     }
                     else if (strcmp(s, "src_max")==0) {
-                        alloc_and_copy_maybe_vector(v, &p.props.src_type,
-                                                    &p.props.range.src_max,
-                                                    &p.props.src_length);
-                        if (p.props.range.src_max) {
-                            p.props.range.known |= CONNECTION_RANGE_SRC_MAX;
-                            p.flags |= CONNECTION_SRC_LENGTH;
-                            p.flags |= CONNECTION_SRC_TYPE;
+                        alloc_and_copy_maybe_vector(v, &p->props.src_type,
+                                                    &p->props.src_max,
+                                                    &p->props.src_length);
+                        if (p->props.src_max) {
+                            p->props.range_known |= CONNECTION_RANGE_SRC_MAX;
+                            p->flags |= CONNECTION_SRC_LENGTH;
+                            p->flags |= CONNECTION_SRC_TYPE;
                         }
                     }
                     else if (strcmp(s, "dest_min")==0) {
-                        alloc_and_copy_maybe_vector(v, &p.props.dest_type,
-                                                    &p.props.range.dest_min,
-                                                    &p.props.dest_length);
-                        if (p.props.range.dest_min) {
-                            p.props.range.known |= CONNECTION_RANGE_DEST_MIN;
-                            p.flags |= CONNECTION_DEST_LENGTH;
-                            p.flags |= CONNECTION_DEST_TYPE;
+                        alloc_and_copy_maybe_vector(v, &p->props.dest_type,
+                                                    &p->props.dest_min,
+                                                    &p->props.dest_length);
+                        if (p->props.dest_min) {
+                            p->props.range_known |= CONNECTION_RANGE_DEST_MIN;
+                            p->flags |= CONNECTION_DEST_LENGTH;
+                            p->flags |= CONNECTION_DEST_TYPE;
                         }
                     }
                     else if (strcmp(s, "dest_max")==0) {
-                        alloc_and_copy_maybe_vector(v, &p.props.dest_type,
-                                                    &p.props.range.dest_max,
-                                                    &p.props.dest_length);
-                        if (p.props.range.dest_max) {
-                            p.props.range.known |= CONNECTION_RANGE_DEST_MAX;
-                            p.flags |= CONNECTION_DEST_LENGTH;
-                            p.flags |= CONNECTION_DEST_TYPE;
+                        alloc_and_copy_maybe_vector(v, &p->props.dest_type,
+                                                    &p->props.dest_max,
+                                                    &p->props.dest_length);
+                        if (p->props.dest_max) {
+                            p->props.range_known |= CONNECTION_RANGE_DEST_MAX;
+                            p->flags |= CONNECTION_DEST_LENGTH;
+                            p->flags |= CONNECTION_DEST_TYPE;
                         }
                     }
-                    p.flags |= p.props.range.known;
+                    p->flags |= p->props.range_known;
                 }
             }
             Py_DECREF(keys);
-            $1 = &p;
+            $1 = p;
         }
     }
     else {
@@ -309,14 +309,14 @@
 
 %typemap(freearg) mapper_db_connection_with_flags_t* {
     if ($1) {
-        if ($1->props.range.known & CONNECTION_RANGE_SRC_MIN)
-            free($1->props.range.src_min);
-        if ($1->props.range.known & CONNECTION_RANGE_SRC_MAX)
-            free($1->props.range.src_max);
-        if ($1->props.range.known | CONNECTION_RANGE_DEST_MIN)
-            free($1->props.range.dest_min);
-        if ($1->props.range.known | CONNECTION_RANGE_DEST_MAX)
-            free($1->props.range.dest_max);
+        if ($1->props.range_known & CONNECTION_RANGE_SRC_MIN)
+            free($1->props.src_min);
+        if ($1->props.range_known & CONNECTION_RANGE_SRC_MAX)
+            free($1->props.src_max);
+        if ($1->props.range_known | CONNECTION_RANGE_DEST_MIN)
+            free($1->props.dest_min);
+        if ($1->props.range_known | CONNECTION_RANGE_DEST_MAX)
+            free($1->props.dest_max);
     }
 }
 
@@ -429,19 +429,19 @@ static int py_to_prop(PyObject *from, void *to, char type, int length)
         {
             // only strings are valid
             if (length > 1) {
-                char ***str_to = (char***)to;
+                char **str_to = (char**)to;
                 for (i=0; i<length; i++) {
                     PyObject *element = PySequence_GetItem(from, i);
                     if (!PyString_Check(element))
                         return 1;
-                    (*str_to)[i] = strdup(PyString_AsString(element));
+                    str_to[i] = strdup(PyString_AsString(element));
                 }
             }
             else {
                 if (!PyString_Check(from))
                     return 1;
                 char **str_to = (char**)to;
-                *str_to = PyString_AsString(from);
+                *str_to = strdup(PyString_AsString(from));
             }
             break;
         }
@@ -1191,13 +1191,19 @@ typedef enum {
     IN_OVERFLOW             = 0x08  //!< No local instances left for incoming remote instance.
 } msig_instance_event_t;
 
-/*! Possible monitor auto-request settings. */
-typedef enum {
-    AUTOREQ_SIGNALS     = 0x01,
-    AUTOREQ_LINKS       = 0x02,
-    AUTOREQ_CONNECTIONS = 0x04,
-    AUTOREQ_ALL         = 0xFF
-} mapper_monitor_autoreq_mode_t;
+/*! Possible monitor auto-subscribe settings. */
+%constant int SUB_NONE                    = 0x00;
+%constant int SUB_DEVICE                  = 0x01;
+%constant int SUB_DEVICE_INPUTS           = 0x02;
+%constant int SUB_DEVICE_OUTPUTS          = 0x04;
+%constant int SUB_DEVICE_SIGNALS          = 0x06; //!< SUB_DEVICE_INPUTS & SUB_DEVICE_OUTPUTS
+%constant int SUB_DEVICE_LINKS_IN         = 0x08;
+%constant int SUB_DEVICE_LINKS_OUT        = 0x10;
+%constant int SUB_DEVICE_LINKS            = 0x18; //!< SUB_DEVICE_LINKS_IN & SUB_DEVICE_LINKS_OUT
+%constant int SUB_DEVICE_CONNECTIONS_IN   = 0x20;
+%constant int SUB_DEVICE_CONNECTIONS_OUT  = 0x40;
+%constant int SUB_DEVICE_CONNECTIONS      = 0x60; //!< SUB_DEVICE_CONNECTIONS_IN & SUB_DEVICE_CONNECTION_OUT
+%constant int SUB_DEVICE_ALL              = 0xFF;
 
 /*! The set of possible actions on a database record, used
  *  to inform callbacks of what is happening to a record. */
@@ -1205,6 +1211,7 @@ typedef enum {
     MDB_MODIFY,
     MDB_NEW,
     MDB_REMOVE,
+    MDB_UNRESPONSIVE,
 } mapper_db_action_t;
 
 typedef enum {
@@ -1260,7 +1267,7 @@ typedef struct _admin {} admin;
         {
             if (minimum && minimum->length == length) {
                 if (minimum->type == 'f')
-                    pmn = &minimum->value;
+                    pmn = minimum->value;
                 else if (minimum->type == 'i') {
                     float *to = (float*)malloc(length * sizeof(float));
                     int *from = (int*)minimum->value;
@@ -1273,7 +1280,7 @@ typedef struct _admin {} admin;
             }
             if (maximum && maximum->length == length) {
                 if (maximum->type == 'f')
-                    pmx = &maximum->value;
+                    pmx = maximum->value;
                 else if (maximum->type == 'i') {
                     float *to = (float*)malloc(length * sizeof(float));
                     int *from = (int*)maximum->value;
@@ -1289,7 +1296,7 @@ typedef struct _admin {} admin;
         {
             if (minimum && minimum->length == length) {
                 if (minimum->type == 'i')
-                    pmn = &minimum->value;
+                    pmn = minimum->value;
                 else if (minimum->type == 'f') {
                     int *to = (int*)malloc(length * sizeof(int));
                     float *from = (float*)minimum->value;
@@ -1302,7 +1309,7 @@ typedef struct _admin {} admin;
             }
             if (maximum && maximum->length == length) {
                 if (maximum->type == 'i')
-                    pmx = &maximum->value;
+                    pmx = maximum->value;
                 else if (maximum->type == 'f') {
                     int *to = (int*)malloc(length * sizeof(int));
                     float *from = (float*)maximum->value;
@@ -1334,7 +1341,7 @@ typedef struct _admin {} admin;
         {
             if (minimum && minimum->length == length) {
                 if (minimum->type == 'f')
-                    pmn = &minimum->value;
+                    pmn = minimum->value;
                 else if (minimum->type == 'i') {
                     float *to = (float*)malloc(length * sizeof(float));
                     int *from = (int*)minimum->value;
@@ -1347,7 +1354,7 @@ typedef struct _admin {} admin;
             }
             if (maximum && maximum->length == length) {
                 if (maximum->type == 'f')
-                    pmx = &maximum->value;
+                    pmx = maximum->value;
                 else if (maximum->type == 'i') {
                     float *to = (float*)malloc(length * sizeof(float));
                     int *from = (int*)maximum->value;
@@ -1363,7 +1370,7 @@ typedef struct _admin {} admin;
         {
             if (minimum && minimum->length == length) {
                 if (minimum->type == 'i')
-                    pmn = &minimum->value;
+                    pmn = minimum->value;
                 else if (minimum->type == 'f') {
                     int *to = (int*)malloc(length * sizeof(int));
                     float *from = (float*)minimum->value;
@@ -1376,7 +1383,7 @@ typedef struct _admin {} admin;
             }
             if (maximum && maximum->length == length) {
                 if (maximum->type == 'i')
-                    pmx = &maximum->value;
+                    pmx = maximum->value;
                 else if (maximum->type == 'f') {
                     int *to = (int*)malloc(length * sizeof(int));
                     float *from = (float*)maximum->value;
@@ -1444,6 +1451,9 @@ typedef struct _admin {} admin;
     signal *get_output_by_index(int index) {
         return (signal *)mdev_get_output_by_index((mapper_device)$self, index);
     }
+    mapper_db_device get_properties() {
+        return mdev_properties((mapper_device)$self);
+    }
     void set_property(const char *key, maybePropVal val=0) {
         if (val)
             mdev_set_property((mapper_device)$self, key, val->type,
@@ -1498,19 +1508,17 @@ typedef struct _admin {} admin;
         num_inputs = property(get_num_inputs)
         num_outputs = property(get_num_outputs)
         def __propgetter(self):
-            signal = self
-            props = {}
+            device = self
+            props = self.get_properties()
             class propsetter(dict):
                 __getitem__ = props.__getitem__
                 def __setitem__(self, key, value):
                     props[key] = value
-                    signal.set_property(key, value)
-            return propsetter({})
+                    device.set_property(key, value)
+            return propsetter(self.get_properties())
         properties = property(__propgetter)
         def set_properties(self, props):
-            for k in props:
-                print 'prop', k, props[k]
-                self.set_property(k, props[k])
+            [self.set_property(k, props[k]) for k in props]
     }
 }
 
@@ -1771,9 +1779,9 @@ typedef struct _admin {} admin;
 }
 
 %extend _monitor {
-    _monitor(admin *DISOWN=0, mapper_monitor_autoreq_mode_t autorequest=0xFF) {
+    _monitor(admin *DISOWN=0, int autosubscribe_flags=0x00) {
         return (monitor *)mapper_monitor_new((mapper_admin) DISOWN,
-                                             autorequest);
+                                             autosubscribe_flags);
     }
     ~_monitor() {
         mapper_monitor_free((mapper_monitor)$self);
@@ -1787,41 +1795,18 @@ typedef struct _admin {} admin;
     db *get_db() {
         return (db *)mapper_monitor_get_db((mapper_monitor)$self);
     }
-    void autorequest(mapper_monitor_autoreq_mode_t autorequest) {
-        mapper_monitor_autorequest((mapper_monitor)$self, autorequest);
+    void autosubscribe(int autosubscribe_flags) {
+        mapper_monitor_autosubscribe((mapper_monitor)$self, autosubscribe_flags);
     }
-    int request_devices() {
-        return mapper_monitor_request_devices((mapper_monitor)$self);
+    void subscribe(const char *name, int subscribe_flags=0, int timeout=0) {
+        return mapper_monitor_subscribe((mapper_monitor)$self, name,
+                                        subscribe_flags, timeout);
     }
-    int request_device_info(const char* name) {
-        return mapper_monitor_request_device_info((mapper_monitor)$self, name);
+    void unsubscribe(const char *name) {
+        return mapper_monitor_unsubscribe((mapper_monitor)$self, name);
     }
-    int request_signals_by_device_name(const char* name) {
-        return mapper_monitor_request_signals_by_device_name((mapper_monitor)$self, name);
-    }
-    int request_input_signals_by_device_name(const char* name) {
-        return mapper_monitor_request_input_signals_by_device_name((mapper_monitor)$self, name);
-    }
-    int request_output_signals_by_device_name(const char* name) {
-        return mapper_monitor_request_output_signals_by_device_name((mapper_monitor)$self, name);
-    }
-    int request_links_by_device_name(const char* name) {
-        return mapper_monitor_request_links_by_device_name((mapper_monitor)$self, name);
-    }
-    int request_links_by_src_device_name(const char* name) {
-        return mapper_monitor_request_links_by_src_device_name((mapper_monitor)$self, name);
-    }
-    int request_links_by_dest_device_name(const char* name) {
-        return mapper_monitor_request_links_by_dest_device_name((mapper_monitor)$self, name);
-    }
-    int request_connections_by_device_name(const char* name) {
-        return mapper_monitor_request_connections_by_device_name((mapper_monitor)$self, name);
-    }
-    int request_connections_by_src_device_name(const char* name) {
-        return mapper_monitor_request_connections_by_src_device_name((mapper_monitor)$self, name);
-    }
-    int request_connections_by_dest_device_name(const char* name) {
-        return mapper_monitor_request_connections_by_dest_device_name((mapper_monitor)$self, name);
+    void request_devices() {
+        mapper_monitor_request_devices((mapper_monitor)$self);
     }
     void link(const char* source_device,
               const char* dest_device,
@@ -1836,17 +1821,14 @@ typedef struct _admin {} admin;
     void unlink(const char* source_device, const char* dest_device) {
         mapper_monitor_unlink((mapper_monitor)$self, source_device, dest_device);
     }
-    void modify(mapper_db_connection_with_flags_t *properties) {
+    void modify_connection(const char* source_signal,
+                           const char* dest_signal,
+                           mapper_db_connection_with_flags_t *properties) {
         if (properties)
         {
-            if (!properties->props.src_name || !properties->props.dest_name)
-                SWIG_exception_fail(SWIG_ValueError,
-                                    "modify() requires 'src_name' and "
-                                    "'dest_name' in properties dict");
-            mapper_monitor_connection_modify((mapper_monitor)$self, &properties->props,
+            mapper_monitor_connection_modify((mapper_monitor)$self, source_signal,
+                                             dest_signal, &properties->props,
                                              properties->flags);
-          fail:
-            ;
         }
     }
     void connect(const char* source_signal,
@@ -1867,6 +1849,9 @@ typedef struct _admin {} admin;
         mapper_timetag_t tt;
         mapper_monitor_now((mapper_monitor)$self, &tt);
         return mapper_timetag_get_double(tt);
+    }
+    void flush(int timeout = ADMIN_TIMEOUT_SEC, int quiet = 1) {
+        mapper_monitor_flush_db((mapper_monitor)$self, timeout, quiet);
     }
     %pythoncode {
         db = property(get_db)
@@ -2086,5 +2071,8 @@ typedef struct _admin {} admin;
     }
     ~_admin() {
         mapper_admin_free((mapper_admin)$self);
+    }
+    const char *libversion() {
+        return mapper_admin_libversion((mapper_admin)$self);
     }
 }

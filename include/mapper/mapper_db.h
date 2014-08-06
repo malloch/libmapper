@@ -87,29 +87,6 @@ typedef struct _mapper_db_device {
 #define CONNECTION_PROTO_UDP        LO_UDP
 #define CONNECTION_PROTO_TCP        LO_TCP
 
-/*! A signal value may be one of several different types, so we use a
- *  union to represent this.  The appropriate selection from this
- *  union is determined by the mapper_signal::type variable.
- *  @ingroup signaldb */
-
-typedef union _mapper_signal_value {
-    float f;
-    double d;
-    int i32;
-} mapper_signal_value_t, mval;
-
-/*! A structure to keep range information, with a bitfield indicating
- *  which parts of the range are known.
- *  @ingroup connectiondb */
-typedef struct _mapper_connection_range {
-    void *src_min;      //!< Array of source minima.
-    void *src_max;      //!< Array of source maxima.
-    void *dest_min;     //!< Destination minimum.
-    void *dest_max;     //!< Destination maximum.
-    int known;          /*!< Bitfield identifying which range
-                         *   extremities are known. */
-} mapper_connection_range_t;
-
 /*! Describes what happens when the range boundaries are
  *  exceeded.
  *  @ingroup connectiondb */
@@ -169,7 +146,13 @@ typedef struct _mapper_db_connection {
 
     int send_as_instance;       //!< 1 to send as instance, 0 otherwise.
 
-    mapper_connection_range_t range;  //!< Range information.
+    void *src_min;              //!< Array of source minima.
+    void *src_max;              //!< Array of source maxima.
+    void *dest_min;             //!< Array of destination minima.
+    void *dest_max;             //!< Array of destination maxima.
+    int range_known;            /*!< Bitfield identifying which range
+                                 *   extremities are known. */
+
     char *expression;
 
     mapper_mode_type mode;      /*!< Bypass, linear, calibrate, or
@@ -205,9 +188,7 @@ typedef struct _mapper_signal_history
     void *value;
 
     /*! Timetag for each sample of stored history. */
-    // TODO: switch to mapper_timetag_t;
-    //mapper_timetag_t *timetag;
-    lo_timetag *timetag;
+    mapper_timetag_t *timetag;
 
     struct _mapper_signal_history *next;
 } mapper_signal_history_t;
@@ -231,9 +212,6 @@ typedef struct _mapper_db_signal
 
     /*! Number of instances. */
     int num_instances;
-
-    /*! Size of the history vector. */
-    int history_size;
 
     /*! The name of this signal, an OSC path.  Must start with '/'. */
     char *name;

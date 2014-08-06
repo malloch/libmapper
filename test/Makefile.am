@@ -1,5 +1,6 @@
 
 TEST_CFLAGS = -Wall -I$(top_srcdir)/include $(liblo_CFLAGS)
+TEST_CXXFLAGS = -Wall -I$(top_srcdir)/include $(liblo_CXXFLAGS)
 
 if WINDOWS_DLL
 TEST_LDADD = $(top_builddir)/src/*.lo $(liblo_LIBS)
@@ -7,11 +8,17 @@ else
 TEST_LDADD = $(top_builddir)/src/libmapper-@MAJOR_VERSION@.la $(liblo_LIBS)
 endif
 
-noinst_PROGRAMS = test testadmin testconnectionproto testcustomtransport \
+noinst_PROGRAMS = test testadmin testconnectionproto testcpp testcustomtransport \
                   testdb testexpression testinstance testlinear testmany \
                   testmonitor testparams testparser testprops testqueue \
                   testquery testrate testrecv testreverse testselect \
                   testsend testsignals testspeed testsync testvector
+
+test_all_ordered = testparams testprops testdb testparser testadmin testmany \
+                   testsend testrecv test testlinear testexpression testqueue \
+                   testquery testrate testinstance testreverse testselect \
+                   testvector testcustomtransport testspeed testsync testcpp \
+                   testconnectionproto
 
 test_CFLAGS = $(TEST_CFLAGS)
 test_SOURCES = test.c
@@ -24,6 +31,10 @@ testadmin_LDADD = $(TEST_LDADD)
 testconnectionproto_CFLAGS = $(TEST_CFLAGS)
 testconnectionproto_SOURCES = testconnectionproto.c
 testconnectionproto_LDADD = $(TEST_LDADD)
+
+testcpp_CXXFLAGS = $(TEST_CXXFLAGS)
+testcpp_SOURCES = testcpp.cpp
+testcpp_LDADD = $(TEST_LDADD)
 
 testcustomtransport_CFLAGS = $(TEST_CFLAGS)
 testcustomtransport_SOURCES = testcustomtransport.c
@@ -108,3 +119,10 @@ testsync_LDADD = $(TEST_LDADD)
 testvector_CFLAGS = $(TEST_CFLAGS)
 testvector_SOURCES = testvector.c
 testvector_LDADD = $(TEST_LDADD)
+
+tests: all
+	for i in $(test_all_ordered); do echo Running $$i; if ! ./$$i -qt; then exit 1; fi; done
+	echo Running testmonitor and testsignals; ./testmonitor -t & ./testsignals
+
+memtest: all
+	for i in $(noinst_PROGRAMS); do echo Running $$i; if ! LD_PRELOAD=/usr/local/lib/libmapper-0.2.dylib valgrind --leakcheck=full ./.libs/$$i -qt; then exit 1; fi; done

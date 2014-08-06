@@ -17,18 +17,21 @@ static void mapper_router_send_or_bundle_message(mapper_router router,
                                                  int send_tcp);
 
 mapper_router mapper_router_new(mapper_device device, const char *host,
-                                int port, const char *name)
+                                int admin_port, int data_port,
+                                const char *name)
 {
     char str[16];
     mapper_router r = (mapper_router) calloc(1, sizeof(struct _mapper_link));
     r->props.src_name = strdup(mdev_name(device));
     r->props.dest_host = strdup(host);
-    r->props.dest_port = port;
-    sprintf(str, "%d", port);
+    r->props.dest_port = data_port;
+    sprintf(str, "%d", data_port);
+    r->data_addr_udp = lo_address_new(host, str);
+    r->data_addr_tcp = lo_address_new_with_proto(LO_TCP, host, str);
+    lo_address_set_tcp_nodelay(r->data_addr_tcp, 1);
 
-    r->remote_addr_udp = lo_address_new(host, str);
-    r->remote_addr_tcp = lo_address_new_with_proto(LO_TCP, host, str);
-    lo_address_set_tcp_nodelay(r->remote_addr_tcp, 1);
+    sprintf(str, "%d", admin_port);
+    r->admin_addr = lo_address_new(host, str);
 
     r->props.dest_name = strdup(name);
     r->props.dest_name_hash = crc32(0L, (const Bytef *)name, strlen(name));
@@ -44,7 +47,7 @@ mapper_router mapper_router_new(mapper_device device, const char *host,
     r->signals = 0;
     r->n_connections = 0;
 
-    if (!r->remote_addr_udp || !r->remote_addr_tcp) {
+    if (!r->data_addr_udp || !r->data_addr_tcp) {
         mapper_router_free(r);
         return 0;
     }
@@ -62,10 +65,12 @@ void mapper_router_free(mapper_router r)
             free(r->props.dest_host);
         if (r->props.dest_name)
             free(r->props.dest_name);
-        if (r->remote_addr_udp)
-            lo_address_free(r->remote_addr_udp);
-        if (r->remote_addr_tcp)
-            lo_address_free(r->remote_addr_tcp);
+        if (r->data_addr_udp)
+            lo_address_free(r->data_addr_udp);
+        if (r->data_addr_tcp)
+            lo_address_free(r->data_addr_tcp);
+        if (r->admin_addr)
+            lo_address_free(r->admin_addr);
         while (r->signals && r->signals->connections) {
             // router_signal is freed with last child connection
             mapper_router_remove_connection(r, r->signals->connections);
@@ -155,11 +160,11 @@ void mapper_router_num_instances_changed(mapper_router r,
     for (i=rs->num_instances; i<size; i++) {
         rs->history[i].type = sig->props.type;
         rs->history[i].length = sig->props.length;
-        rs->history[i].size = sig->props.history_size;
+        rs->history[i].size = rs->history_size;
         rs->history[i].value = calloc(1, msig_vector_bytes(sig)
-                                      * sig->props.history_size);
+                                      * rs->history_size);
         rs->history[i].timetag = calloc(1, sizeof(mapper_timetag_t)
-                                        * sig->props.history_size);
+                                        * rs->history_size);
         rs->history[i].position = -1;
     }
 
@@ -209,6 +214,11 @@ void mapper_router_process_signal(mapper_router r,
 
     if (!value) {
         rs->history[id].position = -1;
+        // reset associated input memory for this instance
+        memset(rs->history[id].value, 0, rs->history_size *
+               msig_vector_bytes(rs->signal));
+        memset(rs->history[id].timetag, 0, rs->history_size *
+               sizeof(mapper_timetag_t));
         c = rs->connections;
         while (c) {
             c->history[id].position = -1;
@@ -216,6 +226,11 @@ void mapper_router_process_signal(mapper_router r,
                 (!c->props.send_as_instance || in_scope))
                 mapper_router_send_update(r, c, id, c->props.send_as_instance ?
                                           map : 0, tt, 0);
+            // also need to reset associated output memory
+            memset(c->history[id].value, 0, c->props.dest_history_size *
+                   c->props.dest_length * mapper_type_size(c->props.dest_type));
+            memset(c->history[id].timetag, 0, c->props.dest_history_size *
+                   sizeof(mapper_timetag_t));
 
             c = c->next;
         }
@@ -294,7 +309,7 @@ void mapper_router_send_update(mapper_router r,
                                lo_blob blob)
 {
     int i;
-    if (!r->remote_addr_udp || !r->remote_addr_tcp)
+    if (!r->data_addr_udp || !r->data_addr_tcp)
         return;
 
     lo_message m = lo_message_new();
@@ -395,9 +410,9 @@ void mapper_router_send_or_bundle_message(mapper_router r, const char *path,
         lo_bundle_add_message(b, path, m);
 
         if (send_tcp)
-            lo_send_bundle_from(r->remote_addr_tcp, r->device->tcp_server, b);
+            lo_send_bundle_from(r->data_addr_tcp, r->device->tcp_server, b);
         else
-            lo_send_bundle_from(r->remote_addr_udp, r->device->udp_server, b);
+            lo_send_bundle_from(r->data_addr_udp, r->device->udp_server, b);
         lo_bundle_free_messages(b);
     }
 }
@@ -451,10 +466,10 @@ void mapper_router_send_queue(mapper_router r,
         if (lo_bundle_count(q->bundle)) {
 #endif
             if (q->send_tcp)
-                lo_send_bundle_from(r->remote_addr_tcp, r->device->tcp_server,
+                lo_send_bundle_from(r->data_addr_tcp, r->device->tcp_server,
                                     q->bundle);
             else
-                lo_send_bundle_from(r->remote_addr_udp, r->device->udp_server,
+                lo_send_bundle_from(r->data_addr_udp, r->device->udp_server,
                                     q->bundle);
         }
         lo_bundle_free_messages(q->bundle);
@@ -510,10 +525,11 @@ mapper_connection mapper_router_add_connection(mapper_router r,
     c->props.muted = 0;
     c->props.send_as_instance = (rs->num_instances > 1);
 
-    c->props.range.src_min = 0;
-    c->props.range.src_max = 0;
-    c->props.range.dest_min = 0;
-    c->props.range.dest_max = 0;
+    c->props.src_min = 0;
+    c->props.src_max = 0;
+    c->props.dest_min = 0;
+    c->props.dest_max = 0;
+    c->props.range_known = 0;
 
     c->props.protocol = LO_UDP;
     c->props.extra = table_new();
@@ -560,14 +576,14 @@ static void mapper_router_free_connection(mapper_router r,
             free(c->props.expression);
         if (c->props.query_name)
             free(c->props.query_name);
-        if (c->props.range.src_min)
-            free(c->props.range.src_min);
-        if (c->props.range.src_max)
-            free(c->props.range.src_max);
-        if (c->props.range.dest_min)
-            free(c->props.range.dest_min);
-        if (c->props.range.dest_max)
-            free(c->props.range.dest_max);
+        if (c->props.src_min)
+            free(c->props.src_min);
+        if (c->props.src_max)
+            free(c->props.src_max);
+        if (c->props.dest_min)
+            free(c->props.dest_min);
+        if (c->props.dest_max)
+            free(c->props.dest_max);
         table_free(c->props.extra, 1);
         for (i=0; i<c->parent->num_instances; i++) {
             free(c->history[i].value);

@@ -11,17 +11,21 @@
 #include <mapper/mapper.h>
 
 mapper_receiver mapper_receiver_new(mapper_device device, const char *host,
-                                    int port, const char *name)
+                                    int admin_port, int data_port,
+                                    const char *name)
 {
     char str[16];
     mapper_receiver r = (mapper_receiver) calloc(1, sizeof(struct _mapper_link));
     r->props.src_host = strdup(host);
-    r->props.src_port = port;
-    sprintf(str, "%d", port);
 
-    r->remote_addr_udp = lo_address_new(host, str);
-    r->remote_addr_tcp = lo_address_new_with_proto(LO_TCP, host, str);
-    lo_address_set_tcp_nodelay(r->remote_addr_tcp, 1);
+    r->props.src_port = data_port;
+    sprintf(str, "%d", data_port);
+    r->data_addr_udp = lo_address_new(host, str);
+    r->data_addr_tcp = lo_address_new_with_proto(LO_TCP, host, str);
+    lo_address_set_tcp_nodelay(r->data_addr_tcp, 1);
+
+    sprintf(str, "%d", admin_port);
+    r->admin_addr = lo_address_new(host, str);
 
     r->props.src_name = strdup(name);
     r->props.src_name_hash = crc32(0L, (const Bytef *)name, strlen(name));
@@ -38,7 +42,7 @@ mapper_receiver mapper_receiver_new(mapper_device device, const char *host,
     r->signals = 0;
     r->n_connections = 0;
 
-    if (!r->remote_addr_udp || !r->remote_addr_tcp) {
+    if (!r->data_addr_udp || !r->data_addr_tcp) {
         mapper_receiver_free(r);
         return 0;
     }
@@ -54,10 +58,12 @@ void mapper_receiver_free(mapper_receiver r)
             free(r->props.src_name);
         if (r->props.src_host)
             free(r->props.src_host);
-        if (r->remote_addr_udp)
-            lo_address_free(r->remote_addr_udp);
-        if (r->remote_addr_tcp)
-            lo_address_free(r->remote_addr_tcp);
+        if (r->data_addr_udp)
+            lo_address_free(r->data_addr_udp);
+        if (r->data_addr_tcp)
+            lo_address_free(r->data_addr_tcp);
+        if (r->admin_addr)
+            lo_address_free(r->admin_addr);
         if (r->props.dest_name)
             free(r->props.dest_name);
         while (r->signals && r->signals->connections) {
@@ -253,9 +259,9 @@ void mapper_receiver_send_update(mapper_receiver r,
         c = c->next;
     }
     if (send_tcp)
-        lo_send_bundle_from(r->remote_addr_tcp, r->device->tcp_server, b);
+        lo_send_bundle_from(r->data_addr_tcp, r->device->tcp_server, b);
     else
-        lo_send_bundle_from(r->remote_addr_udp, r->device->udp_server, b);
+        lo_send_bundle_from(r->data_addr_udp, r->device->udp_server, b);
     lo_bundle_free_messages(b);
 }
 
@@ -294,7 +300,7 @@ void mapper_receiver_send_released(mapper_receiver r, mapper_signal sig,
 
     // always send using TCP??
     if (lo_bundle_count(b))
-        lo_send_bundle_from(r->remote_addr_tcp, r->device->tcp_server, b);
+        lo_send_bundle_from(r->data_addr_tcp, r->device->tcp_server, b);
 
     lo_bundle_free_messages(b);
 }
@@ -334,10 +340,11 @@ mapper_connection mapper_receiver_add_connection(mapper_receiver r,
     c->props.bound_max = BA_NONE;
     c->props.muted = 0;
 
-    c->props.range.src_min = 0;
-    c->props.range.src_max = 0;
-    c->props.range.dest_min = 0;
-    c->props.range.dest_max = 0;
+    c->props.src_min = 0;
+    c->props.src_max = 0;
+    c->props.dest_min = 0;
+    c->props.dest_max = 0;
+    c->props.range_known = 0;
 
     c->props.extra = table_new();
 
@@ -368,14 +375,14 @@ static void mapper_receiver_free_connection(mapper_receiver r, mapper_connection
             free(c->props.expression);
         if (c->props.query_name)
             free(c->props.query_name);
-        if (c->props.range.src_min)
-            free(c->props.range.src_min);
-        if (c->props.range.src_max)
-            free(c->props.range.src_max);
-        if (c->props.range.dest_min)
-            free(c->props.range.dest_min);
-        if (c->props.range.dest_max)
-            free(c->props.range.dest_max);
+        if (c->props.src_min)
+            free(c->props.src_min);
+        if (c->props.src_max)
+            free(c->props.src_max);
+        if (c->props.dest_min)
+            free(c->props.dest_min);
+        if (c->props.dest_max)
+            free(c->props.dest_max);
         table_free(c->props.extra, 1);
         for (i=0; i<c->parent->num_instances; i++) {
             free(c->history[i].value);
