@@ -29,6 +29,9 @@
 #include "config.h"
 #include <mapper/mapper.h>
 
+#define DEST_BUS            0
+#define DEST_SUBSCRIBERS    (void*)-1
+
 /*! Internal function to get the current time. */
 static double get_current_time()
 {
@@ -188,9 +191,13 @@ const int N_DEVICE_BUS_HANDLERS =
     sizeof(device_bus_handlers)/sizeof(device_bus_handlers[0]);
 
 static struct handler_method_assoc device_mesh_handlers[] = {
+    {ADM_LINKED,                NULL,       handler_device_linked},
+    {ADM_UNLINKED,              NULL,       handler_device_unlinked},
     {ADM_SUBSCRIBE,             NULL,       handler_device_subscribe},
     {ADM_UNSUBSCRIBE,           NULL,       handler_device_unsubscribe},
     {ADM_CONNECT_TO,            NULL,       handler_signal_connectTo},
+    {ADM_CONNECTED,             NULL,       handler_signal_connected},
+    {ADM_DISCONNECTED,          "ss",       handler_signal_disconnected},
     {ADM_LINK_PING,             "si",       handler_device_link_ping},
 };
 const int N_DEVICE_MESH_HANDLERS =
@@ -528,7 +535,7 @@ mapper_admin mapper_admin_new(const char *iface, const char *group, int port)
 
     // Also open address/server for mesh-style admin communications
     // TODO: use TCP instead?
-    while (!(admin->mesh_server = lo_server_new(0, liblo_error_handler))) {}
+    while (!(admin->mesh_server = lo_server_new_with_proto(0, LO_TCP, liblo_error_handler))) {}
 
     // Disable liblo message queueing.
     lo_server_enable_queue(admin->bus_server, 0, 1);
@@ -550,7 +557,7 @@ void mapper_admin_send_bundle(mapper_admin admin)
     if (!admin->bundle)
         return;
 
-    if (admin->bundle_dest == (void*)-1) {
+    if (admin->bundle_dest == DEST_SUBSCRIBERS) {
         mapper_admin_subscriber *s = &admin->subscribers;
         if (*s) {
             mapper_clock_now(&admin->clock, &admin->clock.now);
@@ -571,10 +578,11 @@ void mapper_admin_send_bundle(mapper_admin admin)
             s = &(*s)->next;
         }
     }
-    else if (admin->bundle_dest == 0) {
-        lo_send_bundle_from(admin->bus_addr, admin->mesh_server, admin->bundle);
+    else if (admin->bundle_dest == DEST_BUS) {
+        lo_send_bundle_from(admin->bus_addr, admin->bus_server, admin->bundle);
     }
     else {
+        // specific mesh destination stored in admin->bundle_dest
         lo_send_bundle_from(admin->bundle_dest, admin->mesh_server, admin->bundle);
     }
     lo_bundle_free_messages(admin->bundle);
@@ -598,15 +606,17 @@ static int mapper_admin_init_bundle(mapper_admin admin)
 
 void mapper_admin_set_bundle_dest_bus(mapper_admin admin)
 {
-    if (admin->bundle && admin->bundle_dest != 0)
+    if (admin->bundle && admin->bundle_dest != DEST_BUS)
         mapper_admin_send_bundle(admin);
-    admin->bundle_dest = 0;
+    admin->bundle_dest = DEST_BUS;
     if (!admin->bundle)
         mapper_admin_init_bundle(admin);
 }
 
 void mapper_admin_set_bundle_dest_mesh(mapper_admin admin, lo_address address)
 {
+    if (address == 0)
+        mapper_admin_set_bundle_dest_bus(admin);
     if (admin->bundle && admin->bundle_dest != address)
         mapper_admin_send_bundle(admin);
     admin->bundle_dest = address;
@@ -616,10 +626,10 @@ void mapper_admin_set_bundle_dest_mesh(mapper_admin admin, lo_address address)
 
 void mapper_admin_set_bundle_dest_subscribers(mapper_admin admin, int type)
 {
-    if ((admin->bundle && admin->bundle_dest != (void*)-1) ||
+    if ((admin->bundle && admin->bundle_dest != DEST_SUBSCRIBERS) ||
         (admin->message_type != type))
         mapper_admin_send_bundle(admin);
-    admin->bundle_dest = (void*)-1;
+    admin->bundle_dest = DEST_SUBSCRIBERS;
     admin->message_type = type;
     if (!admin->bundle)
         mapper_admin_init_bundle(admin);
@@ -1047,6 +1057,7 @@ static void mapper_admin_send_device(mapper_admin admin,
         admin, ADM_DEVICE, 0, "s", mdev_name(device),
         AT_LIB_VERSION, PACKAGE_VERSION,
         AT_PORT, device->props.port,
+        AT_ADMIN_PORT, lo_server_get_port(admin->mesh_server),
         AT_NUM_INPUTS, mdev_num_inputs(device),
         AT_NUM_OUTPUTS, mdev_num_outputs(device),
         AT_NUM_LINKS_IN, mdev_num_links_in(device),
@@ -1135,6 +1146,8 @@ static void mapper_admin_send_linked(mapper_admin admin,
         lo_message_add_int32(m, link->device->props.port);
         lo_message_add_string(m, "@destPort");
         lo_message_add_int32(m, link->props.dest_port);
+        lo_message_add_string(m, "@adminPort");
+        lo_message_add_int32(m, lo_server_get_port(admin->mesh_server));
     }
     else {
         lo_message_add_string(m, link->props.src_name);
@@ -1403,13 +1416,11 @@ static int handler_logout(const char *path, const char *types,
 }
 
 // Add/renew/remove a monitor subscription.
-static void mapper_admin_manage_subscriber(mapper_admin admin, lo_address address,
-                                           int flags, int timeout_seconds,
+static void mapper_admin_manage_subscriber(mapper_admin admin, const char *ip,
+                                           const char *port, int flags, int timeout_seconds,
                                            int revision)
 {
     mapper_admin_subscriber *s = &admin->subscribers;
-    const char *ip = lo_address_get_hostname(address);
-    const char *port = lo_address_get_port(address);
     if (!ip || !port)
         return;
 
@@ -1455,7 +1466,7 @@ static void mapper_admin_manage_subscriber(mapper_admin admin, lo_address addres
     if (!(*s)) {
         // add new subscriber
         mapper_admin_subscriber sub = malloc(sizeof(struct _mapper_admin_subscriber));
-        sub->address = lo_address_new(ip, port);
+        sub->address = lo_address_new_with_proto(LO_TCP, ip, port);
         sub->lease_expiration_sec = clock->now.sec + timeout_seconds;
         sub->flags = flags;
         sub->next = admin->subscribers;
@@ -1496,7 +1507,7 @@ static int handler_device_subscribe(const char *path, const char *types,
     lo_address a  = lo_message_get_source(msg);
     if (!a || !argc) return 0;
 
-    int i, flags = 0, timeout_seconds = 0;
+    int i, flags = 0, port = 0, timeout_seconds = 0;
     for (i = 0; i < argc; i++) {
         if (types[i] != 's' && types[i] != 'S')
             break;
@@ -1541,9 +1552,17 @@ static int handler_device_subscribe(const char *path, const char *types,
             }
         }
     }
+    mapper_message_t params;
+    mapper_msg_parse_params(&params, path, &types[2],
+                            argc-2, &argv[2]);
+    mapper_msg_get_param_if_int(&params, AT_ADMIN_PORT, &port);
+    char port_str[16];
+    snprintf(port_str, 16, "%i", port);
 
     // add or renew subscription
-    mapper_admin_manage_subscriber(admin, a, flags, timeout_seconds, version);
+    mapper_admin_manage_subscriber(admin, lo_address_get_hostname(a),
+                                   port ? port_str : 0,
+                                   flags, timeout_seconds, version);
 
     return 0;
 }
@@ -1558,8 +1577,17 @@ static int handler_device_unsubscribe(const char *path, const char *types,
     lo_address a  = lo_message_get_source(msg);
     if (!a) return 0;
 
+    int port = 0;
+    mapper_message_t params;
+    mapper_msg_parse_params(&params, path, &types[0],
+                            argc, &argv[0]);
+    mapper_msg_get_param_if_int(&params, AT_ADMIN_PORT, &port);
+    char port_str[16];
+    snprintf(port_str, 16, "%i", port);
+
     // remove subscription
-    mapper_admin_manage_subscriber(admin, a, 0, 0, 0);
+    mapper_admin_manage_subscriber(admin, lo_address_get_hostname(a),
+                                   port ? port_str : 0, 0, 0, 0);
 
     return 0;
 }
@@ -1829,6 +1857,13 @@ static int handler_device_link(const char *path, const char *types,
     params.types[AT_DEST_PORT] = "i";
     params.lengths[AT_DEST_PORT] = 1;
 
+    int admin_port = lo_server_get_port(admin->mesh_server);
+
+    lo_arg *arg_admin_port = (lo_arg*) &admin_port;
+    params.values[AT_ADMIN_PORT] = &arg_admin_port;
+    params.types[AT_ADMIN_PORT] = "i";
+    params.lengths[AT_ADMIN_PORT] = 1;
+
     // TODO: check if src ip and port are available as metadata, send directly
     mapper_admin_set_bundle_dest_bus(admin);
     mapper_admin_bundle_message_with_params(
@@ -1845,10 +1880,10 @@ static int handler_device_linkTo(const char *path, const char *types,
     mapper_admin admin = (mapper_admin) user_data;
     mapper_device md = admin->device;
 
-    const char *src_name, *dest_name, *host=0, *admin_port;
-    int data_port;
+    const char *src_name, *dest_name, *host=0;
+    int data_port, admin_port;
     mapper_message_t params;
-    lo_address a = NULL;
+    lo_address a;
 
     if (argc < 2)
         return 0;
@@ -1870,15 +1905,6 @@ static int handler_device_linkTo(const char *path, const char *types,
     trace("<%s> got /linkTo %s %s\n", mdev_name(md),
           src_name, dest_name);
 
-    // Parse the message.
-    if (mapper_msg_parse_params(&params, path, &types[2],
-                                argc-2, &argv[2]))
-    {
-        trace("<%s> error parsing message parameters in /linkTo.\n",
-              mdev_name(md));
-        return 0;
-    }
-
     // Discover whether the device is already linked.
     mapper_router router =
         mapper_router_find_by_dest_name(md->routers, dest_name);
@@ -1889,23 +1915,34 @@ static int handler_device_linkTo(const char *path, const char *types,
         return 0;
     }
 
+    // Parse the message.
+    if (mapper_msg_parse_params(&params, path, &types[2],
+                                argc-2, &argv[2]))
+    {
+        trace("<%s> error parsing message parameters in /linkTo.\n",
+              mdev_name(md));
+        return 0;
+    }
+
     // Find the sender's hostname
     a = lo_message_get_source(msg);
     host = lo_address_get_hostname(a);
-    admin_port = lo_address_get_port(a);
     if (!host) {
         trace("can't perform /linkTo, host unknown\n");
         return 0;
     }
 
-    // Retrieve the port
+    // Retrieve the admin port
+    mapper_msg_get_param_if_int(&params, AT_ADMIN_PORT, &admin_port);
+
+    // Retrieve the data port
     if (mapper_msg_get_param_if_int(&params, AT_DEST_PORT, &data_port)) {
         trace("can't perform /linkTo, port unknown\n");
         return 0;
     }
 
     // Creation of a new router added to the source.
-    router = mapper_router_new(md, host, atoi(admin_port), data_port, dest_name);
+    router = mapper_router_new(md, host, admin_port, data_port, dest_name);
     if (!router) {
         trace("can't perform /linkTo, NULL router\n");
         return 0;
@@ -1920,18 +1957,16 @@ static int handler_device_linkTo(const char *path, const char *types,
         md->link_cb(md, &router->props, MDEV_LOCAL_ESTABLISHED,
                     md->link_cb_userdata);
 
-    // Announce the result to destination and subscribers.
-    if (!a)
-        mapper_admin_set_bundle_dest_bus(admin);
-    else
-        mapper_admin_set_bundle_dest_mesh(admin, a);
-
+    // inform destination device
+    mapper_admin_set_bundle_dest_mesh(admin, router->admin_addr);
     mapper_admin_send_linked(admin, router, 1);
+
+    // inform subscribers
     mapper_admin_set_bundle_dest_subscribers(admin, SUB_DEVICE_LINKS_OUT);
     mapper_admin_send_linked(admin, router, 1);
 
-    trace("<%s> added new router to %s -> host: %s, port: %d\n",
-          mdev_name(md), dest_name, host, data_port);
+    trace("<%s> added new router to %s -> host: %s, port: %d, admin_port: %d\n",
+          mdev_name(md), dest_name, host, data_port, admin_port);
 
     return 0;
 }
@@ -1946,8 +1981,8 @@ static int handler_device_linked(const char *path, const char *types,
     mapper_monitor mon = admin->monitor;
     mapper_db db = mapper_monitor_get_db(mon);
 
-    const char *src_name, *dest_name, *host=0, *admin_port;
-    int data_port = -1;
+    const char *src_name, *dest_name, *host=0;
+    int data_port = -1, admin_port = 0;
 
     if (argc < 2)
         return 0;
@@ -1959,16 +1994,16 @@ static int handler_device_linked(const char *path, const char *types,
     src_name = &argv[0]->s;
     dest_name = &argv[1]->s;
 
-    trace("<monitor> got /linked %s %s\n",
-          src_name, dest_name);
-
     mapper_message_t params;
     if (mapper_msg_parse_params(&params, path, types+2, argc-2, argv+2))
         return 0;
-    if (mon)
+    if (mon) {
+        trace("<monitor> got /linked %s %s\n", src_name, dest_name);
         mapper_db_add_or_update_link_params(db, src_name, dest_name, &params);
+    }
     if (!md || strcmp(mdev_name(md), dest_name))
         return 0;
+    trace("<%s> got /linked %s %s\n", mdev_name(md), src_name, dest_name);
 
     // Add a receiver data structure
     mapper_receiver receiver =
@@ -1994,17 +2029,18 @@ static int handler_device_linked(const char *path, const char *types,
     // Find the sender's hostname
     lo_address a = lo_message_get_source(msg);
     host = lo_address_get_hostname(a);
-    admin_port = lo_address_get_port(a);
-    if (!host || !admin_port) {
+    if (!host) {
         trace("can't add receiver on /linked, host unknown\n");
         return 0;
     }
 
+    // Retrieve the admin port
+    mapper_msg_get_param_if_int(&params, AT_ADMIN_PORT, &admin_port);
+
     // Retrieve the src device port if it is defined
     mapper_msg_get_param_if_int(&params, AT_SRC_PORT, &data_port);
 
-    receiver = mapper_receiver_new(md, host, atoi(admin_port),
-                                   data_port, src_name);
+    receiver = mapper_receiver_new(md, host, admin_port, data_port, src_name);
     if (!receiver) {
         trace("Error: NULL receiver\n");
         return 0;
@@ -2012,6 +2048,9 @@ static int handler_device_linked(const char *path, const char *types,
     mdev_add_receiver(md, receiver);
     if (argc > 2)
         mapper_receiver_set_from_message(receiver, &params);
+
+    trace("<%s> added new receiver from %s -> host: %s, data_port: %d, admin_port: %d\n",
+          mdev_name(md), src_name, host, data_port, admin_port);
 
     // Inform subscribers
     mapper_admin_set_bundle_dest_subscribers(admin, SUB_DEVICE_LINKS_IN);

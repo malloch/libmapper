@@ -129,7 +129,7 @@ mapper_db mapper_monitor_get_db(mapper_monitor mon)
 
 static void mapper_monitor_set_bundle_dest(mapper_monitor mon, const char *name)
 {
-    // TODO: look up device info, maybe send directly
+    // TODO: look up device info, maybe send directly using mesh comms
     mapper_admin_set_bundle_dest_bus(mon->admin);
 }
 
@@ -150,29 +150,27 @@ static void monitor_subscribe_internal(mapper_monitor mon, const char *device_na
                 lo_message_add_string(m, "device");
             if (subscribe_flags & SUB_DEVICE_SIGNALS)
                 lo_message_add_string(m, "signals");
-            else {
-                if (subscribe_flags & SUB_DEVICE_INPUTS)
+            else if (subscribe_flags & SUB_DEVICE_INPUTS)
                     lo_message_add_string(m, "inputs");
-                else if (subscribe_flags & SUB_DEVICE_OUTPUTS)
-                    lo_message_add_string(m, "outputs");
-            }
+            else if (subscribe_flags & SUB_DEVICE_OUTPUTS)
+                lo_message_add_string(m, "outputs");
+
             if (subscribe_flags & SUB_DEVICE_LINKS)
                 lo_message_add_string(m, "links");
-            else {
-                if (subscribe_flags & SUB_DEVICE_LINKS_IN)
+            else if (subscribe_flags & SUB_DEVICE_LINKS_IN)
                     lo_message_add_string(m, "links_in");
-                else if (subscribe_flags & SUB_DEVICE_LINKS_OUT)
-                    lo_message_add_string(m, "links_out");
-            }
+            else if (subscribe_flags & SUB_DEVICE_LINKS_OUT)
+                lo_message_add_string(m, "links_out");
+
             if (subscribe_flags & SUB_DEVICE_CONNECTIONS)
                 lo_message_add_string(m, "connections");
-            else {
-                if (subscribe_flags & SUB_DEVICE_CONNECTIONS_IN)
+            else if (subscribe_flags & SUB_DEVICE_CONNECTIONS_IN)
                     lo_message_add_string(m, "connections_in");
-                else if (subscribe_flags & SUB_DEVICE_CONNECTIONS_OUT)
-                    lo_message_add_string(m, "connections_out");
-            }
+            else if (subscribe_flags & SUB_DEVICE_CONNECTIONS_OUT)
+                lo_message_add_string(m, "connections_out");
         }
+        lo_message_add_string(m, "@adminPort");
+        lo_message_add_int32(m, lo_server_get_port(mon->admin->mesh_server));
         lo_message_add_string(m, "@lease");
         lo_message_add_int32(m, timeout);
         if (version >= 0) {
@@ -237,6 +235,8 @@ static void mapper_monitor_unsubscribe_internal(mapper_monitor mon,
                 lo_message m = lo_message_new();
                 if (!m)
                     break;
+                lo_message_add_string(m, "@adminPort");
+                lo_message_add_int32(m, lo_server_get_port(mon->admin->mesh_server));
                 lo_bundle_add_message(mon->admin->bundle, cmd, m);
                 mapper_admin_send_bundle(mon->admin);
             }

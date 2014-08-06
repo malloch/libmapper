@@ -8,6 +8,7 @@
 
 const char* mapper_msg_param_strings[] =
 {
+    "@adminPort",       /* AT_ADMIN_PORT */
     "@boundMax",        /* AT_BOUND_MAX */
     "@boundMin",        /* AT_BOUND_MIN */
     "@destLength",      /* AT_DEST_LENGTH */
@@ -386,6 +387,7 @@ void mapper_msg_prepare_varargs(lo_message m, va_list aq)
             s = va_arg(aq, char*);
             lo_message_add_string(m, s);
             break;
+        case AT_ADMIN_PORT:
         case AT_DEST_LENGTH:
         case AT_DEST_PORT:
         case AT_ID:

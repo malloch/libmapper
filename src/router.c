@@ -25,14 +25,18 @@ mapper_router mapper_router_new(mapper_device device, const char *host,
     r->props.src_name = strdup(mdev_name(device));
     r->props.dest_host = strdup(host);
     r->props.dest_port = data_port;
+
     sprintf(str, "%d", data_port);
     r->data_addr_udp = lo_address_new(host, str);
     r->data_addr_tcp = lo_address_new_with_proto(LO_TCP, host, str);
     lo_address_set_tcp_nodelay(r->data_addr_tcp, 1);
 
-    sprintf(str, "%d", admin_port);
-    r->admin_addr = lo_address_new(host, str);
-
+    if (admin_port) {
+        sprintf(str, "%d", admin_port);
+        r->admin_addr = lo_address_new_with_proto(LO_TCP, host, str);
+    }
+    else
+        r->admin_addr = 0;
     r->props.dest_name = strdup(name);
     r->props.dest_name_hash = crc32(0L, (const Bytef *)name, strlen(name));
 

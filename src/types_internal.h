@@ -324,6 +324,7 @@ typedef struct _mapper_monitor {
 
 /*! Symbolic representation of recognized @-parameters. */
 typedef enum {
+    AT_ADMIN_PORT,
     AT_BOUND_MAX,
     AT_BOUND_MIN,
     AT_DEST_LENGTH,
