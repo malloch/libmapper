@@ -824,31 +824,6 @@ int mapper_device_remove_property(mapper_device dev, const char *name);
  *                      nothing to do. */
 int mapper_device_poll(mapper_device dev, int block_ms);
 
-/*! Return the number of file descriptors needed for this device.  This can be
- *  used to allocated an appropriately-sized list for called to
- *  mapper_device_fds.  Note that the number of descriptors needed can change
- *  throughout the life of a device, therefore this function should be called
- *  whenever the list of file descriptors is needed.
- *  \param dev          The device to count file descriptors for.
- *  \return             The number of file descriptors needed for the indicated
- *                      device. */
-int mapper_device_num_fds(mapper_device dev);
-
-/*! Write the list of file descriptors for this device to the provided array.
- *  Up to num file descriptors will be written.  These file descriptors can be
- *  used as input for the read array of select or poll, for example.
- *  \param dev          The device to get file descriptors for.
- *  \param fds          Memory to receive file descriptors.
- *  \param num          The number of file descriptors pointed to by fds.
- *  \return             The number of file descriptors actually written to fds. */
-int mapper_device_fds(mapper_device dev, int *fds, int num);
-
-/*! If an external event indicates that a file descriptor for this device needs
- *  servicing, this function should be called.
- *  \param dev          The device that needs servicing.
- *  \param fd       	The file descriptor that needs servicing. */
-void mapper_device_service_fd(mapper_device dev, int fd);
-
 /*! Detect whether a device is completely initialized.
  *  \param dev          The device to query.
  *  \return             Non-zero if device is completely initialized, i.e., has
@@ -1025,18 +1000,26 @@ void mapper_network_free(mapper_network net);
  *  \return             The mapper_database used by this network structure. */
 mapper_database mapper_network_database(mapper_network net);
 
+/*! Return the number of network interfaces in use.
+ *  \param net          The network structure to query.
+ *  \return             The number of network interfaces in use. Can be queried
+ *                      with mapper_network_interface(). */
+int mapper_network_num_interfaces(mapper_network net);
+
 /*! Return a string indicating the name of the network interface in use.
  *  \param net          The network structure to query.
+ *  \param index        Index of the network server to query.
  *  \return             A string containing the name of the network interface. */
-const char *mapper_network_interface(mapper_network net);
+const char *mapper_network_interface(mapper_network net, int index);
 
 /*! Return the IPv4 address used by a network.
  *  \param net          The network structure to query.
+ *  \param index        Index of the network server to query.
  *  \return             A pointer to an in_addr struct indicating the network's
  *                      IP address, or zero if it is not available.  In general
  *                      this will be the IPv4 address associated with the
  *                      selected local network interface. */
-const struct in_addr *mapper_network_ip4(mapper_network net);
+const struct in_addr *mapper_network_ip4(mapper_network net, int index);
 
 /*! Retrieve the name of the multicast group currently in use.
  *  \param net          The network structure to query.

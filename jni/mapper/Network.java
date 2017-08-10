@@ -24,7 +24,11 @@ public class Network
     /* get current time */
     public native TimeTag now();
 
-    public native String iface();
+    public native int numInterfaces();
+    public native String iface(int index);
+    public String iface() {
+        return iface(0);
+    }
 
     /* retrieve associated Database */
     private native long mapperNetworkDatabase(long _n);

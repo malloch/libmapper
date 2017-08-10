@@ -10,15 +10,15 @@ endif
 
 noinst_PROGRAMS = test testconvergent testcpp testcustomtransport testdatabase \
                   testexpression testinstance testlinear testmany testmapinput \
-                  testmapprotocol testmonitor testnetwork testparams testparser\
-                  testprops testqueue testquery testrate testreverse testselect\
+                  testprotocol testmonitor testnetwork testparams testparser   \
+                  testprops testqueue testquery testrate testreverse	           \
                   testsignals testspeed testvector
 
 test_all_ordered = testparams testprops testdatabase testparser testnetwork    \
                    testmany test testlinear testexpression testqueue testquery \
-                   testrate testinstance testreverse testselect testvector     \
+                   testrate testinstance testreverse testvector                \
                    testcustomtransport testspeed testcpp testmapinput          \
-                   testconvergent testmapprotocol
+                   testconvergent testprotocol
 
 test_CFLAGS = $(TEST_CFLAGS)
 test_SOURCES = test.c
@@ -60,9 +60,9 @@ testmapinput_CFLAGS = $(TEST_CFLAGS)
 testmapinput_SOURCES = testmapinput.c
 testmapinput_LDADD = $(TEST_LDADD)
 
-testmapprotocol_CFLAGS = $(TEST_CFLAGS)
-testmapprotocol_SOURCES = testmapprotocol.c
-testmapprotocol_LDADD = $(TEST_LDADD)
+testprotocol_CFLAGS = $(TEST_CFLAGS)
+testprotocol_SOURCES = testprotocol.c
+testprotocol_LDADD = $(TEST_LDADD)
 
 testmonitor_CFLAGS = $(TEST_CFLAGS)
 testmonitor_SOURCES = testmonitor.c
@@ -99,10 +99,6 @@ testrate_LDADD = $(TEST_LDADD)
 testreverse_CFLAGS = $(TEST_CFLAGS)
 testreverse_SOURCES = testreverse.c
 testreverse_LDADD = $(TEST_LDADD)
-
-testselect_CFLAGS = $(TEST_CFLAGS)
-testselect_SOURCES = testselect.c
-testselect_LDADD = $(TEST_LDADD)
 
 testsignals_CFLAGS = $(TEST_CFLAGS)
 testsignals_SOURCES = testsignals.c

@@ -1415,10 +1415,19 @@ static void renew_subscriptions(mapper_database db, uint32_t time_sec)
 int mapper_database_poll(mapper_database db, int block_ms)
 {
     mapper_network net = db->network;
-    int count = 0, status[2];
+    int count = 0;
     mapper_timetag_t tt;
 
-    lo_server servers[2] = { net->bus_server, net->mesh_server };
+    int i = 0, num_iface = mapper_network_num_interfaces(net) + 1;
+    lo_server servers[num_iface];
+    int status[num_iface];
+    mapper_interface iface = net->interfaces;
+    while (iface) {
+        servers[i] = iface->bus_server;
+        iface = iface->next;
+        ++i;
+    }
+    servers[i] = net->mesh_server;
 
     mapper_network_poll(net);
     mapper_timetag_now(&tt);
@@ -1426,7 +1435,7 @@ int mapper_database_poll(mapper_database db, int block_ms)
     mapper_database_check_device_status(db, tt.sec);
 
     if (!block_ms) {
-        if (lo_servers_recv_noblock(servers, status, 2, 0)) {
+        if (lo_servers_recv_noblock(servers, status, num_iface, 0)) {
             count = status[0] + status[1];
             net->msgs_recvd |= count;
         }
@@ -1439,7 +1448,7 @@ int mapper_database_poll(mapper_database db, int block_ms)
         if (left_ms > 100)
             left_ms = 100;
 
-        if (lo_servers_recv_noblock(servers, status, 2, left_ms))
+        if (lo_servers_recv_noblock(servers, status, num_iface, left_ms))
             count += status[0] + status[1];
 
         elapsed = (mapper_get_current_time() - then) * 1000;

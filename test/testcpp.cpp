@@ -77,12 +77,12 @@ int main(int argc, char ** argv)
     std::cout << "device " << dev.name() << " ready..." << std::endl;
     std::cout << "  ordinal: " << dev.ordinal() << std::endl;
     std::cout << "  id: " << dev.id() << std::endl;
+    std::cout << "  num_interfaces: " << dev.network().num_interfaces() << std::endl;
     std::cout << "  interface: " << dev.network().interface() << std::endl;
     const struct in_addr* a = dev.network().ip4();
     if (a)
         std::cout << "  host: " << inet_ntoa(*a) << std::endl;
     std::cout << "  port: " << dev.port() << std::endl;
-    std::cout << "  num_fds: " << dev.num_fds() << std::endl;
     std::cout << "  num_inputs: " << dev.num_signals(MAPPER_DIR_INCOMING) << std::endl;
     std::cout << "  num_outputs: " << dev.num_signals(MAPPER_DIR_OUTGOING) << std::endl;
     std::cout << "  num_incoming_maps: " << dev.num_maps(MAPPER_DIR_INCOMING) << std::endl;

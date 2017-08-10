@@ -36,8 +36,12 @@ int test_network()
 
     eprintf("Device structure initialized.\n");
 
-    eprintf("Found interface %s has IP %s\n", net->interface_name,
-           inet_ntoa(net->interface_ip));
+    mapper_interface iface = net->interfaces;
+    while (iface) {
+        eprintf("Found interface %s has IP %s and status %d\n", iface->name,
+                inet_ntoa(iface->ip), iface->status);
+        iface = iface->next;
+    }
 
     while (!dev->local->registered) {
         mapper_device_poll(dev, 100);

@@ -440,11 +440,13 @@ namespace mapper {
         operator mapper_network() const
             { return _net; }
 
+        int num_interfaces() const
+            { return mapper_network_num_interfaces(_net); }
         /*! Return a string indicating the name of the network interface in use.
          *  \return     A string containing the name of the network interface. */
-        std::string interface() const
+        std::string interface(int index=0) const
         {
-            const char *iface = mapper_network_interface(_net);
+            const char *iface = mapper_network_interface(_net, index);
             return iface ? std::string(iface) : 0;
         }
 
@@ -453,8 +455,8 @@ namespace mapper {
          *              IP address, or zero if it is not available.  In general
          *              this will be the IPv4 address associated with the
          *              selected local network interface. */
-        const struct in_addr *ip4() const
-            { return mapper_network_ip4(_net); }
+        const struct in_addr *ip4(int index=0) const
+            { return mapper_network_ip4(_net, index); }
 
         /*! Retrieve the name of the multicast group currently in use.
          *  \return     A string specifying the multicast group used by this
@@ -1870,12 +1872,6 @@ namespace mapper {
 
         int poll(int block_ms=0) const
             { return mapper_device_poll(_dev, block_ms); }
-        int num_fds() const
-            { return mapper_device_num_fds(_dev); }
-        int fds(int *fds, int num) const
-            { return mapper_device_fds(_dev, fds, num); }
-        Device& service_fd(int fd)
-            { mapper_device_service_fd(_dev, fd); return (*this); }
         bool ready() const
             { return mapper_device_ready(_dev); }
         std::string name() const

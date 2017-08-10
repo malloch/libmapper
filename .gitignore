@@ -70,6 +70,7 @@ test/testnetwork
 test/testparams
 test/testparser
 test/testprops
+test/testprotocol
 test/testquery
 test/testqueue
 test/testrate

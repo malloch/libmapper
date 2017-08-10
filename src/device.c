@@ -1265,27 +1265,37 @@ int mapper_device_poll(mapper_device dev, int block_ms)
     if (!dev || !dev->local)
         return 0;
 
-    int admin_count = 0, device_count = 0, status[4];
+    int admin_count = 0, device_count = 0;
     mapper_network net = dev->database->network;
 
-    lo_server servers[4] = { net->bus_server,
-                             net->mesh_server,
-                             dev->local->udp_server,
-                             dev->local->tcp_server };
+    int i = 0, num_iface = mapper_network_num_interfaces(net);
+    lo_server servers[num_iface + 3];
+    int status[num_iface + 3];
+    mapper_interface iface = net->interfaces;
+    while (iface) {
+        servers[i] = iface->bus_server;
+        iface = iface->next;
+        ++i;
+    }
+    servers[i++] = net->mesh_server;
+    servers[i++] = dev->local->udp_server;
+    servers[i++] = dev->local->tcp_server;
 
     mapper_network_poll(net);
 
     if (!dev->local->registered) {
-        if (lo_servers_recv_noblock(servers, status, 2, 0)) {
-            admin_count = status[0] + status[1];
+        if (lo_servers_recv_noblock(servers, status, num_iface + 1, 0)) {
+            for (i = 0; i <= num_iface; i++)
+                admin_count += status[i];
             net->msgs_recvd |= admin_count;
         }
         return admin_count;
     }
     else if (!block_ms) {
-        if (lo_servers_recv_noblock(servers, status, 4, 0)) {
-            admin_count = status[0] + status[1];
-            device_count = status[2] + status[3];
+        if (lo_servers_recv_noblock(servers, status, num_iface + 3, 0)) {
+            for (i = 0; i <= num_iface; i++)
+                admin_count += status[i];
+            device_count = status[i] + status[i+1];
             net->msgs_recvd |= admin_count;
         }
         return admin_count + device_count;
@@ -1298,9 +1308,10 @@ int mapper_device_poll(mapper_device dev, int block_ms)
         if (left_ms > 100)
             left_ms = 100;
 
-        if (lo_servers_recv_noblock(servers, status, 4, left_ms)) {
-            admin_count += status[0] + status[1];
-            device_count += status[2] + status[3];
+        if (lo_servers_recv_noblock(servers, status, num_iface + 3, left_ms)) {
+            for (i = 0; i <= num_iface; i++)
+                admin_count += status[i];
+            device_count = status[i] + status[i+1];
         }
 
         elapsed = (mapper_get_current_time() - then) * 1000;
@@ -1317,8 +1328,9 @@ int mapper_device_poll(mapper_device dev, int block_ms)
      * now, but perhaps could be a heuristic based on a recent number of
      * messages per channel per poll. */
     while (device_count < (dev->num_inputs + dev->local->n_output_callbacks)*1
-           && (lo_servers_recv_noblock(&servers[2], &status[2], 2, 0))) {
-        device_count += status[2] + status[3];
+           && (lo_servers_recv_noblock(&servers[num_iface],
+                                       &status[num_iface], 2, 0))) {
+        device_count += status[num_iface + 1] + status[num_iface + 2];
     }
 
     if (dev->props->dirty && mapper_device_ready(dev)
@@ -1330,56 +1342,6 @@ int mapper_device_poll(mapper_device dev, int block_ms)
 
     net->msgs_recvd |= admin_count;
     return admin_count + device_count;
-}
-
-int mapper_device_num_fds(mapper_device dev)
-{
-    // Two for the admin inputs (bus and mesh), and two for the signal input.
-    return 4;
-}
-
-int mapper_device_fds(mapper_device dev, int *fds, int num)
-{
-    if (!dev || !dev->local)
-        return 0;
-    if (num > 0)
-        fds[0] = lo_server_get_socket_fd(dev->database->network->bus_server);
-    if (num > 1) {
-        fds[1] = lo_server_get_socket_fd(dev->database->network->mesh_server);
-        if (num > 2) {
-            fds[2] = lo_server_get_socket_fd(dev->local->udp_server);
-            if (num > 3)
-                fds[3] = lo_server_get_socket_fd(dev->local->tcp_server);
-            else
-                return 3;
-        }
-        else
-            return 2;
-    }
-    else
-        return 1;
-    return 4;
-}
-
-void mapper_device_service_fd(mapper_device dev, int fd)
-{
-    if (!dev || !dev->local)
-        return;
-    mapper_network net = dev->database->network;
-    if (fd == lo_server_get_socket_fd(net->bus_server)) {
-        lo_server_recv_noblock(net->bus_server, 0);
-        mapper_network_poll(dev->database->network);
-    }
-    else if (fd == lo_server_get_socket_fd(net->mesh_server)) {
-        lo_server_recv_noblock(net->mesh_server, 0);
-        mapper_network_poll(dev->database->network);
-    }
-    else if (dev->local->udp_server
-             && fd == lo_server_get_socket_fd(dev->local->udp_server))
-        lo_server_recv_noblock(dev->local->udp_server, 0);
-    else if (dev->local->tcp_server
-             && fd == lo_server_get_socket_fd(dev->local->tcp_server))
-        lo_server_recv_noblock(dev->local->tcp_server, 0);
 }
 
 void mapper_device_num_instances_changed(mapper_device dev, mapper_signal sig,
@@ -1920,7 +1882,9 @@ void mapper_device_manage_subscriber(mapper_device dev, lo_address address,
                 if (!flags || !(flags &= ~prev_flags))
                     return;
             }
-            else {
+            else if (strcmp(ip, lo_address_get_hostname((*s)->address))==0 &&
+                     strcmp(port, lo_address_get_port((*s)->address))==0) {
+                // TODO: switch interface to lo0  if available?
                 // reset timeout
                 trace_dev(dev, "renewing subscription from %s:%s for %d seconds\n",
                           s_ip, s_port, timeout_seconds);
@@ -1928,6 +1892,10 @@ void mapper_device_manage_subscriber(mapper_device dev, lo_address address,
                 int temp = flags;
                 flags &= ~(*s)->flags;
                 (*s)->flags = temp;
+            }
+            else {
+                // we have a running subscription on another network interface
+                return;
             }
             break;
         }

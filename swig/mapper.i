@@ -2884,15 +2884,18 @@ typedef struct _map_query {
     const char *get_group() {
         return mapper_network_group((mapper_network)$self);
     }
-    const char *get_interface() {
-        return mapper_network_interface((mapper_network)$self);
-    }
-    const char *get_ip4() {
-        const struct in_addr *a = mapper_network_ip4((mapper_network)$self);
-        return a ? inet_ntoa(*a) : 0;
-    }
     int get_port() {
         return mapper_network_port((mapper_network)$self);
+    }
+    int get_num_interfaces() {
+        return mapper_network_num_interfaces((mapper_network)$self);
+    }
+    const char *get_interface(int index=0) {
+        return mapper_network_interface((mapper_network)$self, index);
+    }
+    const char *get_ip4(int index=0) {
+        const struct in_addr *a = mapper_network_ip4((mapper_network)$self, index);
+        return a ? inet_ntoa(*a) : 0;
     }
 //    network *send_message() {
 //        mapper_network_send_message();
@@ -2900,9 +2903,10 @@ typedef struct _map_query {
 //    }
     %pythoncode {
         group = property(get_group)
+        port = property(get_port)
+        num_interfaces = property(get_num_interfaces)
         ip4 = property(get_ip4)
         interface = property(get_interface)
-        port = property(get_port)
         def get_properties(self):
             props = {}
             for i in range(self.num_properties):

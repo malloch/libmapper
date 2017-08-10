@@ -2797,11 +2797,18 @@ JNIEXPORT jobject JNICALL Java_mapper_Network_now
     return o;
 }
 
-JNIEXPORT jstring JNICALL Java_mapper_Network_iface
-  (JNIEnv *env, jobject obj)
+JNIEXPORT jint JNICALL Java_mapper_Network_numInterfaces
+(JNIEnv *env, jobject obj)
 {
     mapper_network net = get_network_from_jobject(env, obj);
-    return net ? (*env)->NewStringUTF(env, mapper_network_interface(net)) : 0;
+    return net ? mapper_network_num_interfaces(net) : 0;
+}
+
+JNIEXPORT jstring JNICALL Java_mapper_Network_iface
+  (JNIEnv *env, jobject obj, jint index)
+{
+    mapper_network net = get_network_from_jobject(env, obj);
+    return net ? (*env)->NewStringUTF(env, mapper_network_interface(net, index)) : 0;
 }
 
 JNIEXPORT jlong JNICALL Java_mapper_Network_mapperNetworkDatabase

@@ -240,6 +240,21 @@ typedef struct _mapper_sync_clock_t {
     int new;
 } mapper_sync_clock_t, *mapper_sync_clock;
 
+/* A structure that holds a linked list of possible interfaces. */
+typedef struct _mapper_interface {
+    int status;                     /*!< Status of this interface. */
+    uint32_t next_ping;             /*!< Next scheduled ping time (sec). */
+
+    struct in_addr ip;              /*!< The IP address of interface. */
+    char *name;                     /*!< The name of the network interface for
+                                     *   receiving messages. */
+    lo_server_thread bus_server;    /*!< LibLo server thread for the multicast
+                                     *   bus. */
+    lo_address bus_addr;            /*!< LibLo address for the admin bus. */
+
+    struct _mapper_interface  *next;
+} mapper_interface_t, *mapper_interface;
+
 typedef struct _mapper_subscriber {
     struct _mapper_subscriber *next;
     lo_address                      address;
@@ -249,13 +264,13 @@ typedef struct _mapper_subscriber {
 
 /*! A structure that keeps information about a device. */
 typedef struct _mapper_network {
-    lo_server_thread bus_server;    /*!< LibLo server thread for the
-                                     *   multicast bus. */
-    lo_address bus_addr;            /*!< LibLo address for the multicast bus. */
     lo_server_thread mesh_server;   /*!< LibLo server thread for mesh comms. */
-    char *interface_name;           /*!< The name of the network interface
-                                     *   for receiving messages. */
-    struct in_addr interface_ip;    /*!< The IP address of interface. */
+
+    struct _mapper_interface *interfaces;
+    char *group;
+    char *port;
+    char *force_interface;
+
     struct _mapper_device *device;  /*!< Device that this structure is
                                      *   in charge of. */
     mapper_database_t database;     /*<! Database of local and remote libmapper
@@ -269,6 +284,7 @@ typedef struct _mapper_network {
                                      *   multicast bus/mesh. */
     int message_type;
     uint32_t next_ping;
+    uint32_t rescan_schedule;
     uint8_t own_network;            /*! Zero if this network was created
                                      *  automatically by mapper_device_new()
                                      *  or mapper_database_new(), non-zero if

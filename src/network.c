@@ -40,6 +40,8 @@ extern const char* prop_message_strings[NUM_AT_PROPERTIES];
 
 #define MAX_BUNDLE_COUNT 10
 
+#define RESCAN_SECONDS 10   // Number of seconds between rescanning interfaces
+
 /* Note: any call to liblo where get_liblo_error will be called afterwards must
  * lock this mutex, otherwise there is a race condition on receiving this
  * information.  Could be fixed by the liblo error handler having a user context
@@ -171,10 +173,61 @@ static void handler_error(int num, const char *msg, const char *where)
  * returns 1, the resource in question should be probed on the libmapper bus. */
 static int check_collisions(mapper_network net, mapper_allocated resource);
 
-/*! Local function to get the IP address of a network interface. */
-static int get_interface_addr(const char* pref, struct in_addr* addr,
-                              char **iface)
+static void add_interface(mapper_network net, char *name, struct in_addr ip)
 {
+    trace_net("adding interface %s\n", name);
+    mapper_interface iface;
+
+    // Allocate a new mapper_interface_t struct
+    iface = (mapper_interface) malloc(sizeof(struct _mapper_interface));
+    iface->name = strdup(name);
+    iface->ip = ip;
+    iface->status = 0;
+    iface->next = net->interfaces;
+    net->interfaces = iface;
+
+    /* Open address */
+    iface->bus_addr = lo_address_new(net->group, net->port);
+    if (!iface->bus_addr) {
+        iface->status = 0;
+    }
+    else {
+        /* Set TTL for packet to 1 -> local subnet */
+        lo_address_set_ttl(iface->bus_addr, 1);
+
+        /* Specify the interface to use for multicasting */
+#ifdef HAVE_LIBLO_SET_IFACE
+        lo_address_set_iface(iface->bus_addr, iface->name, 0);
+#endif
+
+        /* Open server for multicast group 224.0.1.3, port 7570 */
+        iface->bus_server =
+#ifdef HAVE_LIBLO_SERVER_IFACE
+            lo_server_new_multicast_iface(net->group, net->port, iface->name, 0,
+                                          handler_error);
+#else
+            lo_server_new_multicast(net->group, net->port, handler_error);
+#endif
+        if (iface->bus_server) {
+            // Disable liblo message queueing.
+            lo_server_enable_queue(iface->bus_server, 0, 1);
+        }
+        else {
+            lo_address_free(iface->bus_addr);
+            iface->bus_addr = 0;
+            iface->status = 0;
+        }
+    }
+    iface = iface->next;
+}
+
+/* Local function to get the IP addresses of network interfaces. If a network
+ * interface is provided as an argument we will only use that interface,
+ * otherwise we will try to listen on all available network interfaces */
+static int check_interfaces(mapper_network net)
+{
+    int found = 0;
+    net->rescan_schedule = mapper_get_current_time() + RESCAN_SECONDS;
     struct in_addr zero;
     struct sockaddr_in *sa;
 
@@ -184,47 +237,48 @@ static int get_interface_addr(const char* pref, struct in_addr* addr,
 
     struct ifaddrs *ifaphead;
     struct ifaddrs *ifap;
-    struct ifaddrs *iflo=0, *ifchosen=0;
 
     if (getifaddrs(&ifaphead) != 0)
         return 1;
 
     ifap = ifaphead;
-    while (ifap) {
-        sa = (struct sockaddr_in *) ifap->ifa_addr;
-        if (!sa) {
-            ifap = ifap->ifa_next;
+    for (ifap = ifaphead; ifap; ifap = ifap->ifa_next) {
+
+        // check if interface name matches argument
+        if (net->force_interface && strcmp(ifap->ifa_name, net->force_interface))
             continue;
-        }
+
+        // skip if interface is not running
+        if (!(ifap->ifa_flags & IFF_RUNNING))
+            continue;
+
+        sa = (struct sockaddr_in *) ifap->ifa_addr;
 
         /* Note, we could also check for IFF_MULTICAST-- however this is the
          * data-sending port, not the libmapper bus port. */
-
-        if (sa->sin_family == AF_INET && ifap->ifa_flags & IFF_UP
+        if (sa && sa->sin_family == AF_INET
             && memcmp(&sa->sin_addr, &zero, sizeof(struct in_addr))!=0) {
-            ifchosen = ifap;
-            if (pref && strcmp(ifap->ifa_name, pref)==0)
-                break;
-            else if (ifap->ifa_flags & IFF_LOOPBACK)
-                iflo = ifap;
+
+            // Check if iface already in list
+            mapper_interface iface = net->interfaces;
+            while (iface) {
+                if (strcmp(iface->name, ifap->ifa_name)==0)
+                    break;
+                iface = iface->next;
+            }
+            if (!iface) {
+                add_interface(net, ifap->ifa_name, sa->sin_addr);
+                found++;
+                if (net->force_interface) {
+                    freeifaddrs(ifaphead);
+                    return found;
+                }
+            }
         }
-        ifap = ifap->ifa_next;
-    }
-
-    // Default to loopback address in case user is working locally.
-    if (!ifchosen)
-        ifchosen = iflo;
-
-    if (ifchosen) {
-        if (*iface) free(*iface);
-        *iface = strdup(ifchosen->ifa_name);
-        sa = (struct sockaddr_in *) ifchosen->ifa_addr;
-        *addr = sa->sin_addr;
-        freeifaddrs(ifaphead);
-        return 0;
     }
 
     freeifaddrs(ifaphead);
+    return found;
 
 #else // !HAVE_GETIFADDRS
 
@@ -234,7 +288,7 @@ static int get_interface_addr(const char* pref, struct in_addr* addr,
     /* Start with recommended 15k buffer for GetAdaptersAddresses. */
     ULONG size = 15*1024/2;
     int tries = 3;
-    PIP_ADAPTER_ADDRESSES paa = malloc(size*2);
+    PIP_ADAPTER_ADDRESSES paa = malloc(size * 2);
     DWORD rc = ERROR_SUCCESS-1;
     while (rc!=ERROR_SUCCESS && paa && tries-- > 0) {
         size *= 2;
@@ -242,14 +296,14 @@ static int get_interface_addr(const char* pref, struct in_addr* addr,
         rc = GetAdaptersAddresses(AF_INET, 0, 0, paa, &size);
     }
     if (rc!=ERROR_SUCCESS)
-        return 2;
+        return 0;
 
     PIP_ADAPTER_ADDRESSES loaa=0, aa = paa;
     PIP_ADAPTER_UNICAST_ADDRESS lopua=0;
     while (aa && rc==ERROR_SUCCESS) {
         PIP_ADAPTER_UNICAST_ADDRESS pua = aa->FirstUnicastAddress;
         // Skip adapters that are not "Up".
-        if (pua && aa->OperStatus == IfOperStatusUp) {
+        if (pua) {
             if (aa->IfType == IF_TYPE_SOFTWARE_LOOPBACK) {
                 loaa = aa;
                 lopua = pua;
@@ -259,36 +313,24 @@ static int get_interface_addr(const char* pref, struct in_addr* addr,
                 sa = (struct sockaddr_in *) pua->Address.lpSockaddr;
                 unsigned char prefix = sa->sin_addr.s_addr&0xFF;
                 if (prefix!=0xA9 && prefix!=0) {
-                    if (*iface) free(*iface);
-                    *iface = strdup(aa->AdapterName);
-                    *addr = sa->sin_addr;
-                    free(paa);
-                    return 0;
+                    add_interface(admin, aa->AdapterName, sa->sin_addr);
+                    found++;
                 }
             }
         }
         aa = aa->Next;
     }
 
-    if (loaa && lopua) {
-        if (*iface) free(*iface);
-        *iface = strdup(loaa->AdapterName);
-        sa = (struct sockaddr_in *) lopua->Address.lpSockaddr;
-        *addr = sa->sin_addr;
-        free(paa);
-        return 0;
-    }
-
     if (paa) free(paa);
 
-#else
+#else   // !HAVE_LIBIPHLPAPI
 
   #error No known method on this system to get the network interface address.
 
 #endif // HAVE_LIBIPHLPAPI
 #endif // !HAVE_GETIFADDRS
 
-    return 2;
+    return found;
 }
 
 /*! A helper function to seed the random number generator. */
@@ -318,14 +360,21 @@ static void mapper_network_add_device_methods(mapper_network net,
 {
     int i;
     char fullpath[256];
+    mapper_interface iface;
     for (i=0; i < NUM_DEVICE_HANDLERS; i++) {
         snprintf(fullpath, 256,
                  network_message_strings[device_handlers[i].str_index],
                  mapper_device_name(net->device));
-        lo_server_add_method(net->bus_server, fullpath, device_handlers[i].types,
-                             device_handlers[i].h, net);
+        iface = net->interfaces;
+        while (iface) {
+            lo_server_add_method(iface->bus_server, fullpath,
+                                 device_handlers[i].types,
+                                 device_handlers[i].h, net);
+            iface = iface->next;
+        }
 #if !FORCE_COMMS_TO_BUS
-        lo_server_add_method(net->mesh_server, fullpath, device_handlers[i].types,
+        lo_server_add_method(net->mesh_server, fullpath,
+                             device_handlers[i].types,
                              device_handlers[i].h, net);
 #endif
     }
@@ -336,6 +385,7 @@ static void mapper_network_remove_device_methods(mapper_network net,
 {
     int i, j;
     char fullpath[256];
+    mapper_interface iface;
     for (i=0; i < NUM_DEVICE_HANDLERS; i++) {
         snprintf(fullpath, 256,
                  network_message_strings[device_handlers[i].str_index],
@@ -352,14 +402,18 @@ static void mapper_network_remove_device_methods(mapper_network net,
             if (found)
                 continue;
         }
-        lo_server_del_method(net->bus_server,
-                             network_message_strings[device_handlers[i].str_index],
-                             device_handlers[i].types);
-#if !FORCE_COMMS_TO_BUS
-        lo_server_del_method(net->mesh_server,
-                             network_message_strings[device_handlers[i].str_index],
-                             device_handlers[i].types);
-#endif
+        iface = net->interfaces;
+        while (iface) {
+            lo_server_del_method(iface->bus_server,
+                                 network_message_strings[device_handlers[i].str_index],
+                                 device_handlers[i].types);
+    #if !FORCE_COMMS_TO_BUS
+            lo_server_del_method(net->mesh_server,
+                                 network_message_strings[device_handlers[i].str_index],
+                                 device_handlers[i].types);
+    #endif
+            iface = iface->next;
+        }
     }
 }
 
@@ -370,15 +424,20 @@ mapper_database mapper_network_add_database(mapper_network net)
 
     // add database methods
     int i;
+    mapper_interface iface;
     for (i=0; i < NUM_DATABASE_HANDLERS; i++) {
-        lo_server_add_method(net->bus_server,
-                             network_message_strings[database_handlers[i].str_index],
-                             database_handlers[i].types, database_handlers[i].h, net);
-#if !FORCE_COMMS_TO_BUS
-        lo_server_add_method(net->mesh_server,
-                             network_message_strings[database_handlers[i].str_index],
-                             database_handlers[i].types, database_handlers[i].h, net);
-#endif
+        iface = net->interfaces;
+        while (iface) {
+            lo_server_add_method(iface->bus_server,
+                                 network_message_strings[database_handlers[i].str_index],
+                                 database_handlers[i].types, database_handlers[i].h, net);
+    #if !FORCE_COMMS_TO_BUS
+            lo_server_add_method(net->mesh_server,
+                                 network_message_strings[database_handlers[i].str_index],
+                                 database_handlers[i].types, database_handlers[i].h, net);
+    #endif
+            iface = iface->next;
+        }
     }
     return &net->database;
 }
@@ -389,6 +448,7 @@ void mapper_network_remove_database(mapper_network net)
         return;
 
     int i, j;
+    mapper_interface iface;
     for (i=0; i < NUM_DATABASE_HANDLERS; i++) {
         // make sure method isn't also used by a device
         if (net->device) {
@@ -402,14 +462,18 @@ void mapper_network_remove_database(mapper_network net)
             if (found)
                 continue;
         }
-        lo_server_del_method(net->bus_server,
-                             network_message_strings[database_handlers[i].str_index],
-                             database_handlers[i].types);
-#if !FORCE_COMMS_TO_BUS
-        lo_server_del_method(net->mesh_server,
-                             network_message_strings[database_handlers[i].str_index],
-                             database_handlers[i].types);
-#endif
+        iface = net->interfaces;
+        while (iface) {
+            lo_server_del_method(iface->bus_server,
+                                 network_message_strings[database_handlers[i].str_index],
+                                 database_handlers[i].types);
+    #if !FORCE_COMMS_TO_BUS
+            lo_server_del_method(net->mesh_server,
+                                 network_message_strings[database_handlers[i].str_index],
+                                 database_handlers[i].types);
+    #endif
+            iface = iface->next;
+        }
     }
     net->database_methods_added = 0;
 }
@@ -423,60 +487,29 @@ mapper_network mapper_network_new(const char *iface, const char *group, int port
     net->own_network = 1;
     net->database.network = net;
     net->database.timeout_sec = TIMEOUT_SEC;
-    net->interface_name = 0;
-
-    /* Default standard ip and port is group 224.0.1.3, port 7570 */
-    char port_str[10], *s_port = port_str;
-    if (!group) group = "224.0.1.3";
-    if (port==0)
-        s_port = "7570";
-    else
-        snprintf(port_str, 10, "%d", port);
 
     /* Initialize interface information. */
-    if (get_interface_addr(iface, &net->interface_ip, &net->interface_name)) {
-        trace_net("no interface found\n");
-    }
+    if (iface)
+        net->force_interface = strdup(iface);
+
+    /* Default standard ip and port is group 224.0.1.3, port 7570 */
+    net->group = group ? strdup(group) : strdup("224.0.1.3");
+    if (port == 0)
+        net->port = strdup("7570");
     else {
-        trace_net("using interface '%s'\n", net->interface_name);
+        char port_str[10];
+        snprintf(port_str, 10, "%d", port);
+        net->port = strdup(port_str);
     }
 
-    /* Open address */
-    net->bus_addr = lo_address_new(group, s_port);
-    if (!net->bus_addr) {
-        free(net);
-        return NULL;
-    }
-
-    /* Set TTL for packet to 1 -> local subnet */
-    lo_address_set_ttl(net->bus_addr, 1);
-
-    /* Specify the interface to use for multicasting */
-#ifdef HAVE_LIBLO_SET_IFACE
-    lo_address_set_iface(net->bus_addr, net->interface_name, 0);
-#endif
-
-    /* Open server for multicast group 224.0.1.3, port 7570 */
-    net->bus_server =
-#ifdef HAVE_LIBLO_SERVER_IFACE
-        lo_server_new_multicast_iface(group, s_port, net->interface_name, 0,
-                                      handler_error);
-#else
-        lo_server_new_multicast(group, s_port, handler_error);
-#endif
-
-    if (!net->bus_server) {
-        lo_address_free(net->bus_addr);
-        free(net);
-        return NULL;
-    }
+    if (!check_interfaces(net))
+        trace("no network interfaces found!\n");
 
     // Also open address/server for mesh-style communications
     // TODO: use TCP instead?
     while (!(net->mesh_server = lo_server_new(0, liblo_error_handler))) {}
 
     // Disable liblo message queueing.
-    lo_server_enable_queue(net->bus_server, 0, 1);
     lo_server_enable_queue(net->mesh_server, 0, 1);
 
     return net;
@@ -496,9 +529,16 @@ void mapper_network_send(mapper_network net)
 {
     if (!net->bundle)
         return;
+    mapper_interface iface;
 
 #if FORCE_COMMS_TO_BUS
-    lo_send_bundle_from(net->bus_addr, net->mesh_server, net->bundle);
+    iface = net->interfaces;
+    while (iface) {
+        if (iface->bus_addr)
+            lo_send_bundle_from(iface->bus_addr, net->mesh_server,
+                                net->bundle);
+        iface = iface->next;
+    }
 #else
     if (net->bundle_dest == BUNDLE_DEST_SUBSCRIBERS) {
         mapper_subscriber *s = &net->device->local->subscribers;
@@ -526,7 +566,13 @@ void mapper_network_send(mapper_network net)
         }
     }
     else if (net->bundle_dest == BUNDLE_DEST_BUS) {
-        lo_send_bundle_from(net->bus_addr, net->mesh_server, net->bundle);
+        iface = net->interfaces;
+        while (iface) {
+            if (iface->bus_addr)
+                lo_send_bundle_from(iface->bus_addr, net->mesh_server,
+                                    net->bundle);
+            iface = iface->next;
+        }
     }
     else {
         lo_send_bundle_from(net->bundle_dest, net->mesh_server, net->bundle);
@@ -611,17 +657,24 @@ void mapper_network_free(mapper_network net)
     // send out any cached messages
     mapper_network_send(net);
 
-    if (net->interface_name)
-        free(net->interface_name);
+    mapper_interface iface = net->interfaces;
+    while (iface) {
+        mapper_interface next = iface->next;
+        if (iface->name)
+            free(iface->name);
+        if (iface->bus_server)
+            lo_server_free(iface->bus_server);
+        if (iface->bus_addr)
+            lo_address_free(iface->bus_addr);
+        free(iface);
+        iface = next;
+    }
 
-    if (net->bus_server)
-        lo_server_free(net->bus_server);
+    if (net->force_interface)
+        free(net->force_interface);
 
     if (net->mesh_server)
         lo_server_free(net->mesh_server);
-
-    if (net->bus_addr)
-        lo_address_free(net->bus_addr);
 
     free(net);
 }
@@ -631,7 +684,7 @@ void mapper_network_free(mapper_network net)
 static void mapper_network_probe_device_name(mapper_network net,
                                              mapper_device dev)
 {
-    dev->local->ordinal.collision_count = -1;
+    dev->local->ordinal.collision_count = 0;
     dev->local->ordinal.count_time = mapper_get_current_time();
 
     /* Note: mapper_device_name() would refuse here since the ordinal is not yet
@@ -643,9 +696,13 @@ static void mapper_network_probe_device_name(mapper_network net,
     /* Calculate an id from the name and store it in id.value */
     dev->id = (mapper_id)crc32(0L, (const Bytef *)name, strlen(name)) << 32;
 
-    /* For the same reason, we can't use mapper_network_send() here. */
-    lo_send(net->bus_addr, network_message_strings[MSG_NAME_PROBE], "si",
-            name, net->random_id);
+    lo_message msg = lo_message_new();
+    if (!msg)
+        return;
+    lo_message_add_string(msg, name);
+    lo_message_add_int32(msg, net->random_id);
+    mapper_network_set_dest_bus(net);
+    mapper_network_add_message(net, 0, MSG_NAME_PROBE, msg);
 }
 
 /*! Add an uninitialized device to this network. */
@@ -664,12 +721,16 @@ void mapper_network_add_device(mapper_network net, mapper_device dev)
         /* Add methods for libmapper bus.  Only add methods needed for
          * allocation here. Further methods are added when the device is
          * registered. */
-        lo_server_add_method(net->bus_server,
-                             network_message_strings[MSG_NAME_PROBE],
-                             NULL, handler_probe, net);
-        lo_server_add_method(net->bus_server,
-                             network_message_strings[MSG_NAME_REG],
-                             NULL, handler_registered, net);
+        mapper_interface iface = net->interfaces;
+        while (iface) {
+            lo_server_add_method(iface->bus_server,
+                                 network_message_strings[MSG_NAME_PROBE],
+                                 NULL, handler_probe, net);
+            lo_server_add_method(iface->bus_server,
+                                 network_message_strings[MSG_NAME_REG],
+                                 NULL, handler_registered, net);
+            iface = iface->next;
+        }
 
         /* Probe potential name to libmapper bus. */
         mapper_network_probe_device_name(net, dev);
@@ -824,8 +885,10 @@ void mapper_network_poll(mapper_network net)
             mapper_device_registered(dev);
 
             /* Send registered msg. */
-            lo_send(net->bus_addr, network_message_strings[MSG_NAME_REG],
-                    "s", mapper_device_name(dev));
+            lo_message msg = lo_message_new();
+            lo_message_add_string(msg, mapper_device_name(dev));
+            mapper_network_set_dest_bus(net);
+            mapper_network_add_message(net, 0, MSG_NAME_REG, msg);
 
             mapper_network_add_device_methods(net, dev);
             mapper_network_maybe_send_ping(net, 1);
@@ -836,28 +899,54 @@ void mapper_network_poll(mapper_network net)
     else {
         // Send out clock sync messages occasionally
         mapper_network_maybe_send_ping(net, 0);
+        int now = mapper_get_current_time();
+        if (net->rescan_schedule < now)
+            check_interfaces(net);
     }
     return;
 }
 
-const char *mapper_network_interface(mapper_network net)
+int mapper_network_num_interfaces(mapper_network net)
 {
-    return net->interface_name;
+    int count = 0;
+    mapper_interface iface = net->interfaces;
+    while (iface) {
+        ++count;
+        iface = iface->next;
+    }
+    return count;
 }
 
-const struct in_addr *mapper_network_ip4(mapper_network net)
+const char *mapper_network_interface(mapper_network net, int index)
 {
-    return &net->interface_ip;
+    mapper_interface iface = net->interfaces;
+    while (iface) {
+        if (!(index--))
+            return iface->name;
+        iface = iface->next;
+    }
+    return NULL;
+}
+
+const struct in_addr *mapper_network_ip4(mapper_network net, int index)
+{
+    mapper_interface iface = net->interfaces;
+    while (iface) {
+        if (!(index--))
+            return &iface->ip;
+        iface = iface->next;
+    }
+    return NULL;
 }
 
 const char *mapper_network_group(mapper_network net)
 {
-    return lo_address_get_hostname(net->bus_addr);
+    return net->group;
 }
 
 int mapper_network_port(mapper_network net)
 {
-    return lo_server_get_port(net->bus_server);
+    return lo_server_get_port(net->interfaces[0].bus_server);
 }
 
 /*! Algorithm for checking collisions and allocating resources. */
@@ -1473,13 +1562,16 @@ static int handler_probe(const char *path, const char *types, lo_arg **argv,
                     break;
                 }
             }
-            /* Name may not yet be registered, so we can't use
-             * mapper_network_send() here. */
-            lo_send(net->bus_addr, network_message_strings[MSG_NAME_REG],
-                    "sii", name, temp_id,
-                    (dev->local->ordinal.value+i+1));
+
+            lo_message msg = lo_message_new();
+            lo_message_add_string(msg, mapper_device_name(dev));
+            lo_message_add_int32(msg, temp_id);
+            lo_message_add_int32(msg, dev->local->ordinal.value + i + 1);
+            mapper_network_set_dest_bus(net);
+            mapper_network_add_message(net, 0, MSG_NAME_REG, msg);
         }
-        else {
+        else if (temp_id != -1 && temp_id != net->random_id) {
+            // TODO: tie collision to network interface
             dev->local->ordinal.collision_count++;
             dev->local->ordinal.count_time = mapper_get_current_time();
         }
