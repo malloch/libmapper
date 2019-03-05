@@ -18,22 +18,22 @@ static int mapper_map_set_mode_linear(mapper_map map);
 
 static int alphabetise_signals(int num, mapper_signal *sigs, int *order)
 {
-    int i, j, result = 1;
+    int i, j, result1 = 1, result2 = 1;
     for (i = 0; i < num; i++)
         order[i] = i;
     for (i = 1; i < num; i++) {
         j = i-1;
         while (j >= 0
-               && (((result = strcmp(sigs[order[j]]->device->name,
-                                     sigs[order[j+1]]->device->name)) > 0)
-                   || ((result = strcmp(sigs[order[j]]->name,
-                                        sigs[order[j+1]]->name)) > 0))) {
+               && (((result1 = strcmp(sigs[order[j]]->device->name,
+                                      sigs[order[j+1]]->device->name)) > 0)
+                   || ((result2 = strcmp(sigs[order[j]]->name,
+                                         sigs[order[j+1]]->name)) > 0))) {
                    int temp = order[j];
                    order[j] = order[j+1];
                    order[j+1] = temp;
                    j--;
-               }
-        if (result == 0)
+        }
+        if (result1 == 0 && result2 == 0)
             return 1;
     }
     return 0;
@@ -271,24 +271,28 @@ const char *mapper_map_description(mapper_map map)
     return 0;
 }
 
-int mapper_map_num_sources(mapper_map map)
+int mapper_map_num_slots(mapper_map map, mapper_location loc)
 {
-    return map->num_sources;
-}
-
-int mapper_map_num_destinations(mapper_map map)
-{
-    // only 1 destination supported for now
-    return 1;
+    int count = 0;
+    if (loc & MAPPER_LOC_SOURCE)
+        count += map->num_sources;
+    if (loc & MAPPER_LOC_DESTINATION)
+        count += 1;
+    return count;
 }
 
 mapper_slot mapper_map_slot(mapper_map map, mapper_location loc, int index)
 {
-    if (loc == MAPPER_LOC_DESTINATION)
-        return &map->destination;
-    if (loc != MAPPER_LOC_SOURCE || index < 0 || index >= map->num_sources)
-        return 0;
-    return map->sources[index];
+    if (loc & MAPPER_LOC_SOURCE) {
+        if (index < map->num_sources)
+            return map->sources[index];
+        index -= map->num_sources;
+    }
+    if (loc & MAPPER_LOC_DESTINATION) {
+        if (index == 0)
+            return &map->destination;
+    }
+    return 0;
 }
 
 mapper_slot mapper_map_slot_by_signal(mapper_map map, mapper_signal sig)
@@ -425,12 +429,12 @@ void mapper_map_set_muted(mapper_map map, int muted)
                             REMOTE_MODIFY);
 }
 
-void mapper_map_set_process_location(mapper_map map, mapper_location location)
+void mapper_map_set_process_location(mapper_map map, mapper_location loc)
 {
-    if (!map)
+    if (!map || (loc != MAPPER_LOC_SOURCE && loc != MAPPER_LOC_DESTINATION))
         return;
     mapper_table_set_record(map->staged_props, AT_PROCESS_LOCATION, NULL, 1,
-                            'i', &location, REMOTE_MODIFY);
+                            'i', &loc, REMOTE_MODIFY);
 }
 
 void mapper_map_set_protocol(mapper_map map, mapper_protocol proto)
@@ -443,7 +447,7 @@ void mapper_map_set_protocol(mapper_map map, mapper_protocol proto)
 
 void mapper_map_add_scope(mapper_map map, mapper_device device)
 {
-    if (!map || !device)
+    if (!map)
         return;
     mapper_property_t prop = AT_SCOPE | PROPERTY_ADD;
     mapper_table_record_t *rec = mapper_table_record(map->staged_props, prop,
@@ -456,7 +460,7 @@ void mapper_map_add_scope(mapper_map map, mapper_device device)
         for (int i = 0; i < rec->length; i++) {
             names[i] = ((const char**)rec->value)[i];
         }
-        names[rec->length] = device->name;
+        names[rec->length] = device ? device->name : "all";
         mapper_table_set_record(map->staged_props, prop, NULL,
                                 rec->length + 1, 's', names,
                                 REMOTE_MODIFY);
@@ -502,6 +506,9 @@ int mapper_map_set_property(mapper_map map, const char *name, int length,
             map->user_data = (void*)value;
             return 1;
         }
+    }
+    else if (prop == AT_ID) {
+        return 1;
     }
     else {
         int flags = REMOTE_MODIFY | publish ? 0 : LOCAL_ACCESS_ONLY;
@@ -1503,6 +1510,10 @@ int mapper_map_set_from_message(mapper_map map, mapper_message msg, int override
                 if (map->local) {
                     if (loc == MAPPER_LOC_UNDEFINED) {
                         trace("map process location is undefined!\n");
+                        break;
+                    }
+                    if (loc == MAPPER_LOC_ANY) {
+                        // no effect
                         break;
                     }
                     if (!map->local->one_source) {

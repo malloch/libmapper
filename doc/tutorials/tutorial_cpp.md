@@ -1,22 +1,37 @@
-Using libmapper and C++
-============
+# Getting started with libmapper and C++
 
-C++ headers are supplied for _libmapper_:
+## Overview of the C++ API
 
-    #include <mapper/mapper_cpp.h>
+If you take a look at the API documentation, there is a section called
+"modules".  This is divided into the following sections:
 
-Devices
-=======
+* [Networks](../html/classmapper_1_1Network.html)
+* [Devices](../html/classmapper_1_1Device.html)
+* [Signals](../html/classmapper_1_1Signal.html)
+* [Maps](../html/classmapper_1_1Map.html)
+* [Slots](../html/classmapper_1_1Map_1_1Slot.html)
+* [Databases](../html/classmapper_1_1Database.html)
 
-Creating a device
------------------
+For this tutorial, the only sections to pay attention to are **Devices** and
+**Signals**.  **Networks** are reserved for providing custom networking
+configurations, but in general you don't need to worry about it.
+
+The **Database** module is used to keep track of what devices, signals and maps
+are on the network.  It is used mainly for creating user interfaces for mapping
+design and will also not be covered here.
+
+## Devices
+
+### Creating a device
 
 To create a _libmapper_ device, it is necessary to provide a few parameters the
 constructor, which is overloaded to accept either arguments of either
 `const char*` or C++ `std::string`:
 
-    mapper::Device dev( const char *name, mapper.Network net = 0 );
-    mapper::Device dev( std::string name, mapper.Network net = 0 );
+~~~c++
+mapper::Device dev(const char *name, mapper.Network net = 0);
+mapper::Device dev(std::string name, mapper.Network net = 0);
+~~~
 
 In regular usage only the first argument is needed. The optional `Network`
 argument can be used to specify different networking parameters, such as
@@ -24,10 +39,11 @@ specifying the name of the network interface to use.
 
 An example of creating a device:
 
-    mapper::Device dev( "test" );
+~~~c++
+mapper::Device dev("test");
+~~~
 
-Polling the device
-------------------
+### Polling the device
 
 The device lifecycle looks like this, in terrible ASCII diagram art:
 
@@ -49,11 +65,15 @@ The `poll()` function can be blocking or non-blocking, depending on how you want
 your application to behave.  It takes an optional number of milliseconds during
 which it should do some work before returning:
 
-    int dev.poll( int block_ms );
+~~~c++
+int dev.poll(int block_ms);
+~~~
 
 An example of calling it with non-blocking behaviour:
 
-    dev.poll();
+~~~c++
+dev.poll();
+~~~
 
 If your polling is in the middle of a processing function or in response to a
 GUI event for example, non-blocking behaviour is desired.  On the other hand if
@@ -77,8 +97,7 @@ Since there is a delay before the device is completely initialized, it is
 sometimes useful to be able to determine this using `ready()`.  Only when
 `dev.ready()` returns non-zero is it valid to use the device's name.
 
-Signals
-=======
+## Signals
 
 Now that we know how to create a device, poll it, and free it, we only need to
 know how to add signals in order to give our program some input/output
@@ -96,10 +115,10 @@ synthesizer might be updated locally through user interaction with a GUI,
 however the normal use of this signal is as a _destination_ for control data
 streams so it should be defined as an `input` signal.  Note that this
 distinction is to help with GUI organization and user-understanding –
-_libmapper_ enables connections from output signals to input signals if desired.
+_libmapper_ enables connections from input signals and to output signals if
+desired.
 
-Creating a signal
------------------
+### Creating a signal
 
 We'll start with creating a "sender", so we will first talk about how to update
 output signals.  A signal requires a bit more information than a device, much of
@@ -118,13 +137,17 @@ for input signals there is an additional argument:
 
 examples:
 
-    mapper::Signal sig_in = dev.add_input_signal( "my_input", 1, 'f',
-                                                  "m/s", 0, 0, h )
+~~~c++
+mapper::Signal input;
+input = dev.add_input_signal("my_input", 1, 'f',
+                             "m/s", 0, 0, h)
 
-    int min[4] = {1,2,3,4};
-    int max[4] = {10,11,12,13};
-    mapper::Signal sig_out = dev.add_output_signal( "my_output", 4, 'i',
-                                                    0, min, max )
+int min[4] = {1,2,3,4};
+int max[4] = {10,11,12,13};
+mapper::Signal output;
+output = dev.add_output_signal("my_output", 4,
+                               'i', 0, min, max)
+~~~
 
 The only _required_ parameters here are the signal "length", its name, and data
 type.  Signals are assumed to be vectors of values, so for usual single-valued
@@ -155,27 +178,39 @@ information to be passed to that function during callback in `user_data`.
 An example of creating a "barebones" `int` scalar output signal with no unit,
 minimum, or maximum information:
 
-    mapper::Signal outputA = dev.add_output_signal( "outA", 1, 'i', 0, 0, 0 );
+~~~c++
+mapper::Signal sig;
+sig = dev.add_output_signal("outA", 1, 'i',
+                            0, 0, 0);
+~~~
 
 An example of a `float` signal where some more information is provided:
 
-    float minimum = 0.0f;
-    float maximum = 5.0f;
-    mapper::Signal sensor1 = dev.add_output_signal( "sensor1", 1, 'f', "V",
-                                                    &minimum, &maximum );
+~~~c++
+float min = 0.0f;
+float max = 5.0f;
+mapper::Signal sig;
+sig = dev.add_output_signal("sensor1", 1, 'f',
+                            "V", &min, &max);
+~~~
 
 So far we know how to create a device and to specify an output signal
 for it.  To recap, let's review the code so far:
- 
-    mapper::Device dev( "test_sender");
-    mapper::Signal sensor1 = dev.add_output_signal( "sensor1", 1, 'f', "V",
-                                                    &minimum, &maximum );
+
+~~~c++
+mapper::Device dev("test_sender");
+mapper::Signal sig;
+float min = 0.0f;
+float max = 5.0f;
+sig = dev.add_output_signal("sensor1", 1, 'f',
+                            "V", &min, &max);
     
-    while ( !done ) {
-        dev.poll( 50 );
-        ... do stuff ...
-        ... update signals ...
-    }
+while (!done) {
+    dev.poll(10);
+    ... do stuff ...
+    ... update signals ...
+}
+~~~
 
 It is possible to retrieve a device's inputs or outputs by name or by index at a
 later time using the functions `dev.input()` or `dev.output()` with either the
@@ -184,15 +219,16 @@ signal name or index as an argument. The functions `dev.inputs()` and
 used to retrieve all of the input/output signals belonging to a particular
 device:
 
-    std::cout << "Signals belonging to " << dev.name() << std::endl;
+~~~c++
+std::cout << "Signals belonging to " << dev.name() << std::endl;
 
-    mapper::Signal::Query q = dev.signals(MAPPER_DIR_INCOMING).begin();
-    for (; q != q.end(); ++q) {
-        std::cout << "input: " << (const char*)(*q) << std::endl;
-    }
+mapper::Signal::Query q = dev.signals(MAPPER_DIR_INCOMING).begin();
+for (; q != q.end(); ++q) {
+    std::cout << "input: " << (const char*)(*q) << std::endl;
+}
+~~~
 
-Updating signals
-----------------
+### Updating signals
 
 We can imagine the above program getting sensor information in a loop.  It could
 be running on an network-enable ARM device and reading the ADC register
@@ -203,9 +239,9 @@ be sent to other devices if that signal is mapped.
 
 This is accomplished by the `update()` function:
 
-    void sig.update( void *value,
-                     int count,
-                     mapper.Timetag timetag );
+~~~c++
+void sig.update(void *value, int count, mapper::Timetag timetag);
+~~~
 
 The `count` and `timetag` arguments can be ommited, and the `update()` function
 is overloaded to accept scalars, arrays, and vectors as appropriate for the
@@ -220,22 +256,25 @@ upstream timing information (e.g., from a microcontroller sampling sensor
 values), you can omit the argument and libmapper will tag the update with the
 current time.
 
-So in the "sensor 1" example, assuming in "do stuff" we have some code which
+So in the "sensor 1" example, assuming in `do_stuff()` we have some code which
 reads sensor 1's value into a float variable called `v1`, the loop becomes:
 
-    while ( !done ) {
-        dev.poll( 50 );
-        float v1 = read_sensor_1();
-        sensor1.update( v1 );
-    }
+~~~c++
+while (!done) {
+    dev.poll(50);
+    
+    // call a hypothetical user function that reads a sensor
+    float v1 = do_stuff();
+    sensor1.update(v1);
+}
+~~~
 
 This is about all that is needed to expose sensor 1's value to the network as a
 mappable parameter.  The _libmapper_ GUI can now map this value to a receiver,
 where it could control a synthesizer parameter or change the brightness of an
 LED, or whatever else you want to do.
 
-Signal conditioning
--------------------
+### Signal conditioning
 
 Most synthesizers of course will not know what to do with the value of sensor1
 --it is an electrical property that has nothing to do with sound or music.  This
@@ -266,8 +305,7 @@ in order to expose both processed and raw data.  Keep in mind that these will
 not take up significant processing time, and _zero_ network bandwidth, if they
 are not mapped.
 
-Receiving signals
------------------
+### Receiving signals
 
 Now that we know how to create a sender, it would be useful to also know how to
 receive signals, so that we can create a sender-receiver pair to test out the
@@ -276,26 +314,26 @@ be retrieved at any time by calling the function `value()` on your signal
 object, however for event-driven applications you may want to be informed of new
 values as they are received or generated.
 
-As mentioned above, the `add_input()` function takes an optional `handler` and
-`user_data`.  This is a function that will be called whenever the value of that
-signal changes.  To create a receiver for a synthesizer parameter "pulse width"
-(given as a ratio between 0 and 1), specify a handler when calling
-`add_input()`.  We'll imagine there is some C++ synthesizer implemented as a
-class `Synthesizer` which has functions `setPulseWidth()` which sets the pulse
-width in a thread-safe manner, and `startAudioInBackground()` which sets up the
-audio thread.
+As mentioned above, the `add_input_signal()` function takes an optional
+`handler` and `user_data`.  This is a function that will be called whenever the
+value of that signal changes.  To create a receiver for a synthesizer parameter
+"pulse width" (given as a ratio between 0 and 1), specify a handler when calling
+`add_input_signal()`.  We'll imagine there is some C++ synthesizer implemented
+as a class `Synthesizer` which has functions `setPulseWidth()` which sets the
+pulse width in a thread-safe manner, and `startAudioInBackground()` which sets
+up the audio thread.
 
 Create the handler function, which is fairly simple,
 
-    void pulsewidth_handler ( mapper::Signal sig,
-                              int instance_id,
-                              void *value,
-                              int count,
-                              mapper::Timetag tt )
-    {
-        Synthesizer *s = (Synthesizer*) sig.user_data();
-        s->setPulseWidth( *(float*)v );
-    }
+~~~c++
+void pulsewidth_handler(mapper::Signal sig, mapper_id instance,
+                        void *value, int count,
+                        mapper::Timetag tt)
+{
+    Synthesizer *s = (Synthesizer*) sig.user_data();
+    s->setPulseWidth(*(float*)v);
+}
+~~~
 
 First, the pointer to the `Synthesizer` instance is extracted from the
 `user_data` pointer, then it is dereferenced to set the pulse width according to
@@ -303,26 +341,27 @@ the value pointed to by `v`.
 
 Then `main()` will look like,
 
-    void main()
-    {
-        Synthesizer synth;
-        synth.startAudioInBackground();
-        
-        float min_pw = 0.0f;
-        float max_pw = 1.0f;
-        
-        mapper::Device my_receiver( "test_receiver" );
-        
-        mapper::Signal synth_pulsewidth =
-            dev.add_input_signal( "pulsewidth", 1, 'f', 0, &min_pw,
-                                  &max_pw, pulsewidth_handler, &synth );
-        
-        while ( !done )
-            dev.poll( 50 );
-    }
+~~~c++
+void main()
+{
+    Synthesizer synth;
+    synth.startAudioInBackground();
+    
+    float min_pw = 0.0f;
+    float max_pw = 1.0f;
+    
+    mapper::Device dev("synth");
+    
+    mapper::Signal pulsewidth =
+        dev.add_input_signal("pulsewidth", 1, 'f', 0, &min_pw,
+                             &max_pw, pulsewidth_handler, &synth);
+    
+    while (!done)
+        dev.poll(50);
+}
+~~~
 
-Working with timetags
-=====================
+## Working with timetags
 
 _libmapper_ uses the `Timetag` data structure to store
 [NTP timestamps](http://en.wikipedia.org/wiki/Network_Time_Protocol#NTP_timestamps).
@@ -344,8 +383,7 @@ _libmapper_ also provides helper functions for getting the current device-time,
 setting the value of a `Timetag` from other representations, and comparing or
 copying timetags.  Check the API documentation for more information.
 
-Working with signal instances
-=============================
+## Working with signal instances
 
 _libmapper_ also provides support for signals with multiple _instances_, for
 example:
@@ -369,48 +407,52 @@ The important qualities of signal instances in _libmapper_ are:
 All signals possess one instance by default. If you would like to reserve more
 instances you can use:
 
-    sig.reserve_instances( int num )
+~~~c++
+sig.reserve_instances(int num)
+sig.reserve_instances(int num, mapper_id *ids)
+sig.reserve_instances(int num, mapper_id *ids, void **user_data)
+~~~
 
 After reserving instances you can update a specific instance, for example:
 
-    sig.instance_update( int instance_id,
-                         void *value,
-                         int count,
-                         Timetag timetag)
+~~~c++
+sig.instance_update(mapper_id instance, void *value,
+                    int count, mapper::Timetag timetag)
+~~~
 
 All of the arguments except one should be familiar from the documentation of
-`update()` presented earlier.  The `instance_id` argument does not have to be
+`update()` presented earlier.  The `instance` argument does not have to be
 considered as an array index - it can be any integer that is convenient for
 labelling your instance. _libmapper_ will internally create a map from your id
 label to one of the preallocated instance structures.
 
-Receiving instances
--------------------
+### Receiving instances
 
 You might have noticed earlier that the handler function called when a signal
-update is received has a argument called `instance_id`. Here is the function
+update is received has a argument called `instance`. Here is the function
 prototype again:
 
-    void mapper_signal_update_handler(mapper::Signal sig,
-                                      int instance_id,
-                                      void *value,
-                                      int count,
-                                      mapper::Timetag tt);
+~~~c++
+void mapper_signal_update_handler(mapper::Signal sig, mapper_id instance,
+                                  void *value, int count,
+                                  mapper::Timetag tt);
+~~~
 
 Under normal usage, this argument will have a value (0 <= n <= num_instances)
 and can be used as an array index. Remember that you will need to reserve
 instances for your input signal using `sig.reserve_instances()` if you want to
 receive instance updates.
 
-Instance Stealing
------------------
+### Instance Stealing
 
 For handling cases in which the sender signal has more instances than the
 receiver signal, the _instance allocation mode_ can be set for an input signal
 to set an action to take in case all allocated instances are in use and a
 previously unseen instance id is received. Use the function:
 
-    sig.set_instance_allocation_mode( instance_allocation_type mode );
+~~~c++
+sig.set_instance_allocation_mode(mapper_instance_stealing_type mode);
+~~~
 
 The argument `mode` can have one of the following values:
 
@@ -423,26 +465,26 @@ The argument `mode` can have one of the following values:
 If you want to use another method for determining which active instance to
 release (e.g. the sound with the lowest volume), you can create an `instance_event_handler` for the signal and write the method yourself:
 
-    void my_handler(mapper::Signal sig,
-                    int instance_id,
-                    msig_instance_event_t event,
-                    mapper::Timetag tt)
-    {
-        // user code chooses which instance to release
-        int id = choose_instance_to_release(sig);
+~~~c++
+void my_handler(mapper::Signal sig, mapper_id instance,
+                mapper_instance_event event, mapper::Timetag tt)
+{
+    // user code chooses which instance to release
+    mapper_id release_me = choose_instance_to_release(sig);
 
-        sig.release_instance(id, tt);
-    }
+    sig.release_instance(release_me, tt);
+}
+~~~
 
 For this function to be called when instance stealing is necessary, we need to
 register it for `IN_OVERFLOW` events:
 
-    sig.set_instance_event_callback( my_handler,
-                                     MAPPER_INSTANCE_OVERFLOW,
-                                     *user_context);
+~~~c++
+sig.set_instance_event_callback(my_handler,
+                                MAPPER_INSTANCE_OVERFLOW);
+~~~
 
-Publishing metadata
-===================
+## Publishing metadata
 
 Things like device names, signal units, and ranges, are examples of metadata
 --information about the data you are exposing on the network.
@@ -453,8 +495,8 @@ but can be retrieved over the network.  This can be used for instance to give a
 device X and Y information, or to perhaps give a signal some property like
 "reliability", or some category like "light", "motor", "shaker", etc.
 
-Some GUI implementing a Monitor could then use this information to display
-information about the network in an intelligent manner.
+Some GUI could then use this information to display information about the
+network in an intelligent manner.
 
 Any time there may be extra knowledge about a signal or device, it is a good
 idea to represent it by adding such properties, which can be of any
@@ -462,7 +504,9 @@ OSC-compatible type.  (So, numbers and strings, etc.)
 
 The property interface is through the functions,
 
-    void <object>.set_property( <name>, <value> );
+~~~c++
+void <object>.set_property(<name>, <value>);
+~~~
 
 The `<value>` arguments can be a scalar, array or std::vector of type `int`,
 `float`, `double`, or `char*`.
@@ -470,30 +514,37 @@ The `<value>` arguments can be a scalar, array or std::vector of type `int`,
 For example, to store a `float` indicating the X position of a device, you can
 call it like this:
 
-    dev.set_property( "x", 12.5f );
-    sig.set_property( "sensingMethod", "resistive" );
+~~~c++
+dev.set_property("x", 12.5f);
+sig.set_property("sensingMethod", "resistive");
+~~~
 
-## Reserved keys
+### Reserved keys
 
-In general you can use any property name not already in use by the device or
-signal data structure.
+You can use any property name not already reserved by libmapper.
 
-### Reserved keys for devices
+#### Reserved keys for devices
 
-`description`, `host`, `id`, `libversion`, `name`, `num_incoming_maps`, `num_outgoing_maps`, `num_inputs`, `num_outputs`, `port`, `synced`, `version`,
+`description`, `host`, `id`, `is_local`, `libversion`, `name`, `num_incoming_maps`,
+`num_outgoing_maps`, `num_inputs`, `num_outputs`, `port`, `synced`, `value`, `version`,
 `user_data`
 
-### Reserved keys for signals
+#### Reserved keys for signals
 
-`description`, `direction`, `id`, `length`, `max`, `maximum`, `min`, `minimum`,
-`name`, `num_incoming_maps`, `num_instances`, `num_outgoing_maps`, `rate`,
+`description`, `direction`, `id`, `is_local`, `length`, `max`, `maximum`, `min`,
+`minimum`, `name`, `num_incoming_maps`, `num_instances`, `num_outgoing_maps`, `rate`,
 `type`, `unit`, `user_data`
 
-### Reserved keys for maps
+#### Reserved keys for links
 
-`expression`, `id`, `mode`, `muted`, `num_sources`, `process_location`, `status`
+`description`, `id`, `is_local`, `num_maps`
 
-### Reserved keys for slots
+#### Reserved keys for maps
+
+`description`, `expression`, `id`, `is_local`, `mode`, `muted`, `num_destinations`,
+`num_sources`, `process_location`, `ready`, `status`
+
+#### Reserved keys for map slots
 
 `bound_max`, `bound_min`, `calibrating`, `causes_update`, `direction`, `length`,
 `maximum`, `minimum`, `num_instances`, `use_as_instance`, `type`

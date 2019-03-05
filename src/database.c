@@ -13,6 +13,52 @@ extern const char* network_message_strings[NUM_MSG_STRINGS];
 static void unsubscribe_internal(mapper_database db, mapper_device dev,
                                  int send_message);
 
+int _flushing = 0;
+int _timeout_sec = TIMEOUT_SEC;
+
+#ifdef DEBUG
+static void print_subscription_flags(int flags)
+{
+    printf("[");
+    if (flags == MAPPER_OBJ_NONE) {
+        printf("none\n");
+        return;
+    }
+
+    if (flags & MAPPER_OBJ_DEVICES)
+        printf("devices, ");
+
+    if (flags & MAPPER_OBJ_INPUT_SIGNALS) {
+        if (flags & MAPPER_OBJ_OUTPUT_SIGNALS)
+            printf("signals, ");
+        else
+            printf("input signals, ");
+    }
+    else if (flags & MAPPER_OBJ_OUTPUT_SIGNALS)
+        printf("output signals, ");
+
+    if (flags & MAPPER_OBJ_INCOMING_LINKS) {
+        if (flags & MAPPER_OBJ_OUTGOING_LINKS)
+            printf("links, ");
+        else
+            printf("incoming links, ");
+    }
+    else if (flags & MAPPER_OBJ_OUTGOING_LINKS)
+        printf("outgoing links, ");
+
+    if (flags & MAPPER_OBJ_INCOMING_MAPS) {
+        if (flags & MAPPER_OBJ_OUTGOING_MAPS)
+            printf("maps, ");
+        else
+            printf("incoming maps, ");
+    }
+    else if (flags & MAPPER_OBJ_OUTGOING_MAPS)
+        printf("outgoing maps, ");
+
+    printf("\b\b]\n");
+}
+#endif
+
 mapper_database mapper_database_new(mapper_network net, int subscribe_flags)
 {
     if (!net)
@@ -97,9 +143,7 @@ mapper_network mapper_database_network(mapper_database db)
 
 void mapper_database_set_timeout(mapper_database db, int timeout_sec)
 {
-    if (timeout_sec < 0)
-        timeout_sec = TIMEOUT_SEC;
-    db->timeout_sec = timeout_sec;
+    db->timeout_sec = (timeout_sec <= 0) ? TIMEOUT_SEC : timeout_sec;
 }
 
 int mapper_database_timeout(mapper_database db)
@@ -109,17 +153,8 @@ int mapper_database_timeout(mapper_database db)
 
 void mapper_database_flush(mapper_database db, int timeout_sec, int quiet)
 {
-    mapper_timetag_t tt;
-    mapper_timetag_now(&tt);
-
-    // flush expired device records
-    mapper_device dev;
-    uint32_t last_ping = tt.sec - timeout_sec;
-    while ((dev = mapper_database_expired_device(db, last_ping))) {
-        // remove subscription
-        unsubscribe_internal(db, dev, 1);
-        mapper_database_remove_device(db, dev, MAPPER_EXPIRED, quiet);
-    }
+    _timeout_sec = (timeout_sec <= 0) ? TIMEOUT_SEC : timeout_sec;
+    _flushing = quiet + 1;
 }
 
 static void add_callback(fptr_list *head, const void *f, const void *user)
@@ -1464,6 +1499,21 @@ int mapper_database_poll(mapper_database db, int block_ms)
     }
 
     net->msgs_recvd |= count;
+
+    if (_flushing) {
+        // flush expired device records
+        mapper_timetag_t tt;
+        mapper_timetag_now(&tt);
+        mapper_device dev;
+        uint32_t last_ping = tt.sec - _timeout_sec;
+        while ((dev = mapper_database_expired_device(db, last_ping))) {
+            // remove subscription
+            unsubscribe_internal(db, dev, 1);
+            mapper_database_remove_device(db, dev, MAPPER_REMOVED, _flushing != 1);
+        }
+        _flushing = 0;
+    }
+
     return count;
 }
 
@@ -1503,7 +1553,10 @@ static void mapper_database_autosubscribe(mapper_database db, int flags)
             unsubscribe_internal(db, db->subscriptions->device, 1);
         }
     }
-    trace_db("setting autosubscribe flags to %d\n", flags);
+#ifdef DEBUG
+    trace_db("setting autosubscribe flags to ");
+    print_subscription_flags(flags);
+#endif
     db->autosubscribe = flags;
 }
 
@@ -1531,9 +1584,11 @@ void mapper_database_subscribe(mapper_database db, mapper_device dev, int flags,
         return;
     }
     if (timeout == -1) {
+#ifdef DEBUG
         trace_db("adding %d-second autorenewing subscription to device '%s' "
-                 "with flags %d.\n", AUTOSUBSCRIBE_INTERVAL,
-                 mapper_device_name(dev), flags);
+                 "with flags ", AUTOSUBSCRIBE_INTERVAL, mapper_device_name(dev));
+        print_subscription_flags(flags);
+#endif
         // special case: autorenew subscription lease
         // first check if subscription already exists
         mapper_subscription s = subscription(db, dev);
@@ -1546,9 +1601,11 @@ void mapper_database_subscribe(mapper_database db, mapper_device dev, int flags,
             s->next = db->subscriptions;
             db->subscriptions = s;
         }
-        else if (s->flags != flags)
-            s->device->version = -1;
+        dev->subscribed = 1;
+        if (s->flags == flags)
+            return;
 
+        s->device->version = -1;
         s->flags = flags;
 
         mapper_timetag_t tt;
@@ -1558,10 +1615,13 @@ void mapper_database_subscribe(mapper_database db, mapper_device dev, int flags,
 
         timeout = AUTOSUBSCRIBE_INTERVAL;
     }
+#ifdef DEBUG
     else {
         trace_db("adding temporary %d-second subscription to device '%s' "
-                 "with flags %d.\n", timeout, mapper_device_name(dev), flags);
+                 "with flags ", timeout, mapper_device_name(dev));
+        print_subscription_flags(flags);
     }
+#endif
 
     subscribe_internal(db, dev, flags, timeout);
 }

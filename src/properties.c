@@ -80,6 +80,7 @@ const char* mapper_location_strings[] =
     NULL,           /* MAPPER_LOC_UNDEFINED */
     "source",       /* MAPPER_LOC_SOURCE */
     "destination",  /* MAPPER_LOC_DESTINATION */
+    "any",          /* MAPPER_LOC_ANY */
 };
 
 const char* mapper_mode_strings[] =
@@ -465,6 +466,10 @@ mapper_property_t mapper_property_from_string(const char *string)
             end = mid - 1;
         mid = (beg + end) * 0.5;
     }
+    if (strcmp(string, "maximum")==0)
+        return AT_MAX;
+    if (strcmp(string, "minimum")==0)
+        return AT_MIN;
     return AT_EXTRA;
 }
 
@@ -489,7 +494,7 @@ mapper_boundary_action mapper_boundary_action_from_string(const char *str)
 
 const char *mapper_location_string(mapper_location loc)
 {
-    if (loc <= 0 || loc > NUM_MAPPER_LOCATIONS)
+    if (loc <= 0 || loc > MAPPER_LOC_ANY)
         return "unknown";
     return mapper_location_strings[loc];
 }

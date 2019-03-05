@@ -1236,8 +1236,9 @@ const char *mapper_map_description(mapper_map map);
 
 /*! Get the number of source signals for to a specific map.
  *  \param map          The map to check.
- *  \return             The number of sources. */
-int mapper_map_num_sources(mapper_map map);
+ *  \param loc          MAPPER_LOC_SOURCE, MAPPER_LOC_DESTINATION,
+ *  \return             The number of slots. */
+int mapper_map_num_slots(mapper_map map, mapper_location loc);
 
 /*! Get the number of destination signals for to a specific map.
  *  \param map          The map to check.
@@ -1686,7 +1687,7 @@ void mapper_slot_print(mapper_slot slot);
 
 /***** Database *****/
 
-/*! @defgroup database Databases
+/*! @defgroup databases Databases
 
     @{ Databases are the primary interface through which a program may observe
        the network and store information about devices and signals that are
@@ -2123,7 +2124,7 @@ void mapper_timetag_copy(mapper_timetag_t *ttl, mapper_timetag_t ttr);
 
 /*! Get the version of libmapper.
  *  \return             A string specifying the version of libmapper. */
-const char *mapper_version();
+const char *mapper_version(void);
 
 #ifdef __cplusplus
 }

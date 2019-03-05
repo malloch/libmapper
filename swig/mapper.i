@@ -54,35 +54,56 @@
 %typemap(freearg) (int num_ids, mapper_id *argv) {
     if ($2) free($2);
 }
-%typemap(in) (int num_sources, const char **sources) {
+%typemap(in) (signal_list) {
     int i;
+    signal *s;
+    signal_list_t *sl = alloca(sizeof(*sl));
     if (PyList_Check($input)) {
-        $1 = PyList_Size($input);
-        $2 = (char **) malloc($1*sizeof(char*));
-        for (i = 0; i < $1; i++) {
-            PyObject *s = PyList_GetItem($input,i);
-            if (PyString_Check(s)) {
-                $2[i] = PyString_AsString(s);
+        sl->len = PyList_Size($input);
+        sl->sigs = (mapper_signal*) malloc(sl->len * sizeof(mapper_signal));
+        for (i = 0; i < sl->len; i++) {
+            PyObject *o = PyList_GetItem($input, i);
+            if (o && strcmp(o->ob_type->tp_name, "signal")==0) {
+                if (!SWIG_IsOK(SWIG_ConvertPtr(o, (void**)&s, SWIGTYPE_p__signal, 0))) {
+                    SWIG_exception_fail(SWIG_TypeError,
+                                        "in method '$symname', expecting type signal");
+                    free(sl->sigs);
+                    return NULL;
+                }
+                sl->sigs[i] = (mapper_signal)s;
             }
             else {
-                free($2);
+                free(sl->sigs);
                 PyErr_SetString(PyExc_ValueError,
-                                "List items must be string.");
+                                "List items must be signals.");
                 return NULL;
             }
         }
     }
-    else if (PyString_Check($input)) {
-        $1 = 1;
-        $2 = (char**) malloc(sizeof(char*));
-        $2[0] = PyString_AsString($input);
+    else if ($input && strcmp(($input)->ob_type->tp_name, "signal")==0) {
+        sl->len = 1;
+        if (!SWIG_IsOK(SWIG_ConvertPtr($input, (void**)&s, SWIGTYPE_p__signal, 0))) {
+            SWIG_exception_fail(SWIG_TypeError,
+                                "in method '$symname', expecting type signal");
+            return NULL;
+        }
+        sl->sigs = (mapper_signal*) malloc(sizeof(mapper_signal));
+        sl->sigs[0] = (mapper_signal)s;
     }
     else {
+        SWIG_exception_fail(SWIG_TypeError,
+                            "in method '$symname', expecting type signal");
         return NULL;
     }
+    $1 = sl;
 }
-%typemap(freearg) (int num_sources, const char **sources) {
-    if ($2) free($2);
+%typemap(freearg) (signal_list) {
+    if ($1) {
+        signal_list sl = (signal_list)$1;
+        if (sl->sigs)
+            free (sl->sigs);
+//        free(sl);
+    }
 }
 %typemap(in) property_value %{
     property_value_t *prop = alloca(sizeof(*prop));
@@ -638,7 +659,9 @@ static void signal_handler_py(mapper_signal sig, mapper_id id,
                               const void *value, int count,
                               mapper_timetag_t *tt)
 {
-    PyEval_RestoreThread(_save);
+    PyGILState_STATE gstate;
+    gstate = PyGILState_Ensure();
+
     PyObject *arglist=0;
     PyObject *valuelist=0;
     PyObject *result=0;
@@ -693,7 +716,8 @@ static void signal_handler_py(mapper_signal sig, mapper_id id,
     Py_DECREF(arglist);
     Py_XDECREF(valuelist);
     Py_XDECREF(result);
-    _save = PyEval_SaveThread();
+
+    PyGILState_Release(gstate);
 }
 
 /* Wrapper for callback back to python when a mapper_instance_event handler
@@ -702,7 +726,10 @@ static void instance_event_handler_py(mapper_signal sig, mapper_id id,
                                       mapper_instance_event event,
                                       mapper_timetag_t *tt)
 {
-    PyEval_RestoreThread(_save);
+
+    PyGILState_STATE gstate;
+    gstate = PyGILState_Ensure();
+
     PyObject *arglist=0;
     PyObject *result=0;
 
@@ -720,14 +747,16 @@ static void instance_event_handler_py(mapper_signal sig, mapper_id id,
     result = PyEval_CallObject(callbacks[1], arglist);
     Py_DECREF(arglist);
     Py_XDECREF(result);
-    _save = PyEval_SaveThread();
+
+    PyGILState_Release(gstate);
 }
 
 /* Wrapper for callback back to python when a device map handler is called. */
 static void device_link_handler_py(mapper_device dev, mapper_link link,
                                    mapper_record_event event)
 {
-    PyEval_RestoreThread(_save);
+    PyGILState_STATE gstate;
+    gstate = PyGILState_Ensure();
 
     PyObject *py_link = SWIG_NewPointerObj(SWIG_as_voidptr(link),
                                            SWIGTYPE_p__link, 0);
@@ -745,14 +774,16 @@ static void device_link_handler_py(mapper_device dev, mapper_link link,
     PyObject *result = PyEval_CallObject(callbacks[0], arglist);
     Py_DECREF(arglist);
     Py_XDECREF(result);
-    _save = PyEval_SaveThread();
+
+    PyGILState_Release(gstate);
 }
 
 /* Wrapper for callback back to python when a device map handler is called. */
 static void device_map_handler_py(mapper_device dev, mapper_map map,
                                   mapper_record_event event)
 {
-    PyEval_RestoreThread(_save);
+    PyGILState_STATE gstate;
+    gstate = PyGILState_Ensure();
 
     PyObject *py_map = SWIG_NewPointerObj(SWIG_as_voidptr(map),
                                           SWIGTYPE_p__map, 0);
@@ -770,7 +801,8 @@ static void device_map_handler_py(mapper_device dev, mapper_map map,
     PyObject *result = PyEval_CallObject(callbacks[1], arglist);
     Py_DECREF(arglist);
     Py_XDECREF(result);
-    _save = PyEval_SaveThread();
+
+    PyGILState_Release(gstate);
 }
 
 static int coerce_prop(property_value prop, char type)
@@ -861,13 +893,19 @@ static int coerce_prop(property_value prop, char type)
 typedef int* maybeInt;
 typedef int booltype;
 
+typedef struct _signal_list {
+    mapper_signal *sigs;
+    int len;
+} signal_list_t, *signal_list;
+
 /* Wrapper for callback back to python when a mapper_database_device handler
  * is called. */
 static void database_device_handler_py(mapper_database db, mapper_device dev,
                                        mapper_record_event event,
                                        const void *user)
 {
-    PyEval_RestoreThread(_save);
+    PyGILState_STATE gstate;
+    gstate = PyGILState_Ensure();
 
     PyObject *py_dev = SWIG_NewPointerObj(SWIG_as_voidptr(dev),
                                           SWIGTYPE_p__device, 0);
@@ -880,7 +918,8 @@ static void database_device_handler_py(mapper_database db, mapper_device dev,
     PyObject *result = PyEval_CallObject((PyObject*)user, arglist);
     Py_DECREF(arglist);
     Py_XDECREF(result);
-    _save = PyEval_SaveThread();
+
+    PyGILState_Release(gstate);
 }
 
 /* Wrapper for callback back to python when a mapper_database_device handler
@@ -889,7 +928,8 @@ static void database_link_handler_py(mapper_database db, mapper_link link,
                                      mapper_record_event event,
                                      const void *user)
 {
-    PyEval_RestoreThread(_save);
+    PyGILState_STATE gstate;
+    gstate = PyGILState_Ensure();
 
     PyObject *py_link = SWIG_NewPointerObj(SWIG_as_voidptr(link),
                                            SWIGTYPE_p__link, 0);
@@ -902,7 +942,8 @@ static void database_link_handler_py(mapper_database db, mapper_link link,
     PyObject *result = PyEval_CallObject((PyObject*)user, arglist);
     Py_DECREF(arglist);
     Py_XDECREF(result);
-    _save = PyEval_SaveThread();
+
+    PyGILState_Release(gstate);
 }
 
 /* Wrapper for callback back to python when a mapper_database_signal handler
@@ -911,7 +952,8 @@ static void database_signal_handler_py(mapper_database db, mapper_signal sig,
                                        mapper_record_event event,
                                        const void *user)
 {
-    PyEval_RestoreThread(_save);
+    PyGILState_STATE gstate;
+    gstate = PyGILState_Ensure();
 
     PyObject *py_sig = SWIG_NewPointerObj(SWIG_as_voidptr(sig),
                                           SWIGTYPE_p__signal, 0);
@@ -924,7 +966,8 @@ static void database_signal_handler_py(mapper_database db, mapper_signal sig,
     PyObject *result = PyEval_CallObject((PyObject*)user, arglist);
     Py_DECREF(arglist);
     Py_XDECREF(result);
-    _save = PyEval_SaveThread();
+
+    PyGILState_Release(gstate);
 }
 
 /* Wrapper for callback back to python when a mapper_database_map handler
@@ -933,7 +976,8 @@ static void database_map_handler_py(mapper_database db, mapper_map map,
                                     mapper_record_event event,
                                     const void *user)
 {
-    PyEval_RestoreThread(_save);
+    PyGILState_STATE gstate;
+    gstate = PyGILState_Ensure();
 
     PyObject *py_map = SWIG_NewPointerObj(SWIG_as_voidptr(map),
                                           SWIGTYPE_p__map, 0);
@@ -946,7 +990,8 @@ static void database_map_handler_py(mapper_database db, mapper_map map,
     PyObject *result = PyEval_CallObject((PyObject*)user, arglist);
     Py_DECREF(arglist);
     Py_XDECREF(result);
-    _save = PyEval_SaveThread();
+
+    PyGILState_Release(gstate);
 }
 
 static mapper_signal add_signal_internal(mapper_device dev, mapper_direction dir,
@@ -1081,6 +1126,12 @@ static mapper_signal add_signal_internal(mapper_device dev, mapper_direction dir
 %constant int LOC_UNDEFINED             = MAPPER_LOC_UNDEFINED;
 %constant int LOC_SOURCE                = MAPPER_LOC_SOURCE;
 %constant int LOC_DESTINATION           = MAPPER_LOC_DESTINATION;
+%constant int LOC_ANY                   = MAPPER_LOC_ANY;
+
+/*! Describes the possible network protocol for map communication. */
+%constant int PROTO_UNDEFINED           = MAPPER_PROTO_UNDEFINED;
+%constant int PROTO_UDP                 = MAPPER_PROTO_UDP;
+%constant int PROTO_TCP                 = MAPPER_PROTO_TCP;
 
 /*! The set of possible directions for a signal or mapping slot. */
 %constant int DIR_UNDEFINED             = MAPPER_DIR_UNDEFINED;
@@ -2247,10 +2298,10 @@ typedef struct _map_query {
 }
 
 %extend _map {
-    _map(signal *src, signal *dst) {
-        mapper_signal msig_src = (mapper_signal)src;
-        mapper_signal msig_dst = (mapper_signal)dst;
-        return (map*)mapper_map_new(1, &msig_src, 1, &msig_dst);
+    _map(signal_list srcs=0, signal_list dsts=0) {
+        if (!srcs || !dsts)
+            return (map*)0;
+        return (map*)mapper_map_new(srcs->len, srcs->sigs, dsts->len, dsts->sigs);
     }
     ~_map() {
         ;
@@ -2271,6 +2322,9 @@ typedef struct _map_query {
     }
     slot *destination(int index=0) {
         return (slot*)mapper_map_slot((mapper_map)$self, MAPPER_LOC_DESTINATION, 0);
+    }
+    slot *slot(mapper_location loc, int index=0) {
+        return (slot*)mapper_map_slot((mapper_map)$self, loc, index);
     }
     slot *slot(signal *sig) {
         return (slot*)mapper_map_slot_by_signal((mapper_map)$self,
@@ -2314,14 +2368,14 @@ typedef struct _map_query {
     booltype get_ready() {
         return mapper_map_ready((mapper_map)$self);
     }
-    int get_num_sources() {
-        return mapper_map_num_sources((mapper_map)$self);
-    }
-    int get_num_destinations() {
-        return mapper_map_num_destinations((mapper_map)$self);
+    int get_num_slots(mapper_location loc=MAPPER_DIR_ANY) {
+        return mapper_map_num_slots((mapper_map)$self, loc);
     }
     int get_process_location() {
         return mapper_map_process_location((mapper_map)$self);
+    }
+    int get_protocol() {
+        return mapper_map_protocol((mapper_map)$self);
     }
     property_value get_property(const char *key) {
         mapper_map map = (mapper_map)$self;
@@ -2386,6 +2440,10 @@ typedef struct _map_query {
         mapper_map_set_process_location((mapper_map)$self, loc);
         return $self;
     }
+    map *set_protocol(int proto) {
+        mapper_map_set_protocol((mapper_map)$self, proto);
+        return $self;
+    }
     map *set_property(const char *key, property_value val=0,
                       booltype publish=1) {
         if (!key || strcmp(key, "user_data")==0)
@@ -2420,9 +2478,9 @@ typedef struct _map_query {
         mode = property(get_mode, set_mode)
         muted = property(get_muted, set_muted)
         num_properties = property(get_num_properties)
-        num_sources = property(get_num_sources)
-        num_destinations = property(get_num_destinations)
+        num_slots = property(get_num_slots)
         process_location = property(get_process_location, set_process_location)
+        protocol = property(get_protocol, set_protocol)
         ready = property(get_ready)
         def get_properties(self):
             props = {}
@@ -2635,7 +2693,7 @@ typedef struct _map_query {
 }
 
 %extend _database {
-    _database(network *DISOWN, int subscribe_flags=0x00) {
+    _database(network *DISOWN=0, int subscribe_flags=0x00) {
         return (database*)mapper_database_new((mapper_network)DISOWN,
                                               subscribe_flags);
     }
@@ -2669,7 +2727,7 @@ typedef struct _map_query {
         mapper_database_request_devices((mapper_database)$self);
         return $self;
     }
-    database *flush(int timeout=-1, booltype quiet=1) {
+    database *flush(int timeout=0, booltype quiet=0) {
         mapper_database_flush((mapper_database)$self, timeout, quiet);
         return $self;
     }

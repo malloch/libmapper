@@ -3,6 +3,7 @@
 #include <mapper/mapper.h>
 #include <stdio.h>
 #include <math.h>
+#include <signal.h>
 
 #include <unistd.h>
 
@@ -144,7 +145,7 @@ void wait_ready()
 void loop()
 {
     int i = 0;
-    while ((!terminate || i < 50) && !done) {
+    while (!done && i < 50) {
         mapper_device_poll(source, 0);
         eprintf("Updating signal %s to %f\n", mapper_signal_name(sendsig),
                (i * 1.0f));
@@ -189,14 +190,14 @@ int main(int argc, char **argv)
                     case 't':
                         terminate = 1;
                         break;
-                    case '-':
-                        break;
                     default:
                         break;
                 }
             }
         }
     }
+
+    signal(SIGINT, ctrlc);
 
     if (setup_destination()) {
         eprintf("Error initializing destination.\n");
@@ -218,14 +219,15 @@ int main(int argc, char **argv)
         goto done;
     }
 
-    set_map_protocol(MAPPER_PROTO_UDP);
-    loop();
+    do {
+        set_map_protocol(MAPPER_PROTO_UDP);
+        eprintf("SENDING UDP\n");
+        loop();
 
-    set_map_protocol(MAPPER_PROTO_TCP);
-    loop();
-
-    set_map_protocol(MAPPER_PROTO_UDP);
-    loop();
+        set_map_protocol(MAPPER_PROTO_TCP);
+        eprintf("SENDING TCP\n");
+        loop();
+    } while (!terminate && !done);
 
     if (sent != received) {
         eprintf("Not all sent messages were received.\n");
