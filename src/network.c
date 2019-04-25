@@ -1584,7 +1584,7 @@ static int handler_probe(const char *path, const char *types, lo_arg **argv,
             }
 
             lo_message msg = lo_message_new();
-            lo_message_add_string(msg, mapper_device_name(dev));
+            lo_message_add_string(msg, name);
             lo_message_add_int32(msg, temp_id);
             lo_message_add_int32(msg, dev->local->ordinal.value + i + 1);
             mapper_network_set_dest_bus(net);
