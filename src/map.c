@@ -23,18 +23,26 @@ static int alphabetise_signals(int num, mapper_signal *sigs, int *order)
         order[i] = i;
     for (i = 1; i < num; i++) {
         j = i-1;
-        while (j >= 0
-               && (((result1 = strcmp(sigs[order[j]]->device->name,
-                                      sigs[order[j+1]]->device->name)) > 0)
-                   || ((result2 = strcmp(sigs[order[j]]->name,
-                                         sigs[order[j+1]]->name)) > 0))) {
-                   int temp = order[j];
-                   order[j] = order[j+1];
-                   order[j+1] = temp;
-                   j--;
+        while (j >= 0) {
+            result1 = strcmp(sigs[order[j]]->device->name,
+                             sigs[order[j+1]]->device->name);
+            if (result1 < 0)
+                break;
+            else if (result1 == 0) {
+                result2 = strcmp(sigs[order[j]]->name, sigs[order[j+1]]->name);
+                if (result2 == 0) {
+                    // abort: identical signal names
+                    return 1;
+                }
+                else if (result2 < 0)
+                    break;
+            }
+            // swap
+            int temp = order[j];
+            order[j] = order[j+1];
+            order[j+1] = temp;
+            j--;
         }
-        if (result1 == 0 && result2 == 0)
-            return 1;
     }
     return 0;
 }
@@ -94,39 +102,40 @@ void mapper_map_init(mapper_map map)
     mapper_slot_init(&map->destination);
 }
 
-mapper_map mapper_map_new(int num_sources, mapper_signal *sources,
-                          int num_destinations, mapper_signal *destinations)
+mapper_map mapper_map_new(int num_srcs, mapper_signal *srcs,
+                          int num_dsts, mapper_signal *dsts)
 {
     int i, j;
-    if (!sources || !*sources || !destinations || !*destinations)
+    if (!srcs || !*srcs || !dsts || !*dsts)
         return 0;
-    if (num_sources <= 0 || num_sources > MAX_NUM_MAP_SOURCES)
+    if (num_srcs <= 0 || num_srcs > MAX_NUM_MAP_SOURCES)
         return 0;
 
-    for (i = 0; i < num_sources; i++) {
-        for (j = 0; j < num_destinations; j++) {
-            if (sources[i]->id == destinations[j]->id) {
+    for (i = 0; i < num_srcs; i++) {
+        for (j = 0; j < num_dsts; j++) {
+            if (   strcmp(srcs[i]->name, dsts[j]->name)==0
+                && strcmp(srcs[i]->device->name, dsts[j]->device->name)==0) {
                 trace("Cannot connect signal '%s:%s' to itself.\n",
-                      mapper_device_name(sources[i]->device), sources[i]->name);
+                      mapper_device_name(srcs[i]->device), srcs[i]->name);
                 return 0;
             }
         }
     }
 
     // Only 1 destination supported for now
-    if (num_destinations != 1)
+    if (num_dsts != 1)
         return 0;
-    mapper_signal destination = destinations[0];
+    mapper_signal dst = dsts[0];
 
-    mapper_database db = destination->device->database;
+    mapper_database db = dst->device->database;
 
     // check if record of map already exists
     mapper_signal sig;
     mapper_map map, *maps, *temp;
-    maps = mapper_signal_maps(destination, MAPPER_DIR_INCOMING);
+    maps = mapper_signal_maps(dst, MAPPER_DIR_INCOMING);
     if (maps) {
-        for (i = 0; i < num_sources; i++) {
-            sig = mapper_database_signal_by_id(db, mapper_signal_id(sources[i]));
+        for (i = 0; i < num_srcs; i++) {
+            sig = mapper_database_signal_by_id(db, mapper_signal_id(srcs[i]));
             if (sig) {
                 temp = mapper_signal_maps(sig, MAPPER_DIR_OUTGOING);
                 maps = mapper_map_query_intersection(maps, temp);
@@ -138,7 +147,7 @@ mapper_map mapper_map_new(int num_sources, mapper_signal *sources,
             }
         }
         while (maps) {
-            if ((*maps)->num_sources == num_sources) {
+            if ((*maps)->num_sources == num_srcs) {
                 map = *maps;
                 mapper_map_query_done(maps);
                 return map;
@@ -147,8 +156,8 @@ mapper_map mapper_map_new(int num_sources, mapper_signal *sources,
         }
     }
 
-    int order[num_sources];
-    if (alphabetise_signals(num_sources, sources, order)) {
+    int order[num_srcs];
+    if (alphabetise_signals(num_srcs, srcs, order)) {
         trace("error in mapper_map_new(): multiple use of source signal.\n");
         return 0;
     }
@@ -156,32 +165,34 @@ mapper_map mapper_map_new(int num_sources, mapper_signal *sources,
     map = (mapper_map)mapper_list_add_item((void**)&db->maps,
                                            sizeof(mapper_map_t));
     map->database = db;
-    map->num_sources = num_sources;
-    map->sources = (mapper_slot*) malloc(sizeof(mapper_slot) * num_sources);
-    for (i = 0; i < num_sources; i++) {
+    map->num_sources = num_srcs;
+    map->sources = (mapper_slot*) malloc(sizeof(mapper_slot) * num_srcs);
+    for (i = 0; i < num_srcs; i++) {
         map->sources[i] = (mapper_slot)calloc(1, sizeof(struct _mapper_slot));
-        if (!(sig = mapper_database_signal_by_id(db, sources[order[i]]->id))) {
-            sig = mapper_database_add_or_update_signal(db, sources[order[i]]->name,
-                                                       sources[order[i]]->device->name, 0);
+        if (srcs[order[i]]->device->database == db)
+            sig = srcs[order[i]];
+        else if (!(sig = mapper_database_signal_by_id(db, srcs[order[i]]->id))) {
+            sig = mapper_database_add_or_update_signal(db, srcs[order[i]]->name,
+                                                       srcs[order[i]]->device->name, 0);
             if (!sig->id) {
-                sig->id = sources[order[i]]->id;
-                sig->direction = sources[order[i]]->direction;
+                sig->id = srcs[order[i]]->id;
+                sig->direction = srcs[order[i]]->direction;
             }
             if (!sig->device->id) {
-                sig->device->id = sources[order[i]]->device->id;
+                sig->device->id = srcs[order[i]]->device->id;
             }
         }
         map->sources[i]->signal = sig;
         map->sources[i]->map = map;
         map->sources[i]->id = i;
     }
-    map->destination.signal = destination;
+    map->destination.signal = dst;
     map->destination.map = map;
     map->destination.direction = MAPPER_DIR_INCOMING;
 
     // we need to give the map a temporary id – this may be overwritten later
-    if (destination->device->local)
-        map->id = mapper_device_generate_unique_id(destination->device);
+    if (dst->device->local)
+        map->id = mapper_device_generate_unique_id(dst->device);
 
     mapper_map_init(map);
 
@@ -1690,15 +1701,17 @@ void reallocate_map_histories(mapper_map map)
                 map->local->expr_vars[i][j].length = 0;
                 map->local->expr_vars[i][j].size = 0;
                 map->local->expr_vars[i][j].position = -1;
+                map->local->expr_vars[i][j].value = 0;
+                map->local->expr_vars[i][j].timetag = 0;
             }
             for (j = 0; j < new_num_vars; j++) {
                 int history_size = mapper_expr_variable_history_size(map->local->expr, j);
                 int vector_length = mapper_expr_variable_vector_length(map->local->expr, j);
-                mhist_realloc(map->local->expr_vars[i]+j, history_size,
+                mhist_realloc(&map->local->expr_vars[i][j], history_size,
                               vector_length * sizeof(double), 0);
-                (map->local->expr_vars[i]+j)->length = vector_length;
-                (map->local->expr_vars[i]+j)->size = history_size;
-                (map->local->expr_vars[i]+j)->position = -1;
+                map->local->expr_vars[i][j].length = vector_length;
+                map->local->expr_vars[i][j].size = history_size;
+                map->local->expr_vars[i][j].position = -1;
             }
         }
         map->local->num_expr_vars = new_num_vars;
