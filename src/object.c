@@ -299,6 +299,7 @@ mpr_obj mpr_obj_add_child(mpr_obj parent, const char *name, mpr_graph g){
     child->type = MPR_OBJ; // 31
     child->graph = g;
     child->parent = parent; // link the parent of this object
+    child->name = name;
 
     //Todo: Add name when other branch is merged.
 
@@ -316,6 +317,41 @@ mpr_obj mpr_obj_get_top_level_parent(mpr_obj obj){
 
 
 }
+
+
+/* Prepends t into s. Assumes s has enough space allocated
+** for the combined string.
+*/
+void prepend(char* s, const char* t)
+{
+    size_t len = strlen(t);
+    memmove(s + len, s, strlen(s) + 1);
+    memcpy(s, t, len);
+}
+
+const char* mpr_obj_generate_full_path(mpr_obj obj, const char *name){
+    mpr_obj current = obj;
+
+    if(current->parent){
+        char *full_path = malloc(100); // TODO: How to better size this dynamically?
+        strcpy(full_path, current->name);
+    
+        // Loop through the tree of map_obj until the top level parent is found.
+        while (current->parent){
+            current = current->parent;
+            if(current->name){
+                prepend(full_path, "/");
+                prepend(full_path, current->name);
+            }
+        }
+        strcat(strcat(full_path,"/"), name);
+
+        return full_path;
+    }
+    return name;
+}
+
+
 /* TODO: Move to proper spot when deemed complete. */
 mpr_obj mpr_obj_new(const char *name, mpr_graph g){
     RETURN_UNLESS(name);
@@ -331,6 +367,7 @@ mpr_obj mpr_obj_new(const char *name, mpr_graph g){
     obj->type = MPR_OBJ;
 
     obj->name = (char*)malloc(strlen(name));
+    strcpy(obj->name, name);
     obj->graph = g;
 
     return obj;

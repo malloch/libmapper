@@ -219,6 +219,8 @@ mpr_obj mpr_obj_add_child(mpr_obj parent, const char *name, mpr_graph g);
  *  \return                The child's top level parent. */
 mpr_obj mpr_obj_get_top_level_parent(mpr_obj obj);
 
+const char* mpr_obj_generate_full_path(mpr_obj obj, const char *name);
+
 /*** Devices ***/
 
 /*! @defgroup devices Devices

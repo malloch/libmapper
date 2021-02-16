@@ -41,6 +41,9 @@ mpr_sig mpr_sig_new(mpr_obj obj, mpr_dir dir, const char *name, int len,
 {
     mpr_dev dev = (mpr_dev)mpr_obj_get_top_level_parent(obj); // Check that top-level object is a mpr_dev
 
+    // Traverse the parental tree and determine the full path for a nested object. Will just be name if this obj is a top level dev
+    name = mpr_obj_generate_full_path(obj, name);
+
     // For now we only allow adding signals to devices.
     RETURN_UNLESS(dev && dev->loc, 0);
     RETURN_UNLESS(name && !check_sig_length(len) && mpr_type_get_is_num(type), 0);
@@ -89,6 +92,7 @@ void mpr_sig_init(mpr_sig s, mpr_dir dir, const char *name, int len,
     s->path = malloc(str_len);
     snprintf(s->path, str_len, "/%s", name);
     s->obj.name = (char*)s->path+1;
+    printf("Name: %s\tPath: %s\n", s->obj.name, s->path); //Todo: Remove when finished developing.
     s->len = len;
     s->type = type;
     s->dir = dir ?: MPR_DIR_OUT;
