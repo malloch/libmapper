@@ -180,10 +180,12 @@ void mpr_obj_push(mpr_obj o)
     else if (o->type & MPR_MAP) {
         mpr_net_use_bus(n);
         mpr_map m = (mpr_map)o;
-        if (m->status >= MPR_STATUS_ACTIVE)
+        if (m->status >= MPR_STATUS_ACTIVE){
             mpr_map_send_state(m, -1, MSG_MAP_MOD);
-        else
+        }
+        else{
             mpr_map_send_state(m, -1, MSG_MAP);
+        }
     }
     else {
         trace("mpr_obj_push(): unknown object type %d\n", o->type);
@@ -289,6 +291,67 @@ void mpr_obj_print(mpr_obj o, int staged)
     printf("\n");
 }
 
+mpr_obj mpr_obj_add_child(mpr_obj parent, const char *name, mpr_graph g){
+    
+    // Add a new child object to the list of children associated with the parent object.
+    mpr_obj child = (mpr_obj)mpr_list_add_item((void**)&parent->children, sizeof(mpr_obj_t));
+    
+    child->type = MPR_OBJ; // 31
+    child->graph = g;
+    child->parent = parent; // link the parent of this object
+    child->name = name;
+
+    //Todo: Add name when other branch is merged.
+
+    return child;
+}
+
+mpr_obj mpr_obj_get_top_level_parent(mpr_obj obj){
+    mpr_obj current = obj;
+
+    // Loop through the tree of map_obj until the top level parent is found.
+    while (current->parent)
+        current = current->parent;
+
+    return current;
+
+
+}
+
+
+/* Prepends t into s. Assumes s has enough space allocated
+** for the combined string.
+*/
+void prepend(char* s, const char* t)
+{
+    size_t len = strlen(t);
+    memmove(s + len, s, strlen(s) + 1);
+    memcpy(s, t, len);
+}
+
+const char* mpr_obj_generate_full_path(mpr_obj obj, const char *name){
+    mpr_obj current = obj;
+
+    if(current->parent){
+        char *full_path = malloc(100); // TODO: How to better size this dynamically?
+        strcpy(full_path, current->name);
+    
+        // Loop through the tree of map_obj until the top level parent is found.
+        while (current->parent){
+            current = current->parent;
+            if(current->name){
+                prepend(full_path, "/");
+                prepend(full_path, current->name);
+            }
+        }
+        strcat(strcat(full_path,"/"), name);
+
+        return full_path;
+    }
+    return name;
+}
+
+
 /* TODO: Move to proper spot when deemed complete. */
 mpr_obj mpr_obj_new(const char *name, mpr_graph g){
     RETURN_UNLESS(name);
@@ -304,6 +367,7 @@ mpr_obj mpr_obj_new(const char *name, mpr_graph g){
     obj->type = MPR_OBJ;
 
     obj->name = (char*)malloc(strlen(name));
+    strcpy(obj->name, name);
     obj->graph = g;
 
     return obj;
@@ -311,15 +375,21 @@ mpr_obj mpr_obj_new(const char *name, mpr_graph g){
 
 void mpr_obj_free(mpr_obj obj){
     RETURN_UNLESS(obj);
-    
-    // Free name
+
+    // Free mpr_obj's name
     free(obj->name);
 
-    // Free graph if appropriate
+    //TODO: Ask joe, should I be freeing the graph of an object here?
+    // mpr_graph_free(obj->graph); // TODO: This seems dangerous
 
+    // Free this object's children objects
+    mpr_list children = mpr_list_from_data(obj->children);
 
-    // Free children objects
-    // Todo: Once nested mpr_obj branch is merged, be sure to free mpr_obj children also.
+    while (children) {
+        mpr_obj child = (mpr_obj)*children;
+        children = mpr_list_get_next(children);
 
-
+        //Free the child at this iteration of the loop.
+        mpr_obj_free(child);
+    }
 }

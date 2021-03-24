@@ -34,6 +34,7 @@ typedef struct _mpr_expr *mpr_expr;
 /* Forward declarations for this file. */
 
 struct _mpr_obj;
+typedef struct _mpr_obj *mpr_obj;
 typedef struct _mpr_obj **mpr_list;
 struct _mpr_dev;
 typedef struct _mpr_dev mpr_dev_t;
@@ -258,6 +259,8 @@ typedef struct _mpr_obj
     struct _mpr_dict props;         //!< Properties associated with this signal.
     int version;                    //!< Version number.
     mpr_type type;                  //!< Object type.
+    mpr_list children;              //!< List of child objects.
+    mpr_obj parent;                 //!< The parent of this child, from a hierarchy perspective.
 } mpr_obj_t, *mpr_obj;
 
 /**** Signal ****/

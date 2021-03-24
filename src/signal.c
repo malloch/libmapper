@@ -60,11 +60,16 @@ static mpr_sig_inst _find_inst_by_name(mpr_sig s, const char* name)
 
 
 // Add a signal to a parent object.
-mpr_sig mpr_sig_new(mpr_dev dev, mpr_dir dir, const char *name, int len,
+mpr_sig mpr_sig_new(mpr_obj obj, mpr_dir dir, const char *name, int len,
                     mpr_type type, const char *unit, const void *min,
                     const void *max, int *num_inst, mpr_sig_handler *h,
                     int events)
 {
+    mpr_dev dev = (mpr_dev)mpr_obj_get_top_level_parent(obj); // Check that top-level object is a mpr_dev
+
+    // Traverse the parental tree and determine the full path for a nested object. Will just be name if this obj is a top level dev
+    name = mpr_obj_generate_full_path(obj, name);
+
     // For now we only allow adding signals to devices.
     RETURN_UNLESS(dev && dev->loc, 0);
     RETURN_UNLESS(name && !check_sig_length(len) && mpr_type_get_is_num(type), 0);

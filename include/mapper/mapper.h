@@ -204,6 +204,23 @@ void mpr_obj_push(mpr_obj obj);
  *  \param staged       1 to print staged properties, 0 otherwise. */
 void mpr_obj_print(mpr_obj obj, int staged);
 
+//TODO: Ensure these functions are in proper location and properly documented.
+
+/*! Add a child object to a parent object .
+ *  \param parent          The parent object that is being added to.
+ *  \param name            The name for this mpr_obj.
+ *  \param graph           The graph associated with this obj, or 0.
+ *  \return                The child object that is being added. */
+mpr_obj mpr_obj_add_child(mpr_obj parent, const char *name, mpr_graph g);
+
+
+/*! Get the top level parent object associated with a child obj.
+ *  \param obj             The child object.
+ *  \return                The child's top level parent. */
+mpr_obj mpr_obj_get_top_level_parent(mpr_obj obj);
+
+const char* mpr_obj_generate_full_path(mpr_obj obj, const char *name);
+
 /*** Devices ***/
 
 /*! @defgroup devices Devices
@@ -215,7 +232,7 @@ void mpr_obj_print(mpr_obj obj, int staged);
        user-specified metadata.  Device signals can be connected, which is
        accomplished by requests from an external GUI or session manager. */
 
-/*! Allocate and initialize a device.
+/*! Allocate a device.
  *  \param name         A short descriptive string to identify the device.
  *                      Must not contain spaces or the slash character '/'.
  *  \param g            A previously allocated graph structure to use.
@@ -223,6 +240,12 @@ void mpr_obj_print(mpr_obj obj, int staged);
  *  \return             A newly allocated device.  Should be freed
  *                      using mpr_dev_free(). */
 mpr_dev mpr_dev_new(const char *name, mpr_graph g);
+
+/*! Initialize a device.
+ *  \param dev          The created device to be initialized.
+ *  \return             A newly initalized device.  Should be freed
+ *                      using mpr_dev_free(). */
+mpr_dev mpr_dev_init(mpr_dev dev);
 
 /*! Free resources used by a device.
  *  \param dev          The device to free. */
@@ -326,7 +349,7 @@ typedef void mpr_sig_handler(mpr_sig sig, mpr_sig_evt evt, mpr_id inst, int leng
  *                      updated.
  *  \param events       Bitflags for types of events we are interested in.
  *  \return             The new signal. */
-mpr_sig mpr_sig_new(mpr_dev parent, mpr_dir dir, const char *name, int len,
+mpr_sig mpr_sig_new(mpr_obj parent, mpr_dir dir, const char *name, int len,
                     mpr_type type, const char *unit, const void *min,
                     const void *max, int *num_inst, mpr_sig_handler *handler,
                     int events);

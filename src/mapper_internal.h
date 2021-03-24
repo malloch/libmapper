@@ -108,7 +108,6 @@ if (!VARNAME) {                                     \
 }
 
 /***** Devices *****/
-
 int mpr_dev_set_from_msg(mpr_dev dev, mpr_msg msg);
 
 void mpr_dev_manage_subscriber(mpr_dev dev, lo_address address, int flags,

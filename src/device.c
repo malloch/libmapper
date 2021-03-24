@@ -87,49 +87,6 @@ void init_dev_prop_tbl(mpr_dev dev)
                 LOCAL_ACCESS_ONLY | NON_MODIFIABLE);
 }
 
-/*! Allocate and initialize a device. This function is called to create a new
- *  mpr_dev, not to create a representation of remote devices. */
-mpr_dev mpr_dev_new(const char *name_prefix, mpr_graph g)
-{
-    RETURN_UNLESS(name_prefix, 0);
-    if (name_prefix[0] == '/')
-        ++name_prefix;
-    TRACE_RETURN_UNLESS(!strchr(name_prefix, '/'), NULL, "error: character '/' "
-                        "is not permitted in device name.\n");
-    if (!g) {
-        g = mpr_graph_new(0);
-        g->own = 0;
-    }
-
-    mpr_dev dev = (mpr_dev)mpr_list_add_item((void**)&g->devs, sizeof(mpr_dev_t));
-    dev->obj.type = MPR_DEV;
-    dev->obj.graph = g;
-    dev->loc = (mpr_local_dev)calloc(1, sizeof(mpr_local_dev_t));
-
-    init_dev_prop_tbl(dev);
-
-    dev->prefix = strdup(name_prefix);
-    mpr_dev_start_servers(dev);
-
-    if (!g->net.server.udp || !g->net.server.tcp) {
-        mpr_dev_free(dev);
-        return NULL;
-    }
-
-    g->net.rtr = (mpr_rtr)calloc(1, sizeof(mpr_rtr_t));
-    g->net.rtr->dev = dev;
-
-    dev->loc->ordinal.val = 1;
-    dev->loc->idmaps.active = (mpr_id_map*) malloc(sizeof(mpr_id_map));
-    dev->loc->idmaps.active[0] = 0;
-    dev->loc->num_sig_groups = 1;
-
-    mpr_net_add_dev(&g->net, dev);
-
-    dev->status = MPR_STATUS_STAGED;
-    return dev;
-}
-
 //! Free resources used by a mpr device.
 void mpr_dev_free(mpr_dev dev)
 {
@@ -1213,4 +1170,70 @@ void mpr_dev_manage_subscriber(mpr_dev dev, lo_address addr, int flags,
         mpr_dev_send_maps(dev, dir);
         mpr_net_send(net);
     }
+}
+
+
+//! TODO: Move this to appropriate location after confirming it works.
+/*! Allocate and initialize a device. This function is called to create a new
+ *  mpr_dev, not to create a representation of remote devices. */
+mpr_dev mpr_dev_init(mpr_dev dev)
+{   
+    mpr_graph g = dev->obj.graph;
+    dev->loc = (mpr_local_dev)calloc(1, sizeof(mpr_local_dev_t));
+
+    init_dev_prop_tbl(dev);
+
+    mpr_dev_start_servers(dev);
+
+    if (!g->net.server.udp || !g->net.server.tcp)
+    {
+        mpr_dev_free(dev);
+        return NULL;
+    }
+
+    g->net.rtr = (mpr_rtr)calloc(1, sizeof(mpr_rtr_t));
+    g->net.rtr->dev = dev;
+
+    dev->loc->ordinal.val = 1;
+    dev->loc->idmaps.active = (mpr_id_map *)malloc(sizeof(mpr_id_map));
+    dev->loc->idmaps.active[0] = 0;
+    dev->loc->num_sig_groups = 1;
+
+    mpr_net_add_dev(&g->net, dev);
+
+    dev->status = MPR_STATUS_STAGED;
+    return dev;
+}
+
+
+/*! Allocate and initialize a device. This function is called to create a new
+ *  mpr_dev, not to create a representation of remote devices. */
+mpr_dev mpr_dev_new(const char *name_prefix, mpr_graph g)
+{
+    RETURN_UNLESS(name_prefix, 0);
+    if (name_prefix[0] == '/')
+        ++name_prefix;
+    TRACE_RETURN_UNLESS(!strchr(name_prefix, '/'), NULL, "error: character '/' "
+                                                         "is not permitted in device name.\n");
+    if (!g)
+    {
+        g = mpr_graph_new(0);
+        g->own = 0;
+    }
+
+    RETURN_UNLESS(name_prefix, 0);
+    if (name_prefix[0] == '/')
+        ++name_prefix;
+    TRACE_RETURN_UNLESS(!strchr(name_prefix, '/'), NULL, "error: character '/' "
+                                                         "is not permitted in device name.\n");
+
+
+    mpr_dev dev = (mpr_dev)mpr_list_add_item((void **)&g->devs, sizeof(mpr_dev_t));
+    
+    dev->obj.type = MPR_DEV;
+    dev->obj.parent = 0; // this device IS the top level parent.
+    dev->obj.graph = g;
+    dev->prefix = strdup(name_prefix);
+
+    return mpr_dev_init(dev);
 }

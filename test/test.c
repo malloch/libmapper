@@ -44,19 +44,19 @@ int setup_src()
     float mnf[]={3.2,2,0}, mxf[]={-2,13,100};
     double mnd=0, mxd=10;
 
-    sendsig_1 = mpr_sig_new(src, MPR_DIR_OUT, "outsig_1", 1, MPR_DBL, "Hz",
+    sendsig_1 = mpr_sig_new((mpr_obj)src, MPR_DIR_OUT, "outsig_1", 1, MPR_DBL, "Hz",
                             &mnd, &mxd, NULL, NULL, 0);
-    sendsig_2 = mpr_sig_new(src, MPR_DIR_OUT, "outsig_2", 1, MPR_FLT, "mm",
+    sendsig_2 = mpr_sig_new((mpr_obj)src, MPR_DIR_OUT, "outsig_2", 1, MPR_FLT, "mm",
                             mnf, mxf, NULL, NULL, 0);
-    sendsig_3 = mpr_sig_new(src, MPR_DIR_OUT, "outsig_3", 3, MPR_FLT, NULL,
+    sendsig_3 = mpr_sig_new((mpr_obj)src, MPR_DIR_OUT, "outsig_3", 3, MPR_FLT, NULL,
                             mnf, mxf, NULL, NULL, 0);
-    sendsig_4 = mpr_sig_new(src, MPR_DIR_OUT, "outsig_4", 1, MPR_FLT, NULL,
+    sendsig_4 = mpr_sig_new((mpr_obj)src, MPR_DIR_OUT, "outsig_4", 1, MPR_FLT, NULL,
                             mnf, mxf, NULL, NULL, 0);
 
     eprintf("Output signal 'outsig' registered.\n");
 
     // Make sure we can add and remove outputs without crashing.
-    mpr_sig_free(mpr_sig_new(src, MPR_DIR_OUT, "outsig_5", 1, MPR_FLT, NULL,
+    mpr_sig_free(mpr_sig_new((mpr_obj)src, MPR_DIR_OUT, "outsig_5", 1, MPR_FLT, NULL,
                              &mnf, &mxf, NULL, NULL, 0));
 
     mpr_list l = mpr_dev_get_sigs(src, MPR_DIR_OUT);
@@ -120,19 +120,19 @@ int setup_dst()
     float mnf[]={0,0,0}, mxf[]={1,1,1};
     double mnd=0, mxd=1;
 
-    recvsig_1 = mpr_sig_new(dst, MPR_DIR_IN, "insig_1", 1, MPR_FLT, NULL,
+    recvsig_1 = mpr_sig_new((mpr_obj)dst, MPR_DIR_IN, "insig_1", 1, MPR_FLT, NULL,
                             mnf, mxf, NULL, handler, MPR_SIG_UPDATE);
-    recvsig_2 = mpr_sig_new(dst, MPR_DIR_IN, "insig_2", 1, MPR_DBL, NULL,
+    recvsig_2 = mpr_sig_new((mpr_obj)dst, MPR_DIR_IN, "insig_2", 1, MPR_DBL, NULL,
                             &mnd, &mxd, NULL, handler, MPR_SIG_UPDATE);
-    recvsig_3 = mpr_sig_new(dst, MPR_DIR_IN, "insig_3", 3, MPR_FLT, NULL,
+    recvsig_3 = mpr_sig_new((mpr_obj)dst, MPR_DIR_IN, "insig_3", 3, MPR_FLT, NULL,
                             mnf, mxf, NULL, handler, MPR_SIG_UPDATE);
-    recvsig_4 = mpr_sig_new(dst, MPR_DIR_IN, "insig_4", 1, MPR_FLT, NULL,
+    recvsig_4 = mpr_sig_new((mpr_obj)dst, MPR_DIR_IN, "insig_4", 1, MPR_FLT, NULL,
                             mnf, mxf, NULL, handler, MPR_SIG_UPDATE);
 
     eprintf("Input signal 'insig' registered.\n");
 
     // Make sure we can add and remove inputs and inputs within crashing.
-    mpr_sig_free(mpr_sig_new(dst, MPR_DIR_IN, "insig_5", 1, MPR_FLT,
+    mpr_sig_free(mpr_sig_new((mpr_obj)dst, MPR_DIR_IN, "insig_5", 1, MPR_FLT,
                              NULL, &mnf, &mxf, NULL, NULL, MPR_SIG_UPDATE));
 
     mpr_list l = mpr_dev_get_sigs(dst, MPR_DIR_IN);
