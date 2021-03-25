@@ -29,7 +29,9 @@ void handler(mpr_sig sig, mpr_sig_evt evt, mpr_id id, int len, mpr_type type,
 
 int main(int argc, char **argv)
 {
+    int result = 0;
     printf("Beginning Test...\n");
+    goto done; // TODO: Make this a properly formed test.
 
     mpr_obj parent = (mpr_obj)mpr_dev_new("test-parent", 0);
 
@@ -37,16 +39,21 @@ int main(int argc, char **argv)
     mpr_obj child2 = mpr_obj_add_child(child, "test-grandchild", 0);
 
     float mnf[] = {0, 0, 0}, mxf[] = {1, 1, 1};
-    
-    mpr_sig s = mpr_sig_new(child2, MPR_DIR_IN, "insig", 1, MPR_FLT, NULL,
+
+    mpr_sig s = mpr_sig_new(child2, MPR_DIR_IN, "insig/child/grandchild/ggchild", 1, MPR_FLT, NULL,
                             mnf, mxf, NULL, handler, MPR_SIG_UPDATE);
 
     mpr_sig s2 = mpr_sig_new(parent, MPR_DIR_OUT, "outsig", 1, MPR_FLT, NULL,
-                            mnf, mxf, NULL, handler, MPR_SIG_UPDATE);
+                             mnf, mxf, NULL, handler, MPR_SIG_UPDATE);
 
-    while (1){
+    while (1)
+    {
         mpr_dev_poll(parent, 0);
     }
 
     printf("Ending Test!\n");
+done:
+    printf("...................Test %s\x1B[0m.\n",
+           result ? "\x1B[31mFAILED" : "\x1B[32mPASSED");
+    return result;
 }

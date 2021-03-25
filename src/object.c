@@ -314,8 +314,6 @@ mpr_obj mpr_obj_get_top_level_parent(mpr_obj obj){
         current = current->parent;
 
     return current;
-
-
 }
 
 
@@ -330,6 +328,10 @@ void prepend(char* s, const char* t)
 }
 
 const char* mpr_obj_generate_full_path(mpr_obj obj, const char *name){
+    
+    if(name == NULL){
+        name = "";
+    }
     mpr_obj current = obj;
 
     if(current->parent){

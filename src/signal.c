@@ -67,19 +67,37 @@ mpr_sig mpr_sig_new(mpr_obj obj, mpr_dir dir, const char *name, int len,
 {
     mpr_dev dev = (mpr_dev)mpr_obj_get_top_level_parent(obj); // Check that top-level object is a mpr_dev
 
+    // Copy the name to make it mutable for strtok function.
+    char buff[strlen(name)];
+    strcpy (buff, name);
+    
+    mpr_obj parent = (mpr_obj)dev;
+
+    /* -- This Snippet will generate the hierarchial structure for a signal with a path containing the '/' char-- */
+    char * token = strtok(buff, "/");
+    while( token != NULL ) {
+        // Build the hierarchial structure by adding a new child and updating the parent node.
+        parent = mpr_obj_add_child(parent, token, dev->obj.graph);
+        token = strtok(NULL, "/"); // Get next token.
+    }
+
+
     // Traverse the parental tree and determine the full path for a nested object. Will just be name if this obj is a top level dev
-    name = mpr_obj_generate_full_path(obj, name);
+    char * full_name = mpr_obj_generate_full_path(parent, token); // TODO: Ensure this function call is optimized internally
+    if(full_name[strlen(full_name)-1] == '/')
+        full_name[strlen(full_name)-1] = '\0'; // Todo: Consider moving this into the above function.
+
 
     // For now we only allow adding signals to devices.
     RETURN_UNLESS(dev && dev->loc, 0);
-    RETURN_UNLESS(name && !check_sig_length(len) && mpr_type_get_is_num(type), 0);
-    TRACE_RETURN_UNLESS(name[strlen(name)-1] != '/', 0,
+    RETURN_UNLESS(full_name && !check_sig_length(len) && mpr_type_get_is_num(type), 0);
+    TRACE_RETURN_UNLESS(full_name[strlen(full_name)-1] != '/', 0,
                         "trailing slash detected in signal name.\n");
     TRACE_RETURN_UNLESS(dir == MPR_DIR_IN || dir == MPR_DIR_OUT, 0,
                         "signal direction must be either input or output.\n")
     mpr_graph g = dev->obj.graph;
     mpr_sig s;
-    if ((s = mpr_dev_get_sig_by_name(dev, name)))
+    if ((s = mpr_dev_get_sig_by_name(dev, full_name)))
         return s;
 
     s = (mpr_sig)mpr_list_add_item((void**)&g->sigs, sizeof(mpr_sig_t));
@@ -90,7 +108,7 @@ mpr_sig mpr_sig_new(mpr_obj obj, mpr_dir dir, const char *name, int len,
     s->period = -1;
     s->loc->handler = h;
     s->loc->event_flags = events;
-    mpr_sig_init(s, dir, name, len, type, unit, min, max, num_inst);
+    mpr_sig_init(s, dir, full_name, len, type, unit, min, max, num_inst);
 
     if (dir == MPR_DIR_IN)
         ++dev->num_inputs;
