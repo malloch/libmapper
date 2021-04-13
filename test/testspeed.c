@@ -67,7 +67,7 @@ int setup_src()
         goto error;
     eprintf("source created.\n");
 
-    sendsig = mpr_sig_new(src, MPR_DIR_OUT, "outsig", 1, MPR_FLT, NULL,
+    sendsig = mpr_sig_new((mpr_obj)src, MPR_DIR_OUT, "outsig", 1, MPR_FLT, NULL,
                           NULL, NULL, NULL, NULL, 0);
     if (!sendsig)
         goto error;
@@ -121,7 +121,7 @@ int setup_dst()
         goto error;
     eprintf("destination created.\n");
 
-    recvsig = mpr_sig_new(dst, MPR_DIR_IN, "insig", 1, MPR_FLT, NULL,
+    recvsig = mpr_sig_new((mpr_obj)dst, MPR_DIR_IN, "insig", 1, MPR_FLT, NULL,
                           NULL, NULL, NULL, handler, MPR_SIG_UPDATE);
     if (!recvsig)
         goto error;

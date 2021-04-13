@@ -37,7 +37,7 @@ int setup_src()
         goto error;
     eprintf("source created.\n");
 
-    sendsig = mpr_sig_new(src, MPR_DIR_OUT, "outsig", vec_len, MPR_FLT, NULL,
+    sendsig = mpr_sig_new((mpr_obj)src, MPR_DIR_OUT, "outsig", vec_len, MPR_FLT, NULL,
                           sMin, sMax, NULL, NULL, 0);
 
     eprintf("Output signal 'outsig' registered.\n");
@@ -91,7 +91,7 @@ int setup_dst()
         goto error;
     eprintf("destination created.\n");
 
-    recvsig = mpr_sig_new(dst, MPR_DIR_IN, "insig", vec_len, MPR_FLT, NULL,
+    recvsig = mpr_sig_new((mpr_obj)dst, MPR_DIR_IN, "insig", vec_len, MPR_FLT, NULL,
                           dMin, dMax, NULL, handler, MPR_SIG_UPDATE);
 
     eprintf("Input signal 'insig' registered.\n");

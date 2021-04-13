@@ -299,7 +299,7 @@ mpr_obj mpr_obj_add_child(mpr_obj parent, const char *name, mpr_graph g){
     child->type = MPR_OBJ; // 31
     child->graph = g;
     child->parent = parent; // link the parent of this object
-    child->name = name;
+    child->name = strdup(name);
 
     //Todo: Add name when other branch is merged.
 
@@ -356,7 +356,7 @@ const char* mpr_obj_generate_full_path(mpr_obj obj, const char *name){
 
 /* TODO: Move to proper spot when deemed complete. */
 mpr_obj mpr_obj_new(const char *name, mpr_graph g){
-    RETURN_UNLESS(name);
+    RETURN_UNLESS(name, NULL);
     TRACE_RETURN_UNLESS(name[strlen(name)-1] != '/', 0,
                         "trailing slash detected in object name.\n");
 
@@ -365,11 +365,10 @@ mpr_obj mpr_obj_new(const char *name, mpr_graph g){
         g->own = 0;
     }
 
-    mpr_obj obj = (mpr_obj*)malloc(sizeof(mpr_obj_t)); // Is this correct?
+    mpr_obj obj = (mpr_obj)malloc(sizeof(mpr_obj_t));
     obj->type = MPR_OBJ;
 
-    obj->name = (char*)malloc(strlen(name));
-    strcpy(obj->name, name);
+    obj->name = strdup(name);
     obj->graph = g;
 
     return obj;

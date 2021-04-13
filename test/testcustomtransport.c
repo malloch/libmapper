@@ -159,7 +159,8 @@ int setup_src()
 
     mpr_graph_add_cb(mpr_obj_get_graph((mpr_obj)src), on_map, MPR_MAP, NULL);
 
-    sendsig = mpr_sig_new(src, MPR_DIR_OUT, "outsig", 1, MPR_FLT, "Hz", &mn, &mx, NULL, NULL, 0);
+    sendsig = mpr_sig_new((mpr_obj)src, MPR_DIR_OUT, "outsig", 1, MPR_FLT, "Hz", &mn, &mx,
+                          NULL, NULL, 0);
 
     eprintf("Output signal 'outsig' registered.\n");
 
@@ -204,7 +205,7 @@ int setup_dst()
 
     float mn=0, mx=1;
 
-    recvsig = mpr_sig_new(dst, MPR_DIR_IN, "insig", 1, MPR_FLT, NULL, &mn, &mx,
+    recvsig = mpr_sig_new((mpr_obj)dst, MPR_DIR_IN, "insig", 1, MPR_FLT, NULL, &mn, &mx,
                           NULL, insig_handler, MPR_SIG_UPDATE);
 
     eprintf("Input signal 'insig' registered.\n");

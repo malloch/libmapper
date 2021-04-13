@@ -40,11 +40,11 @@ int main(int argc, char **argv)
 
     float mnf[] = {0, 0, 0}, mxf[] = {1, 1, 1};
 
-    mpr_sig s = mpr_sig_new(child2, MPR_DIR_IN, "insig/child/grandchild/ggchild", 1, MPR_FLT, NULL,
-                            mnf, mxf, NULL, handler, MPR_SIG_UPDATE);
+    mpr_sig_new(child2, MPR_DIR_IN, "insig/child/grandchild/ggchild", 1, MPR_FLT, NULL,
+                mnf, mxf, NULL, handler, MPR_SIG_UPDATE);
 
-    mpr_sig s2 = mpr_sig_new(parent, MPR_DIR_OUT, "outsig", 1, MPR_FLT, NULL,
-                             mnf, mxf, NULL, handler, MPR_SIG_UPDATE);
+    mpr_sig_new(parent, MPR_DIR_OUT, "outsig", 1, MPR_FLT, NULL,
+                mnf, mxf, NULL, handler, MPR_SIG_UPDATE);
 
     while (1)
     {

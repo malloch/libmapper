@@ -170,9 +170,9 @@ int setup_src()
     float mn=0, mx=10;
     int num_inst = 10, stl = MPR_STEAL_OLDEST;
 
-    multisend = mpr_sig_new(src, MPR_DIR_OUT, "multisend", 1, MPR_FLT, NULL,
+    multisend = mpr_sig_new((mpr_obj)src, MPR_DIR_OUT, "multisend", 1, MPR_FLT, NULL,
                             &mn, &mx, &num_inst, NULL, 0);
-    monosend = mpr_sig_new(src, MPR_DIR_OUT, "monosend", 1, MPR_FLT, NULL,
+    monosend = mpr_sig_new((mpr_obj)src, MPR_DIR_OUT, "monosend", 1, MPR_FLT, NULL,
                            &mn, &mx, NULL, NULL, 0);
     if (!multisend || !monosend)
         goto error;
@@ -232,9 +232,9 @@ int setup_dst()
 
     // Specify 0 instances since we wish to use specific ids
     int num_inst = 0;
-    multirecv = mpr_sig_new(dst, MPR_DIR_IN, "multirecv", 1, MPR_FLT, NULL,
+    multirecv = mpr_sig_new((mpr_obj)dst, MPR_DIR_IN, "multirecv", 1, MPR_FLT, NULL,
                             &mn, NULL, &num_inst, handler, MPR_SIG_UPDATE);
-    monorecv = mpr_sig_new(dst, MPR_DIR_IN, "monorecv", 1, MPR_FLT, NULL,
+    monorecv = mpr_sig_new((mpr_obj)dst, MPR_DIR_IN, "monorecv", 1, MPR_FLT, NULL,
                            &mn, NULL, 0, handler, MPR_SIG_UPDATE);
     if (!multirecv)
         goto error;

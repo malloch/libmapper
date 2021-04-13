@@ -88,16 +88,16 @@ int setup_devs() {
             mn = fmod(rand() * 0.01, 21.f) - 10.f;
             mx = fmod(rand() * 0.01, 21.f) - 10.f;
             generate_name(str, 20);
-			mpr_sig_new(devices[i], MPR_DIR_IN, str, 1, MPR_FLT, NULL,
+			mpr_sig_new((mpr_obj)devices[i], MPR_DIR_IN, str, 1, MPR_FLT, NULL,
                         &mn, &mx, NULL, NULL, 0);
             mn = fmod(rand() * 0.01, 21.f) - 10.f;
             mx = fmod(rand() * 0.01, 21.f) - 10.f;
             generate_name(str, 20);
             if (j%2==0)
-                mpr_sig_new(devices[i], MPR_DIR_OUT, str, 1, MPR_FLT, NULL,
+                mpr_sig_new((mpr_obj)devices[i], MPR_DIR_OUT, str, 1, MPR_FLT, NULL,
                             &mn, &mx, NULL, NULL, 0);
             else
-                mpr_sig_new(devices[i], MPR_DIR_OUT, str, 1, MPR_FLT, NULL,
+                mpr_sig_new((mpr_obj)devices[i], MPR_DIR_OUT, str, 1, MPR_FLT, NULL,
                             &mn, NULL, NULL, NULL, 0);
 		}
 	}

@@ -820,7 +820,7 @@ static mpr_sig add_signal_internal(mpr_dev dev, mpr_dir dir, const char *name,
         }
     }
     int *pnum_inst = num_inst && MPR_INT32 == num_inst->type ? num_inst->val : 0;
-    mpr_sig sig = mpr_sig_new(dev, dir, name, len, type, unit, pmn, pmx,
+    mpr_sig sig = mpr_sig_new((mpr_obj)dev, dir, name, len, type, unit, pmn, pmx,
                               pnum_inst, h, events);
     sig->obj.data = callbacks;
 

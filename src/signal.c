@@ -22,11 +22,11 @@ static int _compare_inst_ids(const void *l, const void *r)
     return memcmp(&(*(mpr_sig_inst*)l)->id, &(*(mpr_sig_inst*)r)->id, sizeof(mpr_id));
 }
 
-static int _compare_inst_names(const void *l, const void *r)
-{
-    // TODO: Check that name is not (null) or set a default string name elsewhere.
-    return strcmp((*(mpr_sig_inst*)l)->name, (*(mpr_sig_inst*)r)->name);
-}
+//static int _compare_inst_names(const void *l, const void *r)
+//{
+//    // TODO: Check that name is not (null) or set a default string name elsewhere.
+//    return strcmp((*(mpr_sig_inst*)l)->name, (*(mpr_sig_inst*)r)->name);
+//}
 
 static mpr_sig_inst _find_inst_by_id(mpr_sig s, mpr_id id)
 {
@@ -82,13 +82,15 @@ mpr_sig mpr_sig_new(mpr_obj obj, mpr_dir dir, const char *name, int len,
     }
 
 
-    // Traverse the parental tree and determine the full path for a nested object. Will just be name if this obj is a top level dev
-    char * full_name = mpr_obj_generate_full_path(parent, token); // TODO: Ensure this function call is optimized internally
-    if(full_name[strlen(full_name)-1] == '/')
+    /* Traverse the tree and determine the full path for a nested object.
+     * Will just be name if this obj is a top level dev */
+    /* TODO: Ensure this function call is optimized internally */
+    char *full_name = (char*)mpr_obj_generate_full_path(parent, token);
+    if (full_name[strlen(full_name)-1] == '/')
         full_name[strlen(full_name)-1] = '\0'; // Todo: Consider moving this into the above function.
 
 
-    // For now we only allow adding signals to devices.
+    /* For now we only allow adding signals to devices. */
     RETURN_UNLESS(dev && dev->loc, 0);
     RETURN_UNLESS(full_name && !check_sig_length(len) && mpr_type_get_is_num(type), 0);
     TRACE_RETURN_UNLESS(full_name[strlen(full_name)-1] != '/', 0,
