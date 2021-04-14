@@ -39,6 +39,8 @@ typedef struct _mpr_obj **mpr_list;
 struct _mpr_dev;
 typedef struct _mpr_dev mpr_dev_t;
 typedef struct _mpr_dev *mpr_dev;
+typedef struct _mpr_local_dev mpr_local_dev_t;
+typedef struct _mpr_local_dev *mpr_local_dev;
 struct _mpr_map;
 struct _mpr_allocated_t;
 struct _mpr_id_map;
@@ -46,7 +48,7 @@ typedef int mpr_sig_group;
 
 /**** String tables ****/
 
-// bit flags for tracking permissions for modifying properties
+/* bit flags for tracking permissions for modifying properties */
 #define NON_MODIFIABLE      0x00
 #define LOCAL_MODIFY        0x01
 #define REMOTE_MODIFY       0x02
@@ -99,31 +101,24 @@ typedef struct _mpr_subscription {
     uint32_t lease_expiration_sec;
 } *mpr_subscription;
 
+#define SERVER_ADMIN    0
+#define SERVER_BUS      0   /* Multicast comms. */
+#define SERVER_MESH     1   /* Mesh comms. */
+
+#define SERVER_DEVICE   2
+#define SERVER_UDP      2
+#define SERVER_TCP      3
+
 /*! A structure that keeps information about network communications. */
 typedef struct _mpr_net {
     struct _mpr_graph *graph;
-    struct {
-        union {
-            lo_server all[4];
-            struct {
-                lo_server admin[2];
-                lo_server dev[2];
-            };
-            struct {
-                lo_server bus;      /*!< LibLo server for the multicast. */
-                lo_server mesh;     /*!< LibLo server for mesh comms. */
 
-                /*! Servers used to handle incoming signal messages. */
-                lo_server udp;
-                lo_server tcp;
-            };
-        };
-    } server;
+    lo_server servers[4];
 
     struct {
         lo_address bus;             /*!< LibLo address for the multicast bus. */
         lo_address dst;
-        struct _mpr_dev *dev;
+        struct _mpr_local_dev *dev;
         char *url;
     } addr;
 
@@ -132,7 +127,7 @@ typedef struct _mpr_net {
         struct in_addr addr;        /*!< The IP address of network interface. */
     } iface;
 
-    struct _mpr_dev **devs;         /*!< Local devices managed by this network structure. */
+    struct _mpr_local_dev **devs;   /*!< Local devices managed by this network structure. */
     lo_bundle bundle;               /*!< Bundle pointer for sending messages on the multicast bus. */
 
     struct {
@@ -154,11 +149,11 @@ typedef struct _mpr_net {
 
 typedef struct _mpr_graph {
     mpr_net_t net;
-    mpr_list devs;                   //!< List of devices.
-    mpr_list sigs;                   //!< List of signals.
-    mpr_list maps;                   //!< List of maps.
-    mpr_list links;                  //!< List of links.
-    fptr_list callbacks;             //!< List of object record callbacks.
+    mpr_list devs;                   /*!< List of devices. */
+    mpr_list sigs;                   /*!< List of signals. */
+    mpr_list maps;                   /*!< List of maps. */
+    mpr_list links;                  /*!< List of links. */
+    fptr_list callbacks;             /*!< List of object record callbacks. */
 
     /*! Linked-list of autorenewing device subscriptions. */
     mpr_subscription subscriptions;
@@ -207,17 +202,17 @@ typedef void mpr_resource_on_collision(struct _mpr_allocated_t *resource);
 
 /*! Allocated resources */
 typedef struct _mpr_allocated_t {
-    double count_time;          //!< The last time collision count was updated.
-    double hints[8];            //!< Availability of a range of resource values.
+    double count_time;          /*!< The last time collision count was updated. */
+    double hints[8];            /*!< Availability of a range of resource values. */
 
-    //!< Function to call when resource becomes locked.
+    /*!< Function to call when resource becomes locked. */
     mpr_resource_on_lock *on_lock;
 
-   //! Function to call when resource collision occurs.
+    /*! Function to call when resource collision occurs. */
     mpr_resource_on_collision *on_collision;
 
-    unsigned int val;           //!< The resource to be allocated.
-    int collision_count;        //!< The number of collisions detected.
+    unsigned int val;           /*!< The resource to be allocated. */
+    int collision_count;        /*!< The number of collisions detected. */
     uint8_t locked;             /*!< Whether or not the value has been locked (allocated). */
     uint8_t online;             /*!< Whether or not we are connected to the
                                  *   distributed allocation network. */
@@ -246,22 +241,22 @@ typedef struct _mpr_subscriber {
     int flags;
 } *mpr_subscriber;
 
-#define TIMEOUT_SEC 10              // timeout after 10 seconds without ping
+#define TIMEOUT_SEC 10              /* timeout after 10 seconds without ping */
 
 /**** Object ****/
 
 typedef struct _mpr_obj
 {
-    mpr_graph graph;                //!< Pointer back to the graph.
-    mpr_id id;                      //!< Unique id for this object.
-    char *name;                     //!< The full name for this object, or zero.
-    void *data;                     //!< User context pointer.
-    struct _mpr_dict props;         //!< Properties associated with this signal.
-    int version;                    //!< Version number.
-    mpr_type type;                  //!< Object type.
-    mpr_list children;              //!< List of child objects.
-    mpr_obj parent;                 //!< The parent of this child, from a hierarchy perspective.
-} mpr_obj_t, *mpr_obj;
+    mpr_graph graph;            /*!< Pointer back to the graph. */
+    mpr_id id;                  /*!< Unique id for this object. */
+    char *name;                 /*!< The full name for this object, or zero. */
+    void *data;                 /*!< User context pointer. */
+    struct _mpr_dict props;     /*!< Properties associated with this signal. */
+    int version;                /*!< Version number. */
+    mpr_type type;              /*!< Object type. */
+    mpr_list children;          /*!< List of child objects. */
+    mpr_obj parent;             /*!< The parent of this child, from a hierarchy perspective. */
+} mpr_obj_t;
 
 /**** Signal ****/
 
@@ -271,61 +266,95 @@ typedef struct _mpr_obj
 
 typedef struct _mpr_value_buffer
 {
-    void *samps;                //!< Value for each sample of stored history.
-    mpr_time *times;            //!< Time for each sample of stored history.
-    int8_t pos;                 //!< Current position in the circular buffer.
+    void *samps;                /*!< Value for each sample of stored history. */
+    mpr_time *times;            /*!< Time for each sample of stored history. */
+    int8_t pos;                 /*!< Current position in the circular buffer. */
+    uint8_t full;               /*!< Indicates whether complete buffer contains valid data. */
 } mpr_value_buffer_t, *mpr_value_buffer;
 
 typedef struct _mpr_value
 {
     mpr_value_buffer inst;      /*!< Array of value histories for each signal instance. */
-    int vlen;                   //!< Vector length.
-    int num_inst;               //!< Number of instances.
-    mpr_type type;              //!< The type of this signal.
-    int8_t mlen;                //!< History size of the buffer.
+    int vlen;                   /*!< Vector length. */
+    int num_inst;               /*!< Number of instances. */
+    mpr_type type;              /*!< The type of this signal. */
+    int8_t mlen;                /*!< History size of the buffer. */
 } mpr_value_t, *mpr_value;
 
-/*! Bit flags for indicating signal instance status. */
-#define RELEASED_LOCALLY  0x01
-#define RELEASED_REMOTELY 0x02
+/*! Bit flags for indicating instance id_map status. */
+#define UPDATED           0x01
+#define RELEASED_LOCALLY  0x02
+#define RELEASED_REMOTELY 0x04
 
 #define EXPR_RELEASE_BEFORE_UPDATE 0x02
 #define EXPR_RELEASE_AFTER_UPDATE  0x04
 #define EXPR_MUTED_UPDATE          0x08
 #define EXPR_UPDATE                0x10
+#define EXPR_EVAL_DONE             0x20
 
 /*! A signal is defined as a vector of values, along with some metadata. */
+/* plan: remove idx? we shouldn't need it anymore */
 typedef struct _mpr_sig_inst
 {
-    mpr_id id;                  //!< User-assignable instance id.
-    void *data;                 //!< User data of this instance.
-    mpr_time created;           //!< The instance's creation timestamp.
-    char *has_val_flags;        //!< Indicates which vector elements have a value.
+    mpr_id id;                  /*!< User-assignable instance id. */
+    void *data;                 /*!< User data of this instance. */
+    mpr_time created;           /*!< The instance's creation timestamp. */
+    char *has_val_flags;        /*!< Indicates which vector elements have a value. */
 
-    const char *name;           //!< The name of this instance, or "" //TODO: Check if the "" is proper.
+    const char *name;           /*!< The name of this instance, or NULL. */
 
-    void *val;                  //!< The current value of this signal instance.
-    mpr_time time;              //!< The time associated with the current value.
+    void *val;                  /*!< The current value of this signal instance. */
+    mpr_time time;              /*!< The time associated with the current value. */
 
-    unsigned int idx;           //!< Index for accessing value history.
-    uint8_t has_val;            //!< Indicates whether this instance has a value.
-    uint8_t active;             //!< Status of this instance.
+    uint8_t idx;                /*!< Index for accessing value history. */
+    uint8_t has_val;            /*!< Indicates whether this instance has a value. */
+    uint8_t active;             /*!< Status of this instance. */
 } mpr_sig_inst_t, *mpr_sig_inst;
 
+/* plan: remove inst, add map/slot resource index (is this the same for all source signals?) */
 typedef struct _mpr_sig_idmap
 {
-    struct _mpr_id_map *map;    //!< Associated mpr_id_map.
-    struct _mpr_sig_inst *inst; //!< Signal instance.
-    int status;                 /*!< Either 0 or a combination of
+    struct _mpr_id_map *map;    /*!< Associated mpr_id_map. */
+    struct _mpr_sig_inst *inst; /*!< Signal instance. */
+    int status;                 /*!< Either 0 or a combination of UPDATED,
                                  *   RELEASED_LOCALLY and RELEASED_REMOTELY. */
 } mpr_sig_idmap_t;
 
+#define MPR_SIG_STRUCT_ITEMS                                                            \
+    mpr_obj_t obj;              /* always first */                                      \
+    char *path;                 /*! OSC path.  Must start with '/'. */                  \
+    char *unit;                 /*!< The unit of this signal, or NULL for N/A. */       \
+    void *min;                  /*!< The minimum of this signal, or NULL for N/A. */    \
+    void *max;                  /*!< The maximum of this signal, or NULL for N/A. */    \
+    float period;               /*!< Estimate of the update rate of this signal. */     \
+    float jitter;               /*!< Estimate of the timing jitter of this signal. */   \
+    int dir;                    /*!< DIR_OUTGOING / DIR_INCOMING / DIR_BOTH */          \
+    int len;                    /*!< Length of the signal vector, or 1 for scalars. */  \
+    int num_inst;               /*!< Number of instances. */                            \
+    int use_inst;               /*!< 1 if using instances, 0 otherwise. */              \
+    int num_maps_in;            /* TODO: use dynamic query instead? */                  \
+    int num_maps_out;           /* TODO: use dynamic query instead? */                  \
+    mpr_steal_type steal_mode;  /*!< Type of voice stealing to perform. */              \
+    mpr_type type;              /*!< The type of this signal. */                        \
+    int is_local;
+
+/*! A record that describes properties of a signal. */
+typedef struct _mpr_sig
+{
+    MPR_SIG_STRUCT_ITEMS
+    mpr_dev dev;
+} mpr_sig_t, *mpr_sig;
+
 typedef struct _mpr_local_sig
 {
-    struct _mpr_sig_idmap *idmaps;  //!< ID maps and active instances.
+    MPR_SIG_STRUCT_ITEMS
+    mpr_local_dev dev;
+
+    struct _mpr_sig_idmap *idmaps;  /*!< ID maps and active instances. */
     int idmap_len;
-    struct _mpr_sig_inst **inst;    //!< Array of pointers to the signal insts.
-    char *vec_known;                //!< Bitflags when entire vector is known.
+    struct _mpr_sig_inst **inst;    /*!< Array of pointers to the signal insts. */
+    char *vec_known;                /*!< Bitflags when entire vector is known. */
+    char *updated_inst;             /*!< Bitflags to indicate updated instances. */
 
     /*! An optional function to be called when the signal value changes or when
      *  signal instance management events occur.. */
@@ -333,36 +362,10 @@ typedef struct _mpr_local_sig
     int event_flags;                /*! Flags for deciding when to call the
                                      *  instance event handler. */
 
-    mpr_sig_group group;            // TODO: replace with hierarchical instancing
+    mpr_sig_group group;            /* TODO: replace with hierarchical instancing */
     uint8_t locked;
-    uint8_t updated;                // TODO: fold into updated_inst bitflags.
+    uint8_t updated;                /* TODO: fold into updated_inst bitflags. */
 } mpr_local_sig_t, *mpr_local_sig;
-
-/*! A record that describes properties of a signal. */
-typedef struct _mpr_sig {
-    mpr_obj_t obj;          // always first
-    mpr_local_sig loc;
-    mpr_dev dev;
-    char *path;             //! OSC path.  Must start with '/'.
-    // char *name;             //! The name of this signal (path+1).
-
-    char *unit;             //!< The unit of this signal, or NULL for N/A.
-    void *min;              //!< The minimum of this signal, or NULL for N/A.
-    void *max;              //!< The maximum of this signal, or NULL for N/A.
-
-    float period;           //!< Estimate of the update rate of this signal.
-    float jitter;           //!< Estimate of the timing jitter of this signal.
-
-    int dir;                //!< DIR_OUTGOING / DIR_INCOMING / DIR_BOTH
-    int len;                //!< Length of the signal vector, or 1 for scalars.
-    int num_inst;           //!< Number of instances.
-    int use_inst;           //!< 1 if using instances, 0 otherwise.
-    int num_maps_in;
-    int num_maps_out;
-
-    mpr_type type;              //!< The type of this signal.
-    mpr_steal_type steal_mode;  //!< Type of voice stealing to perform.
-} mpr_sig_t, *mpr_sig;
 
 /**** Router ****/
 
@@ -371,105 +374,106 @@ typedef struct _mpr_bundle {
     lo_bundle tcp;
 } mpr_bundle_t, *mpr_bundle;
 
-#define NUM_BUNDLES 8
+#define NUM_BUNDLES 1
+#define LOCAL_DEV   0
+#define REMOTE_DEV  1
 
 typedef struct _mpr_link {
-    mpr_obj_t obj;                  // always first
-    union {
-        mpr_dev devs[2];
-        struct {
-            mpr_dev local_dev;
-            mpr_dev remote_dev;
-        };
-    };
+    mpr_obj_t obj;                  /* always first */
+    mpr_dev devs[2];
     int *num_maps;
 
     struct {
-        lo_address admin;           //!< Network address of remote endpoint
-        lo_address udp;             //!< Network address of remote endpoint
-        lo_address tcp;             //!< Network address of remote endpoint
+        lo_address admin;               /*!< Network address of remote endpoint */
+        lo_address udp;                 /*!< Network address of remote endpoint */
+        lo_address tcp;                 /*!< Network address of remote endpoint */
     } addr;
 
-    mpr_bundle_t bundles[NUM_BUNDLES];  //!< Circular buffer to handle interrupts during poll()
+    mpr_bundle_t bundles[NUM_BUNDLES];  /*!< Circular buffer to handle interrupts during poll() */
 
     mpr_sync_clock_t clock;
 } mpr_link_t, *mpr_link;
 
 /**** Maps and Slots ****/
 
-#define MAX_NUM_MAP_SRC     8    // arbitrary
-#define MAX_NUM_MAP_DST     8    // arbitrary
+#define MAX_NUM_MAP_SRC     8       /* arbitrary */
+#define MAX_NUM_MAP_DST     8       /* arbitrary */
+
+#define MPR_SLOT_STRUCT_ITEMS                                                   \
+    mpr_obj_t obj;                  /* always first */                          \
+    mpr_sig sig;                    /*!< Pointer to parent signal */            \
+    mpr_link link;                                                              \
+    int num_inst;                                                               \
+    int dir;                        /*!< DI_INCOMING or DI_OUTGOING */          \
+    int causes_update;              /*!< 1 if causes update, 0 otherwise. */    \
+    int is_local;
+
+typedef struct _mpr_slot {
+    MPR_SLOT_STRUCT_ITEMS
+    struct _mpr_map *map;           /*!< Pointer to parent map */
+} mpr_slot_t, *mpr_slot;
 
 typedef struct _mpr_local_slot {
-    // each slot can point to local signal or a remote link structure
-    struct _mpr_rtr_sig *rsig;      //!< Parent signal if local
+    MPR_SLOT_STRUCT_ITEMS
+    struct _mpr_local_map *map;     /*!< Pointer to parent map */
+
+    /* each slot can point to local signal or a remote link structure */
+    struct _mpr_rtr_sig *rsig;      /*!< Parent signal if local */
     mpr_value_t val;                /*!< Value histories for each signal instance. */
     char status;
 } mpr_local_slot_t, *mpr_local_slot;
 
-typedef struct _mpr_slot {
-    mpr_obj_t obj;                  // always first
-    mpr_local_slot loc;             //!< Pointer to local resources if any
-    struct _mpr_map *map;           //!< Pointer to parent map
-    mpr_sig sig;                    //!< Pointer to parent signal
-    mpr_link link;
-
-    int num_inst;
-
-    int dir;                        //!< DI_INCOMING or DI_OUTGOING
-    int causes_update;              //!< 1 if causes update, 0 otherwise.
-} mpr_slot_t, *mpr_slot;
-
-/*! The mpr_local_map structure is a linked list of mappings for a given signal.
- *  Each signal can be associated with multiple inputs or outputs. This
- *  structure only contains state information used for performing mapping, the
- *  properties are publically defined in mpr_constants.h. */
-typedef struct _mpr_local_map {
-    struct _mpr_rtr *rtr;
-
-    mpr_expr expr;                  //!< The mapping expression.
-    mpr_value_t *vars;              //!< User variables values.
-    const char **var_names;         //!< User variables names.
-    int num_vars;                   //!< Number of user variables.
-    int num_inst;                   //!< Number of local instances.
-
-    uint8_t is_local_only;
-    uint8_t one_src;
-} mpr_local_map_t, *mpr_local_map;
+#define MPR_MAP_STRUCT_ITEMS                                                    \
+    mpr_obj_t obj;                  /* always first */                          \
+    mpr_dev *scopes;                                                            \
+    char *expr_str;                                                             \
+    struct _mpr_id_map *idmap;      /*!< Associated mpr_id_map. */              \
+    int muted;                      /*!< 1 to mute mapping, 0 to unmute */      \
+    int num_scopes;                                                             \
+    int num_src;                                                                \
+    mpr_loc process_loc;                                                        \
+    int status;                                                                 \
+    int protocol;                   /*!< Data transport protocol. */            \
+    int use_inst;                   /*!< 1 if using instances, 0 otherwise. */  \
+    int is_local;
 
 /*! A record that describes the properties of a mapping.
  *  @ingroup map */
 typedef struct _mpr_map {
-    mpr_obj_t obj;                      // always first
-    mpr_local_map loc;
+    MPR_MAP_STRUCT_ITEMS
     mpr_slot *src;
     mpr_slot dst;
-
-    mpr_dev *scopes;
-
-    char *expr_str;
-
-    struct _mpr_id_map *idmap;          //!< Associated mpr_id_map.
-
-    int muted;                          //!< 1 to mute mapping, 0 to unmute
-    int num_scopes;
-    int num_src;
-    mpr_loc process_loc;
-    int status;
-    int protocol;                       //!< Data transport protocol.
-    int use_inst;                       //!< 1 if using instances, 0 otherwise.
 } mpr_map_t, *mpr_map;
+
+typedef struct _mpr_local_map {
+    MPR_MAP_STRUCT_ITEMS
+    mpr_local_slot *src;
+    mpr_local_slot dst;
+
+    struct _mpr_rtr *rtr;
+
+    mpr_expr expr;                  /*!< The mapping expression. */
+    char *updated_inst;             /*!< Bitflags to indicate updated instances. */
+    mpr_value_t *vars;              /*!< User variables values. */
+    const char **var_names;         /*!< User variables names. */
+    int num_vars;                   /*!< Number of user variables. */
+    int num_inst;                   /*!< Number of local instances. */
+
+    uint8_t is_local_only;
+    uint8_t one_src;
+    uint8_t updated;
+} mpr_local_map_t, *mpr_local_map;
 
 /*! The rtr_sig is a linked list containing a signal and a list of mapping
  *  slots.  TODO: This should be replaced with a more efficient approach
  *  such as a hash table or search tree. */
 typedef struct _mpr_rtr_sig {
-    struct _mpr_rtr_sig *next;          //!< The next rtr_sig in the list.
+    struct _mpr_rtr_sig *next;      /*!< The next rtr_sig in the list. */
 
-    struct _mpr_rtr *link;              //!< The parent link.
-    struct _mpr_sig *sig;               //!< The associated signal.
+    struct _mpr_rtr *link;          /*!< The parent link. */
+    struct _mpr_local_sig *sig;     /*!< The associated signal. */
 
-    mpr_slot *slots;
+    mpr_local_slot *slots;
     int num_slots;
     int id_counter;
 
@@ -477,34 +481,56 @@ typedef struct _mpr_rtr_sig {
 
 /*! The router structure. */
 typedef struct _mpr_rtr {
-    struct _mpr_dev *dev;        //!< The device associated with this link.
-    mpr_rtr_sig sigs;            //!< The list of mappings for each signal.
+    struct _mpr_local_dev *dev;     /*!< The device associated with this link. */
+    mpr_rtr_sig sigs;               /*!< The list of mappings for each signal. */
 } mpr_rtr_t, *mpr_rtr;
 
 /*! The instance ID map is a linked list of int32 instance ids for coordinating
  *  remote and local instances. */
 typedef struct _mpr_id_map {
-    struct _mpr_id_map *next;    //!< The next id map in the list.
+    struct _mpr_id_map *next;       /*!< The next id map in the list. */
 
-    mpr_id GID;                  //!< Hash for originating device.
-    mpr_id LID;                  //!< Local instance id to map.
+    mpr_id GID;                     /*!< Hash for originating device. */
+    mpr_id LID;                     /*!< Local instance id to map. */
     int LID_refcount;
     int GID_refcount;
 } mpr_id_map_t, *mpr_id_map;
 
 /**** Device ****/
 
-typedef struct _mpr_local_dev {
-    mpr_allocated_t ordinal;    //!< A unique ordinal for this device instance.
-    int registered;             //!< Non-zero if this device has been registered.
+#define MPR_DEV_STRUCT_ITEMS                                            \
+    mpr_obj_t obj;      /* always first */                              \
+    mpr_dev *linked;                                                    \
+    char *prefix;       /*!< The identifier (prefix) for this device. */\
+    mpr_time synced;    /*!< Timestamp of last sync. */                 \
+    int ordinal;                                                        \
+    int num_inputs;     /*!< Number of associated input signals. */     \
+    int num_outputs;    /*!< Number of associated output signals. */    \
+    int num_maps_in;    /*!< Number of associated incoming maps. */     \
+    int num_maps_out;   /*!< Number of associated outgoing maps. */     \
+    int num_linked;     /*!< Number of linked devices. */               \
+    int status;                                                         \
+    uint8_t subscribed;                                                 \
+    int is_local;
+
+/*! A record that keeps information about a device. */
+struct _mpr_dev {
+    MPR_DEV_STRUCT_ITEMS
+};
+
+struct _mpr_local_dev {
+    MPR_DEV_STRUCT_ITEMS
+
+    mpr_allocated_t ordinal_allocator;  /*!< A unique ordinal for this device instance. */
+    int registered;                     /*!< Non-zero if this device has been registered. */
 
     int n_output_callbacks;
 
-    mpr_subscriber subscribers; /*!< Linked-list of subscribed peers. */
+    mpr_subscriber subscribers;         /*!< Linked-list of subscribed peers. */
 
     struct {
-        struct _mpr_id_map **active;    //!< The list of active instance id maps.
-        struct _mpr_id_map *reserve;    //!< The list of reserve instance id maps.
+        struct _mpr_id_map **active;    /*!< The list of active instance id maps. */
+        struct _mpr_id_map *reserve;    /*!< The list of reserve instance id maps. */
     } idmaps;
 
     mpr_time time;
@@ -512,31 +538,8 @@ typedef struct _mpr_local_dev {
     uint8_t time_is_stale;
     uint8_t polling;
     uint8_t bundle_idx;
-    uint8_t updated;
-} mpr_local_dev_t, *mpr_local_dev;
-
-
-/*! A record that keeps information about a device. */
-struct _mpr_dev {
-    mpr_obj_t obj;              // always first
-    mpr_local_dev loc;
-
-    mpr_dev *linked;
-
-    char *prefix;               //!< The identifier (prefix) for this device.
-    // char *name;                 //!< The full name for this device, or zero.
-
-    mpr_time synced;            //!< Timestamp of last sync.
-
-    int ordinal;
-    int num_inputs;             //!< Number of associated input signals.
-    int num_outputs;            //!< Number of associated output signals.
-    int num_maps_in;            //!< Number of associated incoming maps.
-    int num_maps_out;           //!< Number of associated outgoing maps.
-    int num_linked;             //!< Number of linked devices.
-    int status;
-
-    uint8_t subscribed;
+    uint8_t sending;
+    uint8_t receiving;
 };
 
 /**** Messages ****/
@@ -576,4 +579,4 @@ typedef struct _mpr_msg
     int num_atoms;
 } *mpr_msg;
 
-#endif // __MPR_TYPES_H__
+#endif /* __MPR_TYPES_H__ */

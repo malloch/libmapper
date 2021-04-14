@@ -34,15 +34,15 @@ int main(int argc, char **argv)
 	mpr_sig sig_out = mpr_sig_new(src, MPR_DIR_OUT, "out-sig", 1, MPR_INT32, "none", 0, 0, 0, 0, 0);
 	mpr_sig sig_in = mpr_sig_new(dst, MPR_DIR_IN, "in-sig", 1, MPR_INT32, "none", 0, 0, 0, handler, MPR_SIG_UPDATE);
 
-	char *names[] = {"Thumb", "Index", "Middle", "Ring", "Pinky"}; // Five elements
+	const char *names[] = {"Thumb", "Index", "Middle", "Ring", "Pinky"}; // Five elements
 	int num_inst = sizeof(names) / sizeof(names[0]);			   // 5
 
-	char *names2[] = {"Matthew", "Stuart", "Peachey"};	// 3 elements
+	const char *names2[] = {"Matthew", "Stuart", "Peachey"};	// 3 elements
 	int num_inst2 = sizeof(names2) / sizeof(names2[0]); // 5
 
 	/* Reserve Named Instances on both ends of the map */
-	mpr_sig_reserve_named_inst(sig_out, names, num_inst, 0);
-	mpr_sig_reserve_named_inst(sig_in, names2, num_inst2, 0);
+	mpr_sig_reserve_inst(sig_out, num_inst, 0, names, 0);
+	mpr_sig_reserve_inst(sig_in, num_inst2, 0, names2, 0);
 
 	while (!mpr_dev_get_is_ready(src) && !mpr_dev_get_is_ready(dst))
 	{

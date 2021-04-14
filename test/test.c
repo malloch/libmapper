@@ -1,16 +1,12 @@
 #include <mapper/mapper.h>
 #include <stdio.h>
+#include <stdarg.h>
 #include <math.h>
 #include <lo/lo.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <signal.h>
 #include <string.h>
-
-#define eprintf(format, ...) do {               \
-    if (verbose)                                \
-        fprintf(stdout, format, ##__VA_ARGS__); \
-} while(0)
 
 mpr_dev src = 0;
 mpr_dev dst = 0;
@@ -33,16 +29,27 @@ int autoconnect = 1;
 
 int period = 100;
 
+static void eprintf(const char *format, ...)
+{
+    va_list args;
+    if (!verbose)
+        return;
+    va_start(args, format);
+    vprintf(format, args);
+    va_end(args);
+}
+
 /*! Creation of a local source. */
 int setup_src()
 {
+    float mnf[]={3.2,2,0}, mxf[]={-2,13,100};
+    double mnd=0, mxd=10;
+    mpr_list l;
+
     src = mpr_dev_new("test-send", 0);
     if (!src)
         goto error;
     eprintf("source created.\n");
-
-    float mnf[]={3.2,2,0}, mxf[]={-2,13,100};
-    double mnd=0, mxd=10;
 
     sendsig_1 = mpr_sig_new((mpr_obj)src, MPR_DIR_OUT, "outsig_1", 1, MPR_DBL, "Hz",
                             &mnd, &mxd, NULL, NULL, 0);
@@ -55,11 +62,11 @@ int setup_src()
 
     eprintf("Output signal 'outsig' registered.\n");
 
-    // Make sure we can add and remove outputs without crashing.
+    /* Make sure we can add and remove outputs without crashing. */
     mpr_sig_free(mpr_sig_new((mpr_obj)src, MPR_DIR_OUT, "outsig_5", 1, MPR_FLT, NULL,
                              &mnf, &mxf, NULL, NULL, 0));
 
-    mpr_list l = mpr_dev_get_sigs(src, MPR_DIR_OUT);
+    l = mpr_dev_get_sigs(src, MPR_DIR_OUT);
     eprintf("Number of outputs: %d\n", mpr_list_get_size(l));
     mpr_list_free(l);
 
@@ -83,20 +90,21 @@ void handler(mpr_sig sig, mpr_sig_evt evt, mpr_id id, int len, mpr_type type,
              const void *val, mpr_time t)
 {
     if (val) {
+        int i;
         const char *name = mpr_obj_get_prop_as_str(sig, MPR_PROP_NAME, NULL);
         eprintf("--> destination got %s", name);
 
         switch (type) {
             case MPR_FLT: {
                 float *v = (float*)val;
-                for (int i = 0; i < len; i++) {
+                for (i = 0; i < len; i++) {
                     eprintf(" %f", v[i]);
                 }
                 break;
             }
             case MPR_DBL: {
                 double *v = (double*)val;
-                for (int i = 0; i < len; i++) {
+                for (i = 0; i < len; i++) {
                     eprintf(" %f", v[i]);
                 }
                 break;
@@ -112,13 +120,14 @@ void handler(mpr_sig sig, mpr_sig_evt evt, mpr_id id, int len, mpr_type type,
 /*! Creation of a local destination. */
 int setup_dst()
 {
+    float mnf[]={0,0,0}, mxf[]={1,1,1};
+    double mnd=0, mxd=1;
+    mpr_list l;
+
     dst = mpr_dev_new("test-recv", 0);
     if (!dst)
         goto error;
     eprintf("destination created.\n");
-
-    float mnf[]={0,0,0}, mxf[]={1,1,1};
-    double mnd=0, mxd=1;
 
     recvsig_1 = mpr_sig_new((mpr_obj)dst, MPR_DIR_IN, "insig_1", 1, MPR_FLT, NULL,
                             mnf, mxf, NULL, handler, MPR_SIG_UPDATE);
@@ -131,11 +140,11 @@ int setup_dst()
 
     eprintf("Input signal 'insig' registered.\n");
 
-    // Make sure we can add and remove inputs and inputs within crashing.
+    /* Make sure we can add and remove inputs and inputs within crashing. */
     mpr_sig_free(mpr_sig_new((mpr_obj)dst, MPR_DIR_IN, "insig_5", 1, MPR_FLT,
                              NULL, &mnf, &mxf, NULL, NULL, MPR_SIG_UPDATE));
 
-    mpr_list l = mpr_dev_get_sigs(dst, MPR_DIR_IN);
+    l = mpr_dev_get_sigs(dst, MPR_DIR_IN);
     eprintf("Number of inputs: %d\n", mpr_list_get_size(l));
     mpr_list_free(l);
 
@@ -167,8 +176,9 @@ void wait_local_devs()
 
 void loop()
 {
+    int i = 0, recvd, num_maps;
+    float val[3];
     eprintf("-------------------- GO ! --------------------\n");
-    int i = 0, recvd;
 
     if (!done && autoconnect) {
         mpr_map maps[4];
@@ -181,8 +191,8 @@ void loop()
             mpr_obj_push(maps[i]);
         }
 
-        // wait until all maps has been established
-        int num_maps = 0;
+        /* wait until all maps has been established */
+        num_maps = 0;
         while (!done && num_maps < 4) {
             mpr_dev_poll(src, 10);
             mpr_dev_poll(dst, 10);
@@ -194,8 +204,6 @@ void loop()
     }
 
     i = 0;
-    float val[3];
-
     while ((!terminate || i < 50) && !done) {
 
         val[0] = val[1] = val[2] = (i % 10) * 1.0f;
@@ -235,7 +243,7 @@ int main(int argc, char ** argv)
 {
     int i, j, result = 0;
 
-    // process flags for -v verbose, -t terminate, -h help
+    /* process flags for -v verbose, -t terminate, -h help */
     for (i = 1; i < argc; i++) {
         if (argv[i] && argv[i][0] == '-') {
             int len = strlen(argv[i]);

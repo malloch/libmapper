@@ -1,17 +1,13 @@
 #include "../src/mapper_internal.h"
 #include <mapper/mapper.h>
 #include <stdio.h>
+#include <stdarg.h>
 #include <math.h>
 #include <lo/lo.h>
 #include <unistd.h>
 #include <signal.h>
 #include <stdlib.h>
 #include <string.h>
-
-#define eprintf(format, ...) do {               \
-    if (verbose)                                \
-        fprintf(stdout, format, ##__VA_ARGS__); \
-} while(0)
 
 int verbose = 1;
 int terminate = 0;
@@ -30,15 +26,25 @@ int received = 0;
 float expected;
 float period;
 
+static void eprintf(const char *format, ...)
+{
+    va_list args;
+    if (!verbose)
+        return;
+    va_start(args, format);
+    vprintf(format, args);
+    va_end(args);
+}
+
 /*! Creation of a local source. */
 int setup_src()
 {
+    float mn=0, mx=10;
+
     src = mpr_dev_new("testrate-send", 0);
     if (!src)
         goto error;
     eprintf("source created.\n");
-
-    float mn=0, mx=10;
 
     sendsig = mpr_sig_new((mpr_obj)src, MPR_DIR_OUT, "outsig", 1, MPR_FLT, "Hz",
                           &mn, &mx, NULL, NULL, 0);
@@ -64,10 +70,12 @@ void cleanup_src()
 void handler(mpr_sig sig, mpr_sig_evt event, mpr_id instance, int len,
              mpr_type type, const void *val, mpr_time t)
 {
+    const char *name;
+
     if (!val)
         return;
 
-    const char *name = mpr_obj_get_prop_as_str((mpr_obj)sig, MPR_PROP_NAME, NULL);
+    name = mpr_obj_get_prop_as_str((mpr_obj)sig, MPR_PROP_NAME, NULL);
     eprintf("%s rec'ved %f (period: %f, jitter: %f, diff: %f)\n", name,
             *(float*)val, sig->period, sig->jitter, period - sig->period);
     if (*(float*)val == expected)
@@ -79,18 +87,18 @@ void handler(mpr_sig sig, mpr_sig_evt event, mpr_id instance, int len,
 /*! Creation of a local destination. */
 int setup_dst()
 {
+    float mn=0, mx=1, rate;
+
     dst = mpr_dev_new("testrate-recv", 0);
     if (!dst)
         goto error;
     eprintf("destination created.\n");
 
-    float mn=0, mx=1;
-
     recvsig = mpr_sig_new((mpr_obj)dst, MPR_DIR_IN, "insig", 1, MPR_FLT, NULL,
                           &mn, &mx, NULL, handler, MPR_SIG_UPDATE);
 
-    // This signal is expected to be updated at 100 Hz
-    float rate = 100.f;
+    /* This signal is expected to be updated at 100 Hz */
+    rate = 100.f;
     mpr_obj_set_prop((mpr_obj)recvsig, MPR_PROP_RATE, NULL, 1, MPR_FLT, &rate, 1);
 
     eprintf("Input signal 'insig' registered.\n");
@@ -123,10 +131,13 @@ int setup_maps()
 {
     int i = 0;
     mpr_map map = mpr_map_new(1, &sendsig, 1, &recvsig);
+
+    /* TODO: set up update bundling as map property */
+
     mpr_obj_push((mpr_obj)map);
 
     i = 0;
-    // wait until mapping has been established
+    /* wait until mapping has been established */
     while (!done && !mpr_map_get_is_ready(map)) {
         mpr_dev_poll(src, 10);
         mpr_dev_poll(dst, 10);
@@ -140,10 +151,8 @@ int setup_maps()
 void loop()
 {
     int i = 0, thresh = 0;
-
     float fval;
 
-    i = 0;
     while ((!terminate || i < 50) && !done) {
         fval = (float)i;
         mpr_sig_set_value(sendsig, 0, 1, MPR_FLT, &fval);
@@ -151,7 +160,7 @@ void loop()
                 sendsig->period, sendsig->jitter);
         period = sendsig->period;
         ++sent;
-        expected = fval * 0.1;
+        expected = fval * 0.1f;
         mpr_dev_poll(src, 0);
         mpr_dev_poll(dst, polltime);
         ++i;
@@ -176,7 +185,7 @@ int main(int argc, char **argv)
 {
     int i, j, result = 0;
 
-    // process flags for -v verbose, -t terminate, -h help
+    /* process flags for -v verbose, -t terminate, -h help */
     for (i = 1; i < argc; i++) {
         if (argv[i] && argv[i][0] == '-') {
             int len = strlen(argv[i]);

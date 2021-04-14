@@ -3,17 +3,14 @@
 from __future__ import print_function
 import sys, random, mapper as mpr
 
-def h(sig, event, id, val, timetag):
-    print('  handler got', sig['name'], '=', val, 'at time', timetag.get_double())
-
-mins = [0,0,0,0,0,0,0,0,0,0]
-maxs = [1,1,1,1,1,1,1,1,1,1]
+def h(sig, event, id, val, time):
+    print('  handler got', sig['name'], '=', val, 'at time', time.get_double())
 
 src = mpr.device("py.testvector.src")
-outsig = src.add_signal(mpr.DIR_OUT, "outsig", 10, mpr.INT32, None, mins, maxs)
+outsig = src.add_signal(mpr.DIR_OUT, "outsig", 10, mpr.INT32, None, 0, 1)
 
 dest = mpr.device("py.testvector.dst")
-insig = dest.add_signal(mpr.DIR_IN, "insig", 10, mpr.FLT, None, mins, maxs, None, h)
+insig = dest.add_signal(mpr.DIR_IN, "insig", 10, mpr.FLT, None, 0, 1, None, h)
 
 while not src.ready or not dest.ready:
     src.poll(10)

@@ -2,6 +2,7 @@
 #include <mapper/mapper.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <stdarg.h>
 #include <math.h>
 #include <time.h>
 #include <sys/time.h>
@@ -11,22 +12,6 @@
 #include <string.h>
 
 int count = 0;
-
-#define eprintf(format, ...) do {               \
-    if (verbose)                                \
-        fprintf(stdout, format, ##__VA_ARGS__); \
-    else {                                      \
-        if (count >= 20) {                      \
-            count = 0;                          \
-            fprintf(stdout, "\33[2K\r");        \
-        }                                       \
-        else {                                  \
-            fprintf(stdout, ".");               \
-            ++count;                            \
-        }                                       \
-    }                                           \
-    fflush(stdout);                             \
-} while(0)
 
 int verbose = 1;
 
@@ -46,10 +31,29 @@ int received = 0;
 int done = 0;
 
 double times[100];
-float value;
 
 void switch_modes();
 void print_results();
+
+static void eprintf(const char *format, ...)
+{
+    va_list args;
+    if (!verbose) {
+        if (count >= 20) {
+            count = 0;
+            fprintf(stdout, "\33[2K\r");
+        }
+        else {
+            fprintf(stdout, ".");
+            ++count;
+        }
+        fflush(stdout);
+        return;
+    }
+    va_start(args, format);
+    vprintf(format, args);
+    va_end(args);
+}
 
 /*! Internal function to get the current time. */
 static double current_time()
@@ -62,6 +66,7 @@ static double current_time()
 /*! Creation of a local source. */
 int setup_src()
 {
+    mpr_list l;
     src = mpr_dev_new("testspeed-send", 0);
     if (!src)
         goto error;
@@ -71,10 +76,10 @@ int setup_src()
                           NULL, NULL, NULL, NULL, 0);
     if (!sendsig)
         goto error;
-    mpr_sig_reserve_inst(sendsig, 10, 0, 0);
+    mpr_sig_reserve_inst(sendsig, 10, 0, 0, 0);
 
     eprintf("Output signal registered.\n");
-    mpr_list l = mpr_dev_get_sigs(src, MPR_DIR_OUT);
+    l = mpr_dev_get_sigs(src, MPR_DIR_OUT);
     eprintf("Number of outputs: %d\n", mpr_list_get_size(l));
     mpr_list_free(l);
 
@@ -101,11 +106,11 @@ void handler(mpr_sig sig, mpr_sig_evt event, mpr_id inst, int length,
         counter = (counter+1)%10;
         if (++received >= iterations)
             switch_modes();
-        if (use_inst) {
+        if (use_inst)
             mpr_sig_set_value(sendsig, counter, length, type, value);
-        }
         else
             mpr_sig_set_value(sendsig, 0, length, type, value);
+        mpr_dev_update_maps(mpr_sig_get_dev(sig));
     }
     else {
         const char *name = mpr_obj_get_prop_as_str((mpr_obj)sig, MPR_PROP_NAME, NULL);
@@ -116,6 +121,7 @@ void handler(mpr_sig sig, mpr_sig_evt event, mpr_id inst, int length,
 /*! Creation of a local destination. */
 int setup_dst()
 {
+    mpr_list l;
     dst = mpr_dev_new("testspeed-recv", 0);
     if (!dst)
         goto error;
@@ -125,10 +131,10 @@ int setup_dst()
                           NULL, NULL, NULL, handler, MPR_SIG_UPDATE);
     if (!recvsig)
         goto error;
-    mpr_sig_reserve_inst(recvsig, 10, 0, 0);
+    mpr_sig_reserve_inst(recvsig, 10, 0, 0, 0);
 
     eprintf("Input signal registered.\n");
-    mpr_list l = mpr_dev_get_sigs(dst, MPR_DIR_IN);
+    l = mpr_dev_get_sigs(dst, MPR_DIR_IN);
     eprintf("Number of inputs: %d\n", mpr_list_get_size(l));
     mpr_list_free(l);
 
@@ -159,13 +165,15 @@ void wait_local_devs()
 
 void map_sigs()
 {
-    eprintf("Creating maps... ");
-    mpr_map map = mpr_map_new(1, &sendsig, 1, &recvsig);
+    mpr_map map;
     const char *expr = "y=y{-1}+1";
+
+    eprintf("Creating maps... ");
+    map = mpr_map_new(1, &sendsig, 1, &recvsig);
     mpr_obj_set_prop((mpr_obj)map, MPR_PROP_EXPR, NULL, 1, MPR_STR, expr, 1);
     mpr_obj_push((mpr_obj)map);
 
-    // wait until mapping has been established
+    /* wait until mapping has been established */
     while (!done && !mpr_map_get_is_ready(map)) {
         mpr_dev_poll(src, 10);
         mpr_dev_poll(dst, 10);
@@ -213,9 +221,10 @@ void print_results()
 {
     int i, j;
     double total_elapsed_time = 0;
-    for (i=0; i<numModes; i++) {
-        for (j=0; j<numTrials; j++)
-            total_elapsed_time += times[i*numTrials+j];
+
+    for (i = 0; i < numModes; i++) {
+        for (j = 0; j < numTrials; j++)
+            total_elapsed_time += times[i * numTrials + j];
     }
     printf(" (%i messages in %f seconds).\n", iterations * numModes * numTrials,
            total_elapsed_time);
@@ -224,14 +233,14 @@ void print_results()
 
     eprintf("\n*****************************************************\n");
     eprintf("\nRESULTS OF SPEED TEST:\n");
-    for (i=0; i<numModes; i++) {
-        eprintf("MODE %i\n", i);
+    for (i = 0; i < numModes; i++) {
         float bestTime = times[i*numTrials];
-        for (j=0; j<numTrials; j++) {
+        eprintf("MODE %i\n", i);
+        for (j = 0; j < numTrials; j++) {
             eprintf("trial %i: %i messages processed in %f seconds\n", j,
-                    iterations, times[i*numTrials+j]);
-            if (times[i*numTrials+j] < bestTime)
-                bestTime = times[i*numTrials+j];
+                    iterations, times[i * numTrials + j]);
+            if (times[i * numTrials + j] < bestTime)
+                bestTime = times[i * numTrials + j];
         }
         eprintf("\nbest trial: %i messages in %f seconds\n", iterations, bestTime);
     }
@@ -241,8 +250,9 @@ void print_results()
 int main(int argc, char **argv)
 {
     int i, j, result = 0;
+    float value = (float)rand();
 
-    // process flags for -v verbose, -h help
+    /* process flags for -v verbose, -h help */
     for (i = 1; i < argc; i++) {
         if (argv[i] && argv[i][0] == '-') {
             int len = strlen(argv[i]);
@@ -264,8 +274,6 @@ int main(int argc, char **argv)
         }
     }
 
-    value = (float)rand();
-
     signal(SIGINT, ctrlc);
 
     if (setup_dst()) {
@@ -284,13 +292,13 @@ int main(int argc, char **argv)
 
     map_sigs();
 
-    // start things off
+    /* start things off */
     eprintf("STARTING TEST...\n");
     times[0] = current_time();
-    mpr_sig_set_value(sendsig, counter++, 1, MPR_FLT, &value);
+    mpr_sig_set_value(sendsig, counter, 1, MPR_FLT, &value);
     while (!done) {
-        mpr_dev_poll(dst, 0);
         mpr_dev_poll(src, 0);
+        mpr_dev_poll(dst, 0);
     }
     goto done;
 

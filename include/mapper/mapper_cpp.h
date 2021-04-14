@@ -17,25 +17,12 @@
 #include <cstring>
 #include <iostream>
 
-//signal_update_handler(Signal sig, instance_id, val, len, Time)
-//- optional: instance_id, time, len
-//
-//possible forms:
-//(Signal sig, void *val)
-//(Signal sig, void *val, Time time)
-//(Signal sig, int instance_id, void *val)
-//(Signal sig, int instance_id, void *val, Time time)
-//(Signal sig, void *val, int len)
-//(Signal sig, void *val, int len, Time time)
-//(Signal sig, int instance_id, void *val, int len)
-//(Signal sig, int instance_id, void *val, int len, Time time)
-
 #ifdef interface
 #undef interface
 #endif
 
-#define RETURN_SELF(FUNC)   \
-{ FUNC; return (*this); }
+#define RETURN_SELF   \
+{ return (*this); }
 
 #define MPR_TYPE(NAME) mpr_ ## NAME
 #define MPR_FUNC(OBJ, FUNC) mpr_ ## OBJ ## _ ## FUNC
@@ -46,12 +33,12 @@ public:                                                                     \
         { Object::set_property(p); }                                        \
     template <typename... Values>                                           \
     CLASS_NAME& set_property(const Values... vals)                          \
-        { RETURN_SELF(Object::set_property(vals...)); }                     \
+        { Object::set_property(vals...); RETURN_SELF }                      \
     template <typename T>                                                   \
     CLASS_NAME& remove_property(const T prop)                               \
-        { RETURN_SELF(Object::remove_property(prop)); }                     \
+        { Object::remove_property(prop); RETURN_SELF }                      \
     const CLASS_NAME& push() const                                          \
-        { RETURN_SELF(Object::push()); }                                    \
+        { Object::push(); RETURN_SELF }                                     \
 
 namespace mapper {
 
@@ -86,21 +73,21 @@ namespace mapper {
         uint32_t sec()
             { return _time.sec; }
         Time& set_sec(uint32_t sec)
-            { RETURN_SELF(_time.sec = sec); }
+            { _time.sec = sec; RETURN_SELF }
         uint32_t frac()
             { return _time.frac; }
         Time& set_frac (uint32_t frac)
-            { RETURN_SELF(_time.frac = frac); }
+            { _time.frac = frac; RETURN_SELF }
         Time& now()
-            { RETURN_SELF(mpr_time_set(&_time, MPR_NOW)); }
+            { mpr_time_set(&_time, MPR_NOW); RETURN_SELF }
         operator mpr_time*()
             { return &_time; }
         operator double() const
             { return mpr_time_as_dbl(_time); }
         Time& operator=(Time& time)
-            { RETURN_SELF(mpr_time_set(&_time, time._time)); }
+            { mpr_time_set(&_time, time._time); RETURN_SELF }
         Time& operator=(double d)
-            { RETURN_SELF(mpr_time_set_dbl(&_time, d)); }
+            { mpr_time_set_dbl(&_time, d); RETURN_SELF }
         Time operator+(Time& addend)
         {
             mpr_time temp;
@@ -116,15 +103,15 @@ namespace mapper {
             return temp;
         }
         Time& operator+=(Time& addend)
-            { RETURN_SELF(mpr_time_add(&_time, *(mpr_time*)addend)); }
+            { mpr_time_add(&_time, *(mpr_time*)addend); RETURN_SELF }
         Time& operator+=(double addend)
-            { RETURN_SELF(mpr_time_add_dbl(&_time, addend)); }
+            { mpr_time_add_dbl(&_time, addend); RETURN_SELF }
         Time& operator-=(Time& subtrahend)
-            { RETURN_SELF(mpr_time_sub(&_time, *(mpr_time*)subtrahend)); }
+            { mpr_time_sub(&_time, *(mpr_time*)subtrahend); RETURN_SELF }
         Time& operator-=(double subtrahend)
-            { RETURN_SELF(mpr_time_add_dbl(&_time, -subtrahend)); }
+            { mpr_time_add_dbl(&_time, -subtrahend); RETURN_SELF }
         Time& operator*=(double multiplicand)
-            { RETURN_SELF(mpr_time_mul(&_time, multiplicand)); }
+            { mpr_time_mul(&_time, multiplicand); RETURN_SELF }
         bool operator<(Time& rhs)
             { return mpr_time_cmp(_time, rhs._time) < 0; }
         bool operator<=(Time& rhs)
@@ -169,7 +156,7 @@ namespace mapper {
         bool operator!=(const List& rhs)
             { return (_list != rhs._list); }
         List& operator++()
-            { RETURN_SELF(if (_list) _list = mpr_list_get_next(_list)); }
+            { if (_list) _list = mpr_list_get_next(_list); RETURN_SELF }
         List operator++(int)
             { List tmp(*this); operator++(); return tmp; }
         List begin()
@@ -272,7 +259,7 @@ namespace mapper {
         List& set_property(const Values... vals);
 
         T operator*()
-            { return T(*_list); }
+            { return _list ? T(*_list) : T(NULL); }
 
         /*! Retrieve an indexed item in the List.
          *  \param idx           The index of the element to retrieve.
@@ -342,7 +329,7 @@ namespace mapper {
          *  \param prop    The Property to remove.
          *  \return        Self. */
         virtual Object& remove_property(mpr_prop prop)
-            { RETURN_SELF(mpr_obj_remove_prop(_obj, prop, NULL)); }
+            { mpr_obj_remove_prop(_obj, prop, NULL); RETURN_SELF }
 
         /*! Remove a named Property from an Object.
          *  \param key     Name of the Property to remove.
@@ -357,7 +344,10 @@ namespace mapper {
         /*! Push "staged" property changes out to the distributed graph.
          *  \return         Self. */
         virtual const Object& push() const
-            { RETURN_SELF(mpr_obj_push(_obj)); }
+            { mpr_obj_push(_obj); RETURN_SELF }
+
+        const Object& print(int staged=0) const
+            { mpr_obj_print(_obj, staged); RETURN_SELF }
 
         /*! Retrieve the number of Properties owned by an Object.
          *  \param staged   Set to true to count properties that have been
@@ -390,10 +380,9 @@ namespace mapper {
         mpr_sig _sig;
     };
 
-    /*! Maps define dataflow connections between sets of Signals. A Map consists
-     *  of one or more source Signals, one or more destination Signal (currently),
-     *  restricted to one) and properties which determine how the source data is
-     *  processed.*/
+    /*! Maps define dataflow connections between sets of Signals. A Map consists of one or more
+     *  source Signals, one or more destination Signal (currently), restricted to one) and
+     *  properties which determine how the source data is processed. */
     class Map : public Object
     {
     private:
@@ -423,10 +412,9 @@ namespace mapper {
         /*! Create a map between a pair of Signals.
          *  \param src  Source Signal.
          *  \param dst  Destination Signal object.
-         *  \return     A new Map object – either loaded from the Graph (if the
-         *              Map already exists) or newly created. In the latter case
-         *              the Map will not take effect until it has been added to
-         *              the distributed graph using push(). */
+         *  \return     A new Map object – either loaded from the Graph (if the Map already exists)
+         *              or newly created. In the latter case the Map will not take effect until it
+         *              has been added to the distributed graph using push(). */
         Map(signal_type src, signal_type dst) : Object(NULL)
         {
             mpr_sig cast_src = src, cast_dst = dst;
@@ -452,13 +440,11 @@ namespace mapper {
         /*! Create a map between a set of Signals.
          *  \param num_srcs The number of source signals in this map.
          *  \param srcs     Array of source Signal objects.
-         *  \param num_dsts The number of destination signals in this map.
-         *                  Currently restricted to 1.
+         *  \param num_dsts The number of destination signals in this map, currently restricted to 1.
          *  \param dsts     Array of destination Signal objects.
-         *  \return         A new Map object – either loaded from the Graph (if
-         *                  the Map already exists) or newly created. In the
-         *                  latter case the Map will not take effect until it
-         *                  has been added to the graph using push(). */
+         *  \return         A new Map object – either loaded from the Graph (if the Map already
+         *                  exists) or newly created. In the latter case the Map will not take
+         *                  effect until it has been added to the graph using push(). */
         Map(int num_srcs, signal_type srcs[], int num_dsts, signal_type dsts[]) : Object(NULL)
         {
             mpr_sig cast_src[num_srcs], cast_dst = dsts[0];
@@ -470,10 +456,9 @@ namespace mapper {
         /*! Create a map between a set of Signals.
          *  \param srcs std::array of source Signal objects.
          *  \param dsts std::array of destination Signal objects.
-         *  \return     A new Map object – either loaded from the Graph (if the
-         *              Map already exists) or newly created. In the latter case
-         *              the Map will not take effect until it has been added to
-         *              the distributed graph using push(). */
+         *  \return     A new Map object – either loaded from the Graph (if the Map already exists)
+         *              or newly created. In the latter case the Map will not take effect until it
+         *              has been added to the distributed graph using push(). */
         template <size_t N, size_t M>
         Map(std::array<signal_type, N>& srcs,
             std::array<signal_type, M>& dsts) : Object(NULL)
@@ -491,10 +476,9 @@ namespace mapper {
         /*! Create a map between a set of Signals.
          *  \param srcs std::vector of source Signal objects.
          *  \param dsts std::vector of destination Signal objects.
-         *  \return     A new Map object – either loaded from the Graph (if the
-         *              Map already exists) or newly created. In the latter case
-         *              the Map will not take effect until it has been added to
-         *              the distributed graph using push(). */
+         *  \return     A new Map object – either loaded from the Graph (if the Map already exists)
+         *              or newly created. In the latter case the Map will not take effect until it
+         *              has been added to the distributed graph using push(). */
         Map(std::vector<signal_type>& srcs, std::vector<signal_type>& dsts) : Object(NULL)
         {
             if (!srcs.size() || (dsts.size() != 1)) {
@@ -521,7 +505,7 @@ namespace mapper {
         /*! Re-create stale map if necessary.
          *  \return         Self. */
         const Map& refresh() const
-            { RETURN_SELF(mpr_map_refresh(_obj)); }
+            { mpr_map_refresh(_obj); RETURN_SELF }
 
         /*! Release the Map between a set of Signals. */
         // this function can be const since it only sends the unmap msg
@@ -539,23 +523,21 @@ namespace mapper {
 //        List<Device> scopes() const
 //            { return List<Device>((void**)mpr_map_scopes(_obj)); }
 
-        /*! Add a scope to this Map. Map scopes configure the propagation of
-         *  Signal updates across the Map. Changes will not take effect until
-         *  synchronized with the distributed graph using push().
-         *  \param dev      Device to add as a scope for this Map. After taking
-         *                  effect, this setting will cause instance updates
-         *                  originating from the specified Device to be
-         *                  propagated across the Map.
+        /*! Add a scope to this Map. Map scopes configure the propagation of Signal updates across
+         *  the Map. Changes will not take effect until synchronized with the distributed graph
+         *  using push().
+         *  \param dev      Device to add as a scope for this Map. After taking effect, this
+         *                  setting will cause instance updates originating from the specified
+         *                  Device to be propagated across the Map.
          *  \return         Self. */
         inline Map& add_scope(const Device& dev);
 
-        /*! Remove a scope from this Map. Map scopes configure the propagation
-         *  of Signal updates across the Map. Changes will not take effect until
-         *  synchronized with the distributed graph using push().
-         *  \param dev      Device to remove as a scope for this Map. After
-         *                  taking effect, this setting will cause instance
-         *                  updates originating from the specified Device to be
-         *                  blocked from propagating across the Map.
+        /*! Remove a scope from this Map. Map scopes configure the propagation of Signal updates
+         *  across the Map. Changes will not take effect until synchronized with the distributed
+         *  graph using push().
+         *  \param dev      Device to remove as a scope for this Map. After taking effect, this
+         *                  setting will cause instance updates originating from the specified
+         *                  Device to be blocked from propagating across the Map.
          *  \return         Self. */
         inline Map& remove_scope(const Device& dev);
 
@@ -578,14 +560,20 @@ namespace mapper {
         friend class Graph;
     };
 
-    /*! Signals define inputs or outputs for Devices.  A Signal consists of a
-     *  scalar or vector value of some integer or floating-point type.  A Signal
-     *  is created by adding an input or output to a Device.  It can optionally
-     *  be provided with some metadata such as a range, unit, or other
-     *  properties.  Signals can be mapped by creating Maps using remote
-     *  requests on the network, usually generated by a standalone GUI. */
+    /*! Signals define inputs or outputs for Devices.  A Signal consists of a scalar or vector
+     *  value of some integer or floating-point type.  A Signal is created by adding an input or
+     *  output to a Device.  It can optionally be provided with some metadata such as a range,
+     *  unit, or other properties.  Signals can be mapped by creating Maps using remote requests
+     *  on the network, usually generated by a standalone GUI. */
     class Signal : public Object
     {
+    protected:
+        friend class Device;
+        Signal(mpr_dev dev, mpr_dir dir, const str_type &name, int len, mpr_type type,
+               const str_type &unit=0, void *min=0, void *max=0, int *num_inst=0)
+        {
+            _obj = mpr_sig_new(dev, dir, name, len, type, unit, min, max, num_inst, NULL, 0);
+        }
     public:
         Signal() : Object() {}
         Signal(mpr_sig sig) : Object(sig) {}
@@ -599,11 +587,11 @@ namespace mapper {
 
         /* Value update functions*/
         Signal& set_value(const int *val, int len)
-            { RETURN_SELF(mpr_sig_set_value(_obj, 0, len, MPR_INT32, val)); }
+            { mpr_sig_set_value(_obj, 0, len, MPR_INT32, val); RETURN_SELF }
         Signal& set_value(const float *val, int len)
-            { RETURN_SELF(mpr_sig_set_value(_obj, 0, len, MPR_FLT, val)); }
+            { mpr_sig_set_value(_obj, 0, len, MPR_FLT, val); RETURN_SELF }
         Signal& set_value(const double *val, int len)
-            { RETURN_SELF(mpr_sig_set_value(_obj, 0, len, MPR_DBL, val)); }
+            { mpr_sig_set_value(_obj, 0, len, MPR_DBL, val); RETURN_SELF }
         template <typename T>
         Signal& set_value(T val)
             { return set_value(&val, 1); }
@@ -623,13 +611,11 @@ namespace mapper {
             { return mpr_sig_get_value(_obj, 0, 0); }
         const void *value(Time time) const
             { return mpr_sig_get_value(_obj, 0, (mpr_time*)time); }
-        Signal& set_callback(mpr_sig_handler *h, int events=MPR_SIG_UPDATE)
-            { RETURN_SELF(mpr_sig_set_cb(_obj, h, events)); }
 
-        /*! Signal Instances can be used to describe the multiplicity and/or ephemerality
-        of phenomena associated with Signals. A signal describes the phenomena, e.g.
-        the position of a 'blob' in computer vision, and the signal's instances will
-        describe the positions of actual detected blobs. */
+        /*! Signal Instances can be used to describe the multiplicity and/or ephemerality of
+         *  phenomena associated with Signals. A signal describes the phenomena, e.g. the position
+         *  of a 'blob' in computer vision, and the signal's instances will describe the positions
+         *  of actual detected blobs. */
         class Instance {
         public:
             Instance(mpr_sig sig, mpr_id id)
@@ -679,7 +665,7 @@ namespace mapper {
                 { return _id; }
 
             Instance& set_data(void *data)
-                { RETURN_SELF(mpr_sig_set_inst_data(_sig, _id, data)); }
+                { mpr_sig_set_inst_data(_sig, _id, data); RETURN_SELF }
             void *data() const
                 { return mpr_sig_get_inst_data(_sig, _id); }
 
@@ -690,12 +676,95 @@ namespace mapper {
                 mpr_time *_time = time;
                 return mpr_sig_get_value(_sig, _id, _time);
             }
+            Signal signal() const
+                { return Signal(_sig); }
         protected:
             friend class Signal;
         private:
             mpr_id _id;
             mpr_sig _sig;
         };
+    private:
+#define HANDLER_NONE        -1
+#define HANDLER_STANDARD    0
+#define HANDLER_SIMPLE      1
+#define HANDLER_INSTANCE    2
+        typedef struct _handler_data {
+            union {
+                void (*standard)(Signal&&, mpr_sig_evt, mpr_id, int, mpr_type, const void*, mpr_time);
+                void (*simple)(Signal&&, int, mpr_type, const void*, mpr_time);
+                void (*instance)(Signal::Instance&&, mpr_sig_evt, int, mpr_type, const void*, mpr_time);
+            } handler;
+            int type;
+        } *handler_data;
+        static void _generic_handler(mpr_sig sig, mpr_sig_evt evt, mpr_id inst, int len,
+                                     mpr_type type, const void *val, mpr_time time)
+        {
+            // recover signal user_data
+            handler_data data = (handler_data)mpr_obj_get_prop_as_ptr(sig, MPR_PROP_DATA, NULL);
+            if (!data)
+                return;
+            switch (data->type) {
+                case HANDLER_STANDARD: {
+                    data->handler.standard(Signal(sig), evt, inst, len, type, val, time);
+                    break;
+                }
+                case HANDLER_SIMPLE: {
+                    data->handler.simple(Signal(sig), len, type, val, time);
+                    break;
+                }
+                case HANDLER_INSTANCE:
+                    data->handler.instance(Signal::Instance(sig, inst), evt, len, type, val, time);
+                    break;
+            }
+        }
+        void _set_callback(handler_data data,
+                           void (*h)(Signal&&, mpr_sig_evt, mpr_id, int, mpr_type, const void*, mpr_time))
+        {
+            data->type = HANDLER_STANDARD;
+            data->handler.standard = h;
+        }
+        void _set_callback(handler_data data,
+                           void (*h)(Signal&&, int, mpr_type, const void*, mpr_time))
+        {
+            data->type = HANDLER_SIMPLE;
+            data->handler.simple = h;
+        }
+        void _set_callback(handler_data data,
+                           void (*h)(Signal::Instance&&, mpr_sig_evt, int, mpr_type, const void*, mpr_time))
+        {
+            data->type = HANDLER_INSTANCE;
+            data->handler.instance = h;
+        }
+    public:
+        template <typename H>
+        Signal& set_callback(H& h, int events=MPR_SIG_UPDATE)
+        {
+            handler_data data = (handler_data)mpr_obj_get_prop_as_ptr(_obj, MPR_PROP_DATA, NULL);
+            if (data)
+                free(data);
+            if (h && events) {
+                data = (handler_data)malloc(sizeof(struct _handler_data));
+                _set_callback(data, h);
+                mpr_sig_set_cb(_obj, _generic_handler, events);
+                mpr_obj_set_prop(_obj, MPR_PROP_DATA, NULL, 1, MPR_PTR, data, 0);
+            }
+            else {
+                mpr_sig_set_cb(_obj, NULL, 0);
+                mpr_obj_remove_prop(_obj, MPR_PROP_DATA, NULL);
+            }
+            RETURN_SELF
+        }
+        Signal& set_callback()
+        {
+            handler_data data = (handler_data)mpr_obj_get_prop_as_ptr(_obj, MPR_PROP_DATA, NULL);
+            if (data) {
+                mpr_sig_set_cb(_obj, NULL, 0);
+                mpr_obj_remove_prop(_obj, MPR_PROP_DATA, NULL);
+                free(data);
+            }
+            RETURN_SELF
+        }
         Instance instance()
         {
             mpr_id id = mpr_dev_generate_unique_id(mpr_sig_get_dev(_obj));
@@ -704,13 +773,17 @@ namespace mapper {
         Instance instance(mpr_id id)
             { return Instance(_obj, id); }
         Signal& reserve_instances(int num, mpr_id *ids = 0)
-            { RETURN_SELF(mpr_sig_reserve_inst(_obj, num, ids, 0)); }
+            { mpr_sig_reserve_inst(_obj, num, ids, 0, 0); RETURN_SELF }
         Signal& reserve_instances(int num, mpr_id *ids, void **data)
-            { RETURN_SELF(mpr_sig_reserve_inst(_obj, num, ids, data)); }
+            { mpr_sig_reserve_inst(_obj, num, ids, 0, data); RETURN_SELF }
+        Signal& reserve_instances(int num, const char **names = 0)
+            { mpr_sig_reserve_inst(_obj, num, 0, names, 0); RETURN_SELF }
+        Signal& reserve_instances(int num, const char **names, void **data)
+            { mpr_sig_reserve_inst(_obj, num, 0, names, data); RETURN_SELF }
         Instance instance(int idx, mpr_status status) const
             { return Instance(_obj, mpr_sig_get_inst_id(_obj, idx, status)); }
         Signal& remove_instance(Instance instance)
-            { RETURN_SELF(mpr_sig_remove_inst(_obj, instance._id)); }
+            { mpr_sig_remove_inst(_obj, instance._id); RETURN_SELF }
         Instance oldest_instance()
             { return Instance(_obj, mpr_sig_get_oldest_inst_id(_obj)); }
         Instance newest_instance()
@@ -721,11 +794,10 @@ namespace mapper {
         OBJ_METHODS(Signal);
     };
 
-    /*! A Device is an entity on the network which has input and/or output
-     *  Signals.  The Device is the primary interface through which a program
-     *  uses libmapper.  A Device must have a name, to which a unique ordinal is
-     *  subsequently appended.  It can also be given other user-specified
-     *  metadata.  Signals can be mapped using local code or messages over the
+    /*! A Device is an entity on the network which has input and/or output Signals.  The Device is
+     *  the primary interface through which a program uses libmapper.  A Device must have a name,
+     *  to which a unique ordinal is subsequently appended.  It can also be given other
+     *  user-specified metadata.  Signals can be mapped using local code or messages over the
      *  network, usually sent from an external GUI. */
     class Device : public Object
     {
@@ -771,15 +843,16 @@ namespace mapper {
             { return _obj; }
 
         Signal add_signal(mpr_dir dir, const str_type &name, int len, mpr_type type,
-                          const str_type &unit=0, void *min=0, void *max=0,
-                          int *num_inst=0, mpr_sig_handler h=0,
-                          int events=MPR_SIG_UPDATE)
+                          const str_type &unit=0, void *min=0, void *max=0, int *num_inst=0)
         {
-            return Signal(mpr_sig_new(_obj, dir, name, len, type,
-                                      unit, min, max, num_inst, h, events));
+            return Signal(_obj, dir, name, len, type, unit, min, max, num_inst);
         }
         Device& remove_signal(Signal& sig)
-            { RETURN_SELF(mpr_sig_free(sig)); }
+        {
+            sig.set_callback();
+            mpr_sig_free(sig);
+            RETURN_SELF
+        }
 
         List<Signal> signals(mpr_dir dir=MPR_DIR_ANY) const
             { return List<Signal>(mpr_dev_get_sigs(_obj, dir)); }
@@ -795,9 +868,9 @@ namespace mapper {
         Time get_time()
             { return mpr_dev_get_time(_obj); }
         Device& set_time(Time time)
-            { RETURN_SELF(mpr_dev_set_time(_obj, *time)); }
-        Device& process_outputs()
-            { RETURN_SELF(mpr_dev_process_outputs(_obj)); }
+            { mpr_dev_set_time(_obj, *time); RETURN_SELF }
+        Device& update_maps()
+            { mpr_dev_update_maps(_obj); RETURN_SELF }
 
         OBJ_METHODS(Device);
     };
@@ -810,17 +883,35 @@ namespace mapper {
         mpr_dev _dev;
     };
 
-    /*! Graphs are the primary interface through which a program may observe
-     *  the network and store information about Devices and Signals that are
-     *  present.  Each Graph stores records of Devices, Signals, and Maps,
-     *  which can be queried. */
+    /*! Graphs are the primary interface through which a program may observe the network and store
+     *  information about Devices and Signals that are present. Each Graph stores records of
+     *  Devices, Signals, and Maps, which can be queried. */
     class Graph
     {
+    private:
+        typedef struct _handler_data {
+            void (*handler) (Graph&&, Object&&, mpr_graph_evt);
+        } *handler_data;
+        static void _generic_handler(mpr_graph g, mpr_obj o, mpr_graph_evt e, const void *user)
+        {
+            using func_t = void (*) (Graph&&, Object&&, mpr_graph_evt);
+            func_t h = reinterpret_cast<func_t>((void*)user);
+            switch (mpr_obj_get_type(o)) {
+                case MPR_DEV:
+                    h(Graph(g), Device(o), e);
+                    break;
+                case MPR_SIG:
+                    h(Graph(g), Signal(o), e);
+                    break;
+                case MPR_MAP:
+                    h(Graph(g), Map(o), e);
+                    break;
+            }
+        }
     public:
         /*! Create a peer in the libmapper distributed graph.
-         *  \param flags    Sets whether the graph should automatically
-         *                  subscribe to information about Signals and Maps when
-         *                  it encounters a previously-unseen Device.
+         *  \param flags    Sets whether the graph should automatically subscribe to information
+         *                  about Signals and Maps when it encounters a previously-unseen Device.
          *  \return         The new Graph. */
         Graph(int flags = MPR_OBJ)
         {
@@ -854,11 +945,10 @@ namespace mapper {
             { return _graph; }
 
         /*! Specify the network interface to use.
-         *  \param iface        A string specifying the name of the network
-         *                      interface to use.
+         *  \param iface        A string specifying the name of the network interface to use.
          *  \return             Self. */
         Graph& set_iface(const str_type &iface)
-            { RETURN_SELF(mpr_graph_set_interface(_graph, iface)); }
+            { mpr_graph_set_interface(_graph, iface); RETURN_SELF }
 
         /*! Return a string indicating the name of the network interface in use.
          *  \return     A string containing the name of the network interface.*/
@@ -873,7 +963,7 @@ namespace mapper {
          *  \param port     The multicast port to use.
          *  \return         Self. */
         Graph& set_address(const str_type &group, int port)
-            { RETURN_SELF(mpr_graph_set_address(_graph, group, port)); }
+            { mpr_graph_set_address(_graph, group, port); RETURN_SELF }
 
         /*! Retrieve the multicast url currently in use.
          *  \return     A string specifying the multicast url in use. */
@@ -881,8 +971,7 @@ namespace mapper {
             { return std::string(mpr_graph_get_address(_graph)); }
 
         /*! Update a Graph.
-         *  \param block_ms     The number of milliseconds to block, or 0 for
-         *                      non-blocking behaviour.
+         *  \param block_ms     The number of milliseconds to block, or 0 for non-blocking behavior.
          *  \return             The number of handled messages. */
         int poll(int block_ms=0) const
             { return mpr_graph_poll(_graph, block_ms); }
@@ -890,60 +979,77 @@ namespace mapper {
         // subscriptions
         /*! Subscribe to information about a specific Device.
          *  \param dev      The Device of interest.
-         *  \param flags    Bitflags setting the type of information of interest.
-         *                  Can be a combination of MPR_DEV, MPR_SIG_IN,
-         *                  MPR_SIG_OUT, MPR_SIG, MPR_MAP_IN, MPR_MAP_OUT,
-         *                  MPR_MAP, or simply MPR_OBJ for all information.
-         *  \param timeout  The desired duration in seconds for this
-         *                  subscription. If set to -1, the graph will
-         *                  automatically renew the subscription until it is
+         *  \param flags    Bitflags setting the type of information of interest. Can be a
+         *                  combination of MPR_DEV, MPR_SIG_IN, MPR_SIG_OUT, MPR_SIG, MPR_MAP_IN,
+         *                  MPR_MAP_OUT, MPR_MAP, or simply MPR_OBJ for all information.
+         *  \param timeout  The desired duration in seconds for this subscription. If set to -1,
+         *                  the graph will automatically renew the subscription until it is
          *                  freed or this function is called again.
          *  \return         Self. */
         const Graph& subscribe(const device_type& dev, int flags, int timeout)
-            { RETURN_SELF(mpr_graph_subscribe(_graph, dev, flags, timeout)); }
+            { mpr_graph_subscribe(_graph, dev, flags, timeout); RETURN_SELF }
 
         /*! Subscribe to information about all discovered Devices.
-         *  \param flags    Bitflags setting the type of information of interest.
-         *                  Can be a combination of MPR_DEV, MPR_SIG_IN,
-         *                  MPR_SIG_OUT, MPR_SIG, MPR_MAP_IN, MPR_MAP_OUT,
-         *                  MPR_MAP, or simply MPR_OBJ for all information.
+         *  \param flags    Bitflags setting the type of information of interest. Can be a
+         *                  combination of MPR_DEV, MPR_SIG_IN, MPR_SIG_OUT, MPR_SIG, MPR_MAP_IN,
+         *                  MPR_MAP_OUT, MPR_MAP, or simply MPR_OBJ for all information.
          *  \return         Self. */
         const Graph& subscribe(int flags)
-            { RETURN_SELF(mpr_graph_subscribe(_graph, 0, flags, -1)); }
+            { mpr_graph_subscribe(_graph, 0, flags, -1); RETURN_SELF }
 
         /*! Unsubscribe from information about a specific Device.
          *  \param dev      The Device of interest.
          *  \return         Self. */
         const Graph& unsubscribe(const device_type& dev)
-            { RETURN_SELF(mpr_graph_unsubscribe(_graph, dev)); }
+            { mpr_graph_unsubscribe(_graph, dev); RETURN_SELF }
 
         /*! Cancel all subscriptions.
          *  \return         Self. */
         const Graph& unsubscribe()
-            { RETURN_SELF(mpr_graph_unsubscribe(_graph, 0)); }
+            { mpr_graph_unsubscribe(_graph, 0); RETURN_SELF }
 
         // graph signals
-        /*! Register a callback for when an Object record is added, updated, or
-         *  removed.
+        /*! Register a callback for when an Object record is added, updated, or removed.
          *  \param h        Callback function.
          *  \param types    Bitflags setting the type of information of interest.
          *                  Can be a combination of mpr_type values.
-         *  \param data     A user-defined pointer to be passed to the
-         *                  callback for context.
+         *  \return         Self. */
+        const Graph& add_callback(void (*h)(Graph&&, Object&&, mpr_graph_evt), int types) const
+        {
+            mpr_graph_add_cb(_graph, _generic_handler, types, reinterpret_cast<void*>(h));
+            RETURN_SELF
+        }
+
+        /*! Register a C callback for when an Object record is added, updated, or removed.
+         *  \param h        Callback function.
+         *  \param types    Bitflags setting the type of information of interest.
+         *                  Can be a combination of mpr_type values.
+         *  \param data     A user-defined pointer to be passed to the callback for context.
          *  \return         Self. */
         const Graph& add_callback(mpr_graph_handler *h, int types, void *data) const
-            { RETURN_SELF(mpr_graph_add_cb(_graph, h, types, data)); }
+            { mpr_graph_add_cb(_graph, h, types, data); RETURN_SELF }
 
         /*! Remove an Object record callback from the Graph service.
          *  \param h        Callback function.
          *  \param data     The user context pointer that was originally
          *                  specified when adding the callback
          *  \return         Self. */
+        const Graph& remove_callback(void (*h)(Graph&&, Object&&, mpr_graph_evt)) const
+        {
+            mpr_graph_remove_cb(_graph, _generic_handler, reinterpret_cast<void*>(h));
+            RETURN_SELF
+        }
+
+        /*! Remove a C Object record callback from the Graph service.
+         *  \param h        Callback function.
+         *  \param data     The user context pointer that was originally
+         *                  specified when adding the callback
+         *  \return         Self. */
         const Graph& remove_callback(mpr_graph_handler *h, void *data) const
-            { RETURN_SELF(mpr_graph_remove_cb(_graph, h, data)); }
+            { mpr_graph_remove_cb(_graph, h, data); RETURN_SELF }
 
         const Graph& print() const
-            { RETURN_SELF(mpr_graph_print(_graph)); }
+            { mpr_graph_print(_graph); RETURN_SELF }
 
         // graph devices
         List<Device> devices() const
@@ -1098,7 +1204,7 @@ namespace mapper {
 
         template <typename... Values>
         Property& operator = (Values... vals)
-            { RETURN_SELF(_set(vals...)); }
+            { _set(vals...); RETURN_SELF }
 
         mpr_prop prop;
         const char *key;
@@ -1295,6 +1401,8 @@ namespace mapper {
 
     void Object::set_property(const Property& p)
     {
+        if (p.prop == MPR_PROP_DATA || (p.key && !strcmp(p.key, "data")))
+            return;
         mpr_obj_set_prop(_obj, p.prop, p.key, p.len, p.type, p.val, p.pub);
     }
 
@@ -1361,7 +1469,7 @@ namespace mapper {
     List<T>& List<T>::set_property(const Values... vals)
     {
         Property p(vals...);
-        if (!p)
+        if (!p || p.prop == MPR_PROP_DATA || (p.key && !strcmp(p.key, "data")))
             return (*this);
         mpr_list cpy = mpr_list_get_cpy(_list);
         while (cpy) {
@@ -1386,10 +1494,10 @@ namespace mapper {
         { _sig = (mpr_sig)sig; }
 
     Map& Map::add_scope(const Device& dev)
-        { RETURN_SELF(mpr_map_add_scope(_obj, mpr_dev(dev))); }
+        { mpr_map_add_scope(_obj, mpr_dev(dev)); RETURN_SELF }
 
     Map& Map::remove_scope(const Device& dev)
-        { RETURN_SELF(mpr_map_remove_scope(_obj, mpr_dev(dev))); }
+        { mpr_map_remove_scope(_obj, mpr_dev(dev)); RETURN_SELF }
 
     Device Signal::device() const
         { return Device(mpr_sig_get_dev(_obj)); }

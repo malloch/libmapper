@@ -2,15 +2,11 @@
 #include <mapper/mapper.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdarg.h>
 #include <math.h>
 #include <unistd.h>
 #include <string.h>
 #include <signal.h>
-
-#define eprintf(format, ...) do {               \
-    if (verbose)                                \
-        fprintf(stdout, format, ##__VA_ARGS__); \
-} while(0)
 
 int verbose = 1;
 int terminate = 0;
@@ -28,10 +24,22 @@ int sent = 0;
 int received = 0;
 
 float *sMin, *sMax, *dMin, *dMax, *expected;
-double *M, *B;
+float *M, *B;
+
+static void eprintf(const char *format, ...)
+{
+    va_list args;
+    if (!verbose)
+        return;
+    va_start(args, format);
+    vprintf(format, args);
+    va_end(args);
+}
 
 int setup_src()
 {
+    mpr_list l;
+
     src = mpr_dev_new("testvector-send", 0);
     if (!src)
         goto error;
@@ -41,7 +49,7 @@ int setup_src()
                           sMin, sMax, NULL, NULL, 0);
 
     eprintf("Output signal 'outsig' registered.\n");
-    mpr_list l = mpr_dev_get_sigs(src, MPR_DIR_OUT);
+    l = mpr_dev_get_sigs(src, MPR_DIR_OUT);
     eprintf("Number of outputs: %d\n", mpr_list_get_size(l));
     mpr_list_free(l);
     return 0;
@@ -64,9 +72,11 @@ void handler(mpr_sig sig, mpr_sig_evt event, mpr_id instance, int length,
              mpr_type type, const void *value, mpr_time t)
 {
     int i;
+    float *f;
+
     if (!value || length != vec_len)
         return;
-    float *f = (float*)value;
+    f = (float*)value;
     eprintf("handler: Got [");
     for (i = 0; i < length; i++) {
         eprintf("%f, ", f[i]);
@@ -86,6 +96,8 @@ void handler(mpr_sig sig, mpr_sig_evt event, mpr_id instance, int length,
 
 int setup_dst()
 {
+    mpr_list l;
+
     dst = mpr_dev_new("testvector-recv", 0);
     if (!dst)
         goto error;
@@ -95,7 +107,7 @@ int setup_dst()
                           dMin, dMax, NULL, handler, MPR_SIG_UPDATE);
 
     eprintf("Input signal 'insig' registered.\n");
-    mpr_list l = mpr_dev_get_sigs(dst, MPR_DIR_IN);
+    l = mpr_dev_get_sigs(dst, MPR_DIR_IN);
     eprintf("Number of inputs: %d\n", mpr_list_get_size(l));
     mpr_list_free(l);
     return 0;
@@ -121,8 +133,7 @@ int setup_maps()
     mpr_map map = mpr_map_new(1, &sendsig, 1, &recvsig);
     mpr_obj_push((mpr_obj)map);
 
-    // wait until mapping has been established
-    i = 0;
+    /* wait until mapping has been established */
     while (!done && !mpr_map_get_is_ready(map)) {
         mpr_dev_poll(src, 10);
         mpr_dev_poll(dst, 10);
@@ -130,13 +141,13 @@ int setup_maps()
             return 1;
     }
 
-    // calculate M and B for generated expected values
+    /* calculate M and B for generated expected values */
     for (i = 0; i < vec_len; i++) {
-        double sRange = (double)sMax[i] - (double)sMin[i];
+        float sRange = (float)sMax[i] - (float)sMin[i];
         if (sRange) {
-            M[i] = ((double)dMax[i] - (double)dMin[i]) / sRange;
-            B[i] = (  (double)dMin[i] * (double)sMax[i]
-                    - (double)dMax[i] * (double)sMin[i]) / sRange;
+            M[i] = ((float)dMax[i] - (float)dMin[i]) / sRange;
+            B[i] = (  (float)dMin[i] * (float)sMax[i]
+                    - (float)dMax[i] * (float)sMin[i]) / sRange;
         }
         else {
             M[i] = 0;
@@ -157,13 +168,14 @@ void wait_ready()
 
 void loop()
 {
-    eprintf("Polling device..\n");
     int i = 0, j = 0;
     float *v = malloc(vec_len * sizeof(float));
+
+    eprintf("Polling device..\n");
     while ((!terminate || i < 50) && !done) {
         for (j = 0; j < vec_len; j++) {
             v[j] = (float)(i + j);
-            expected[j] = (double)v[j] * M[j] + B[j];
+            expected[j] = v[j] * M[j] + B[j];
         }
         eprintf("Updating signal %s to [", sendsig->obj.name);
         for (j = 0; j < vec_len; j++)
@@ -192,7 +204,7 @@ int main(int argc, char **argv)
 {
     int i, j, result = 0;
 
-    // process flags for -v verbose, -t terminate, -h help
+    /* process flags for -v verbose, -t terminate, -h help */
     for (i = 1; i < argc; i++) {
         if (argv[i] && argv[i][0] == '-') {
             int len = strlen(argv[i]);
@@ -234,8 +246,8 @@ int main(int argc, char **argv)
     sMax = malloc(vec_len * sizeof(float));
     dMin = malloc(vec_len * sizeof(float));
     dMax = malloc(vec_len * sizeof(float));
-    M = malloc(vec_len * sizeof(double));
-    B = malloc(vec_len * sizeof(double));
+    M = malloc(vec_len * sizeof(float));
+    B = malloc(vec_len * sizeof(float));
     expected = malloc(vec_len * sizeof(float));
 
     for (i = 0; i < vec_len; i++) {

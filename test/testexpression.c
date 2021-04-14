@@ -1,14 +1,10 @@
 #include <mapper/mapper.h>
 #include <stdio.h>
+#include <stdarg.h>
 #include <math.h>
 #include <string.h>
 #include <unistd.h>
 #include <signal.h>
-
-#define eprintf(format, ...) do {               \
-    if (verbose)                                \
-        fprintf(stdout, format, ##__VA_ARGS__); \
-} while(0)
 
 int verbose = 1;
 int terminate = 0;
@@ -29,19 +25,30 @@ int addend = 0;
 float expected_val;
 double expected_time;
 
+static void eprintf(const char *format, ...)
+{
+    va_list args;
+    if (!verbose)
+        return;
+    va_start(args, format);
+    vprintf(format, args);
+    va_end(args);
+}
+
 int setup_src()
 {
+    float mn=0, mx=1;
+    mpr_list l;
+
     src = mpr_dev_new("testexpression-send", 0);
     if (!src)
         goto error;
     eprintf("source created.\n");
 
-    float mn=0, mx=1;
-    sendsig = mpr_sig_new(src, MPR_DIR_OUT, "outsig", 1, MPR_FLT, NULL,
-                          &mn, &mx, NULL, NULL, 0);
+    sendsig = mpr_sig_new(src, MPR_DIR_OUT, "outsig", 1, MPR_FLT, NULL, &mn, &mx, NULL, NULL, 0);
 
     eprintf("Output signal 'outsig' registered.\n");
-    mpr_list l = mpr_dev_get_sigs(src, MPR_DIR_OUT);
+    l = mpr_dev_get_sigs(src, MPR_DIR_OUT);
     eprintf("Number of outputs: %d\n", mpr_list_get_size(l));
     mpr_list_free(l);
     return 0;
@@ -69,25 +76,25 @@ void handler(mpr_sig sig, mpr_sig_evt event, mpr_id instance, int length,
             mpr_time_as_dbl(t));
     if (*(float*)value != expected_val)
         eprintf("  error: expected value %f\n", expected_val);
-    // else if (mpr_time_as_dbl(t) != expected_time)
-    //     eprintf("  error: expected time %f\n", expected_time);
     else
         received++;
 }
 
 int setup_dst()
 {
+    float mn=0, mx=1;
+    mpr_list l;
+
     dst = mpr_dev_new("testexpression-recv", 0);
     if (!dst)
         goto error;
     eprintf("destination created.\n");
 
-    float mn=0, mx=1;
     recvsig = mpr_sig_new(dst, MPR_DIR_IN, "insig", 1, MPR_FLT, NULL,
                           &mn, &mx, NULL, handler, MPR_SIG_UPDATE);
 
     eprintf("Input signal 'insig' registered.\n");
-    mpr_list l = mpr_dev_get_sigs(dst, MPR_DIR_IN);
+    l = mpr_dev_get_sigs(dst, MPR_DIR_IN);
     eprintf("Number of inputs: %d\n", mpr_list_get_size(l));
     mpr_list_free(l);
     return 0;
@@ -112,7 +119,7 @@ int setup_maps()
     mpr_obj_set_prop(map, MPR_PROP_EXPR, NULL, 1, MPR_STR, "foo=0;y=x*10+foo", 1);
     mpr_obj_push(map);
 
-    // wait until mapping has been established
+    /* wait until mapping has been established */
     while (!done && !mpr_map_get_is_ready(map)) {
         mpr_dev_poll(src, 10);
         mpr_dev_poll(dst, 10);
@@ -131,15 +138,17 @@ void wait_ready()
 
 void loop()
 {
-    eprintf("Polling device..\n");
     int i = 0;
     mpr_time t;
+
+    eprintf("Polling device..\n");
     while ((!terminate || i < 50) && !done) {
         float val = i * 1.0f;
         expected_val = val * 10 + addend;
         t = mpr_dev_get_time(src);
-        expected_time = mpr_time_as_dbl(t) + 10;
-        eprintf("Updating output signal to %f at time %f\n", (i * 1.0f), mpr_time_as_dbl(t));
+        expected_time = mpr_time_as_dbl(t);
+        eprintf("Updating output signal to %f at time %f\n", (i * 1.0f),
+                mpr_time_as_dbl(t));
         mpr_sig_set_value(sendsig, 0, 1, MPR_FLT, &val);
         sent++;
         mpr_dev_poll(src, 0);
@@ -162,7 +171,7 @@ int main(int argc, char **argv)
 {
     int i, j, result = 0;
 
-    // process flags for -v verbose, -t terminate, -h help
+    /* process flags for -v verbose, -t terminate, -h help */
     for (i = 1; i < argc; i++) {
         if (argv[i] && argv[i][0] == '-') {
             int len = strlen(argv[i]);
@@ -220,7 +229,7 @@ int main(int argc, char **argv)
     addend = 1000;
     mpr_obj_set_prop(map, MPR_PROP_EXTRA, "var@foo", 1, MPR_INT32, &addend, 1);
     mpr_obj_push(map);
-    // wait for change to take effect
+    /* wait for change to take effect */
     mpr_dev_poll(dst, 100);
     mpr_dev_poll(src, 100);
 

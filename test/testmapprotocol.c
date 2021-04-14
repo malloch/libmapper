@@ -1,21 +1,10 @@
 #include <mapper/mapper.h>
 #include <stdio.h>
+#include <stdarg.h>
 #include <math.h>
 #include <string.h>
 #include <signal.h>
 #include <unistd.h>
-
-#define eprintf(format, ...) do {               \
-    if (verbose)                                \
-        fprintf(stdout, format, ##__VA_ARGS__); \
-    else {                                      \
-        if (col >= 50)                          \
-            printf("\33[2K\r");                 \
-        fprintf(stdout, ".");                   \
-        ++col;                                  \
-    }                                           \
-    fflush(stdout);                             \
-} while(0)
 
 int verbose = 1;
 int period = 100;
@@ -33,20 +22,37 @@ int done = 0;
 
 int terminate = 0;
 
+static void eprintf(const char *format, ...)
+{
+    va_list args;
+    if (!verbose) {
+        if (col >= 50)
+            printf("\33[2K\r");
+        fprintf(stdout, ".");
+        ++col;
+        return;
+    }
+    va_start(args, format);
+    vprintf(format, args);
+    fflush(stdout);
+    va_end(args);
+}
+
 int setup_src()
 {
+    float mn=0, mx=1;
+    mpr_list l;
+
     src = mpr_dev_new("testmapprotocol-send", 0);
     if (!src)
         goto error;
     eprintf("source created.\n");
 
-    float mn=0, mx=1;
-
     sendsig = mpr_sig_new(src, MPR_DIR_OUT, "outsig", 1, MPR_FLT, NULL,
                           &mn, &mx, NULL, NULL, 0);
 
     eprintf("Output signal /outsig registered.\n");
-    mpr_list l = mpr_dev_get_sigs(src, MPR_DIR_OUT);
+    l = mpr_dev_get_sigs(src, MPR_DIR_OUT);
     eprintf("Number of outputs: %d\n", mpr_list_get_size(l));
     mpr_list_free(l);
     return 0;
@@ -76,18 +82,19 @@ void handler(mpr_sig sig, mpr_sig_evt event, mpr_id instance, int length,
 
 int setup_dst()
 {
+    float mn=0, mx=1;
+    mpr_list l;
+
     dst = mpr_dev_new("testmapprotocol-recv", 0);
     if (!dst)
         goto error;
     eprintf("destination created.\n");
 
-    float mn=0, mx=1;
-
     recvsig = mpr_sig_new(dst, MPR_DIR_IN, "insig", 1, MPR_FLT, NULL,
                           &mn, &mx, NULL, handler, MPR_SIG_UPDATE);
 
     eprintf("Input signal /insig registered.\n");
-    mpr_list l = mpr_dev_get_sigs(dst, MPR_DIR_IN);
+    l = mpr_dev_get_sigs(dst, MPR_DIR_IN);
     eprintf("Number of inputs: %d\n", mpr_list_get_size(l));
     mpr_list_free(l);
     return 0;
@@ -108,20 +115,21 @@ void cleanup_dst()
 
 void set_map_protocol(mpr_proto proto)
 {
+    int len;
+    mpr_type type;
+    const void *val;
+
     if (!map)
         return;
 
     if (!mpr_obj_set_prop((mpr_obj)map, MPR_PROP_PROTOCOL, NULL, 1, MPR_INT32,
                           &proto, 1)) {
-        // protocol not changed, exit
+        /* protocol not changed, exit */
         return;
     }
     mpr_obj_push((mpr_obj)map);
 
-    // wait until change has taken effect
-    int len;
-    mpr_type type;
-    const void *val;
+    /* wait until change has taken effect */
     do {
         mpr_dev_poll(src, 10);
         mpr_dev_poll(dst, 10);
@@ -135,7 +143,7 @@ int setup_map()
     map = mpr_map_new(1, &sendsig, 1, &recvsig);
     mpr_obj_push(map);
 
-    // wait until map is established
+    /* wait until map is established */
     while (!mpr_map_get_is_ready(map)) {
         mpr_dev_poll(dst, 10);
         mpr_dev_poll(src, 10);
@@ -180,7 +188,7 @@ int main(int argc, char **argv)
 {
     int i, j, result = 0;
 
-    // process flags for -v verbose, -t terminate, -h help
+    /* process flags for -v verbose, -t terminate, -h help */
     for (i = 1; i < argc; i++) {
         if (argv[i] && argv[i][0] == '-') {
             int len = strlen(argv[i]);

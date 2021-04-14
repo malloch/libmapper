@@ -151,16 +151,49 @@ signals with different vector lengths.
 * `[y[0], y[2]] = x` — apply update to output vector elements `y[0]` and `y[2]` but
 leave `y[1]` unchanged.
 
-### Vector functions
+### Vector reduce functions
 
-There are several special functions that operate across all elements of the vector:
+There are several special functions that operate across all elements of the vector and output a single value:
 
-* `any(x)` — output `1` if **any** of the elements of vector `x` are non-zero, otherwise output `0`
-* `all(x)` — output `1` if **all** of the elements of vector `x` are non-zero, otherwise output `0`
-* `sum(x)` – output the sum of the elements in vector `x`
-* `mean(x)` – output the average (mean) of the elements in vector `x`
-* `max(x)` – output the maximum element in vector `x` (overloaded)
-* `min(x)` – output the minimum element in vector `x` (overloaded)
+* `x.any()` — output `1` if **any** of the elements of vector `x` are non-zero, otherwise output `0`
+* `x.all()` — output `1` if **all** of the elements of vector `x` are non-zero, otherwise output `0`
+* `x.sum()` – output the sum of the elements in vector `x`
+* `x.mean()` – output the average (mean) of the elements in vector `x`
+* `x.max()` – output the maximum element in vector `x` (overloaded)
+* `x.min()` – output the minimum element in vector `x` (overloaded)
+* `x.center()` – output the midpoint between `x.min()` and `x.max()`
+* `x.norm()` – output the length of the vector `x`
+* `dot(a, b)` – output the dot product of vectors `a` and `b`
+
+### Non-reducing vector functions
+
+* `angle(a, b)` – output the angle between vectors `a` and `b`
+
+<h2 id="instances">Instances</h2>
+
+Input and output signals addressed by libmapper may be *instanced* meaning that there a multiple independent instances of the object or phenomenon represented by the signal. For example, a signal representing `/touch/position` on a multitouch display would have an instance corresponding to each active touch.
+
+<h3 id="instance-functions">Instance functions</h3>
+
+There are several special functions that operate across all instances of a signal:
+
+* `x.pool().any()` – output `1` if any active instance of `x` is non-zero, otherwise output `0` (for each vector element)
+* * `x.pool().all()` – output `1` if all active instance of `x` are non-zero, otherwise output `0` (for each vector element)
+* `x.pool().count()` — output the number of instances of `x` that are currently active
+* `x.pool().sum()` – output the sum of the values of all active instances of `x`
+* `x.pool().mean()` – output the mean of the values of all active instances of `x`
+* `x.pool().max()` – output the maximum value of all active instances of `x`
+* `x.pool().min()` – output the minimum value of all active instances of `x`
+* `x.pool().size()` – output the difference between the maximum and minimum values of all instances, i.e. `x.pool().max()-x.pool().min()`
+* `x.pool().center()` – output the N-dimensional point located at the center of the instance ranges, i.e. `(x.pool().max()+x.pool().min())*0.5`
+
+These instance functions accept subexpressions as arguments. for example, we can calculate the linear displacement of input `x` averaged across all of its active instances with the expression `y=(x-x{-1}).pool().mean()`. Similarly, we can calculate the average angular displacement around the center of a bounding box including all active instances.
+
+* `c=x.pool().center(); y=(angle(x{-1}, c, x)).pool().mean();`
+
+In a scenario where `x` represents the touch coordinates on a multitouch surface, this value gives mean rotation of all touches around their mutual center.
+
+Future work: add filter() and use to produce new expression-managed instances for clusters of points.
 
 <h2 id="fir-and-iir-filters">FIR and IIR Filters</h2>
 
@@ -326,7 +359,7 @@ Convergent mapping—in which multiple source signals update a single destinatio
   </tr>
 </table>
 
-<h2 id="instance-management">Instance Management</h2>
+<h3 id="instance-management">Instance Management</h3>
 
 Signal instancing can also be managed from within the map expression by manipulating a special variable named `alive` that represents the instance state. The use cases for in-map instancing can be complex, but here are some simple examples:
 
@@ -348,7 +381,7 @@ Signal instancing can also be managed from within the map expression by manipula
     </tr>
 </table>
 
-### Conditional output
+#### Conditional output
 
 In the case of a map with a singleton (non-instanced) destination, in-map
 instance management can be used for conditional updates. For example,
@@ -361,7 +394,7 @@ y = x;
 
 Since in this case the destination signal is not instanced it will not be "released" when `alive` evaluates to False, however any assignments to the output `y` while `alive` is False will not take effect. The statement `alive = x > 10` is evaluated first, and the update `y = x` is only propagated to the destination if `x > 10` evaluates to True (non-zero) **at the time of assignment**. The entire expression is evaluated however, so counters can be incremented etc. even while `alive` is False. There is a more complex example in the section below on Accessing Variable Timetags.
 
-### Conditional serial instancing
+#### Conditional serial instancing
 
 When mapping a singleton source signal to an instanced destination signal there are several possible desired behaviours:
 
@@ -370,7 +403,7 @@ When mapping a singleton source signal to an instanced destination signal there 
     * Example 1: a destination signal named *polyPressure* belongs to a software shim device for interfacing with MIDI. The singleton signal *mouse/position/x* is mapped to *polyPressure*, and the map's `use_inst` property is set to False to enable controlling the poly pressure parameter of all active notes in parallel.
 3. The source signal controls available destination signal instances **serially**. This is accomplished by manipulating the `alive` variable as described above. On each rising edge (transition from 0 to non-zero) of the `alive` variable a new instance id map will be generated
 
-### Modified instancing
+#### Modified instancing
 
 *currently undocumented*
 

@@ -70,8 +70,7 @@
             PyObject *o = PyList_GetItem($input, i);
             if (o && strcmp(o->ob_type->tp_name, "signal")==0) {
                 if (!SWIG_IsOK(SWIG_ConvertPtr(o, (void**)&s, SWIGTYPE_p__signal, 0))) {
-                    SWIG_exception_fail(SWIG_TypeError,
-                                        "in method '$symname', expecting type signal");
+                    SWIG_exception_fail(SWIG_TypeError, "in method '$symname', expecting type signal");
                     free(sa->sigs);
                     return NULL;
                 }
@@ -87,16 +86,14 @@
     else if ($input && strcmp(($input)->ob_type->tp_name, "signal")==0) {
         sa->len = 1;
         if (!SWIG_IsOK(SWIG_ConvertPtr($input, (void**)&s, SWIGTYPE_p__signal, 0))) {
-            SWIG_exception_fail(SWIG_TypeError,
-                                "in method '$symname', expecting type signal");
+            SWIG_exception_fail(SWIG_TypeError, "in method '$symname', expecting type signal");
             return NULL;
         }
         sa->sigs = (mpr_sig*) malloc(sizeof(mpr_sig));
         sa->sigs[0] = (mpr_sig)s;
     }
     else {
-        SWIG_exception_fail(SWIG_TypeError,
-                            "in method '$symname', expecting type signal");
+        SWIG_exception_fail(SWIG_TypeError, "in method '$symname', expecting type signal");
         return NULL;
     }
     $1 = sa;
@@ -173,8 +170,7 @@
         prop->val.type = 0;
         check_type($input, &prop->val.type, 1, 1);
         if (!prop->val.type) {
-            PyErr_SetString(PyExc_ValueError,
-                            "Problem determining value type.");
+            PyErr_SetString(PyExc_ValueError, "Problem determining value type.");
             return NULL;
         }
         if (PyList_Check($input))
@@ -245,7 +241,7 @@ typedef struct _device {} device;
 typedef struct _signal {} signal__;
 typedef struct _map {} map;
 typedef struct _graph {} graph;
-typedef struct _timetag {} timetag;
+typedef struct _time {} time__;
 
 typedef struct _device_list {
     mpr_list list;
@@ -603,13 +599,13 @@ static PyObject *prop_to_py(propval prop, const char *key)
             if (prop->len > 1) {
                 for (i=0; i<prop->len; i++) {
                     PyObject *py_tt = SWIG_NewPointerObj(SWIG_as_voidptr(&vect[i]),
-                                                         SWIGTYPE_p__timetag, 0);
+                                                         SWIGTYPE_p__time, 0);
                     PyList_SetItem(v, i, Py_BuildValue("O", py_tt));
                 }
             }
             else {
                 PyObject *py_tt = SWIG_NewPointerObj(SWIG_as_voidptr(vect),
-                                                     SWIGTYPE_p__timetag, 0);
+                                                     SWIGTYPE_p__time, 0);
                 v = Py_BuildValue("O", py_tt);
             }
             break;
@@ -623,6 +619,58 @@ static PyObject *prop_to_py(propval prop, const char *key)
             else
                 v = PyBool_FromLong(*(int*)prop->val);
             break;
+        case MPR_DEV:
+            if (prop->len == 1) {
+                PyObject *py_dev = SWIG_NewPointerObj(SWIG_as_voidptr((mpr_dev)prop->val),
+                                                      SWIGTYPE_p__device, 0);
+                v = Py_BuildValue("O", py_dev);
+            }
+            break;
+        case MPR_SIG:
+            if (prop->len == 1) {
+                PyObject *py_sig = SWIG_NewPointerObj(SWIG_as_voidptr((mpr_sig)prop->val),
+                                                      SWIGTYPE_p__signal, 0);
+                v = Py_BuildValue("O", py_sig);
+            }
+            break;
+        case MPR_MAP:
+            if (prop->len == 1) {
+                PyObject *py_map = SWIG_NewPointerObj(SWIG_as_voidptr((mpr_map)prop->val),
+                                                      SWIGTYPE_p__map, 0);
+                v = Py_BuildValue("O", py_map);
+            }
+            break;
+        case MPR_LIST: {
+            mpr_list l = (mpr_list)prop->val;
+            PyObject *o = Py_None;
+            if (l && *l) {
+                switch (mpr_obj_get_type((mpr_obj)*l)) {
+                    case MPR_DEV: {
+                        device_list *ret = malloc(sizeof(struct _device_list));
+                        ret->list = l;
+                        o = SWIG_NewPointerObj(SWIG_as_voidptr(ret), SWIGTYPE_p__device_list, 0);
+                        break;
+                    }
+                    case MPR_SIG: {
+                        signal_list *ret = malloc(sizeof(struct _signal_list));
+                        ret->list = l;
+                        o = SWIG_NewPointerObj(SWIG_as_voidptr(ret), SWIGTYPE_p__signal_list, 0);
+                        break;
+                    }
+                    case MPR_MAP: {
+                        map_list *ret = malloc(sizeof(struct _map_list));
+                        ret->list = l;
+                        o = SWIG_NewPointerObj(SWIG_as_voidptr(ret), SWIGTYPE_p__map_list, 0);
+                        break;
+                    }
+                    default:
+                        printf("[libmapper] unknown list type (prop_to_py).\n");
+                        return 0;
+                }
+            }
+            v = Py_BuildValue("O", o);
+            break;
+        }
         default:
             return 0;
             break;
@@ -640,6 +688,7 @@ static PyObject *prop_to_py(propval prop, const char *key)
  * and then use the preprocessor to do replacement. Should work as long as
  * signal() doesn't need to be called from the SWIG wrapper code. */
 #define signal signal__
+#define time time__
 
 /* Wrapper for callback back to python when a mpr_sig handler is called. */
 static void signal_handler_py(mpr_sig sig, mpr_sig_evt e, mpr_id id, int len,
@@ -653,10 +702,8 @@ static void signal_handler_py(mpr_sig sig, mpr_sig_evt e, mpr_id id, int len,
     PyObject *result=0;
     int i;
 
-    PyObject *py_sig = SWIG_NewPointerObj(SWIG_as_voidptr(sig),
-                                          SWIGTYPE_p__signal, 0);
-    PyObject *py_tt = SWIG_NewPointerObj(SWIG_as_voidptr(&tt),
-                                         SWIGTYPE_p__timetag, 0);
+    PyObject *py_sig = SWIG_NewPointerObj(SWIG_as_voidptr(sig), SWIGTYPE_p__signal, 0);
+    PyObject *py_tt = SWIG_NewPointerObj(SWIG_as_voidptr(&tt), SWIGTYPE_p__time, 0);
 
     if (val) {
         if (type == MPR_INT32) {
@@ -690,7 +737,7 @@ static void signal_handler_py(mpr_sig sig, mpr_sig_evt e, mpr_id id, int len,
         arglist = Py_BuildValue("(OiLOO)", py_sig, e, id, Py_None, py_tt);
     }
     if (!arglist) {
-        printf("[mapper] Could not build arglist (signal_handler_py).\n");
+        printf("[libmapper] Could not build arglist (signal_handler_py).\n");
         return;
     }
     PyObject **callbacks = (PyObject**)sig->obj.data;
@@ -728,13 +775,13 @@ static void graph_handler_py(mpr_graph g, mpr_obj obj, mpr_graph_evt e, const vo
             py_obj = SWIG_NewPointerObj(SWIG_as_voidptr(obj), SWIGTYPE_p__map, 0);
             break;
         default:
-            printf("[mapper] Unknown object type (graph_handler_py).\n");
+            printf("[libmapper] Unknown object type (graph_handler_py).\n");
             return;
     }
 
     PyObject *arglist = Py_BuildValue("(iOi)", type, py_obj, e);
     if (!arglist) {
-        printf("[mapper] Could not build arglist (graph_handler_py).\n");
+        printf("[libmapper] Could not build arglist (graph_handler_py).\n");
         return;
     }
     PyObject *result = PyEval_CallObject((PyObject*)data, arglist);
@@ -742,93 +789,6 @@ static void graph_handler_py(mpr_graph g, mpr_obj obj, mpr_graph_evt e, const vo
     Py_XDECREF(result);
 
     PyGILState_Release(gstate);
-}
-
-static mpr_sig add_signal_internal(mpr_dev dev, mpr_dir dir, const char *name,
-                                   int len, char type, const char *unit,
-                                   propval min, propval max, propval num_inst,
-                                   PyObject *PyFunc, int events)
-{
-    int i;
-    void *h = 0;
-    PyObject **callbacks = 0;
-    if (PyFunc) {
-        h = signal_handler_py;
-        callbacks = malloc(2 * sizeof(PyObject*));
-        callbacks[0] = PyFunc;
-        callbacks[1] = 0;
-        Py_INCREF(PyFunc);
-    }
-    void *pmn=0, *pmx=0;
-    int pmn_coerced=0, pmx_coerced=0;
-    if (type == MPR_FLT)
-    {
-        if (min && min->len == len) {
-            if (min->type == MPR_FLT)
-                pmn = min->val;
-            else if (min->type == MPR_INT32) {
-                float *to = (float*)malloc(len * sizeof(float));
-                int *from = (int*)min->val;
-                for (i=0; i<len; i++) {
-                    to[i] = (float)from[i];
-                }
-                pmn = to;
-                pmn_coerced = 1;
-            }
-        }
-        if (max && max->len == len) {
-            if (max->type == MPR_FLT)
-                pmx = max->val;
-            else if (max->type == MPR_INT32) {
-                float *to = (float*)malloc(len * sizeof(float));
-                int *from = (int*)max->val;
-                for (i=0; i<len; i++) {
-                    to[i] = (float)from[i];
-                }
-                pmx = to;
-                pmx_coerced = 1;
-            }
-        }
-    }
-    else if (type == MPR_INT32)
-    {
-        if (min && min->len == len) {
-            if (min->type == MPR_INT32)
-                pmn = min->val;
-            else if (min->type == MPR_FLT) {
-                int *to = (int*)malloc(len * sizeof(int));
-                float *from = (float*)min->val;
-                for (i=0; i<len; i++) {
-                    to[i] = (int)from[i];
-                }
-                pmn = to;
-                pmn_coerced = 1;
-            }
-        }
-        if (max && max->len == len) {
-            if (max->type == MPR_INT32)
-                pmx = max->val;
-            else if (max->type == MPR_FLT) {
-                int *to = (int*)malloc(len * sizeof(int));
-                float *from = (float*)max->val;
-                for (i=0; i<len; i++) {
-                    to[i] = (int)from[i];
-                }
-                pmx = to;
-                pmx_coerced = 1;
-            }
-        }
-    }
-    int *pnum_inst = num_inst && MPR_INT32 == num_inst->type ? num_inst->val : 0;
-    mpr_sig sig = mpr_sig_new((mpr_obj)dev, dir, name, len, type, unit, pmn, pmx,
-                              pnum_inst, h, events);
-    sig->obj.data = callbacks;
-
-    if (pmn_coerced)
-        free(pmn);
-    if (pmx_coerced)
-        free(pmx);
-    return sig;
 }
 
 static void set_obj_prop(mpr_obj o, mpr_prop p, const char *s, propval v, booltype pub) {
@@ -894,7 +854,7 @@ static named_prop get_obj_prop_by_idx(mpr_obj obj, int idx) {
 %constant int DBL                       = MPR_DBL;
 %constant int STR                       = MPR_STR;
 %constant int BOOL                      = MPR_BOOL;
-%constant int TIMETAG                   = MPR_TIME;
+%constant int TIME                      = MPR_TIME;
 %constant int TYPE                      = MPR_TYPE;
 %constant int PTR                       = MPR_PTR;
 %constant int DEV                       = MPR_DEV;
@@ -1010,7 +970,7 @@ typedef struct _device {} device;
 typedef struct _signal {} signal;
 typedef struct _map {} map;
 typedef struct _graph {} graph;
-typedef struct _timetag {} timetag;
+typedef struct _time {} time;
 
 typedef struct _device_list {
     mpr_list list;
@@ -1128,9 +1088,26 @@ typedef struct _device_list {
                        propval num_inst=0, PyObject *PyFunc=0,
                        int events=MPR_SIG_ALL)
     {
-        return (signal*)add_signal_internal((mpr_dev)$self, dir, name, len,
-                                            type, unit, min, max, num_inst,
-                                            PyFunc, events);
+        void *h = 0;
+        PyObject **callbacks = 0;
+        if (PyFunc) {
+            h = signal_handler_py;
+            callbacks = malloc(2 * sizeof(PyObject*));
+            callbacks[0] = PyFunc;
+            callbacks[1] = 0;
+            Py_INCREF(PyFunc);
+        }
+        int *pnum_inst = num_inst && MPR_INT32 == num_inst->type ? num_inst->val : 0;
+        mpr_sig sig = mpr_sig_new((mpr_obj)$self, dir, name, len, type, unit,
+                                  NULL, NULL, pnum_inst, h, events);
+        if (sig) {
+            sig->obj.data = callbacks;
+            if (max)
+                mpr_obj_set_prop((mpr_obj)sig, MPR_PROP_MAX, NULL, max->len, max->type, max->val, 1);
+            if (min)
+                mpr_obj_set_prop((mpr_obj)sig, MPR_PROP_MIN, NULL, min->len, min->type, min->val, 1);
+        }
+        return (signal*)sig;
     }
     device *remove_signal(signal *sig) {
         mpr_sig msig = (mpr_sig)sig;
@@ -1144,6 +1121,11 @@ typedef struct _device_list {
         return $self;
     }
 
+    device *update_maps() {
+        mpr_dev_update_maps((mpr_dev)$self);
+        return $self;
+    }
+
     int poll(int timeout=0) {
         _save = PyEval_SaveThread();
         int rc = mpr_dev_poll((mpr_dev)$self, timeout);
@@ -1152,12 +1134,12 @@ typedef struct _device_list {
     }
 
     // queue management
-    timetag *get_time() {
+    time *get_time() {
         mpr_time *tt = (mpr_time*)malloc(sizeof(mpr_time));
         mpr_time_set(tt, mpr_dev_get_time((mpr_dev)$self));
-        return (timetag*)tt;
+        return (time*)tt;
     }
-    device *set_time(timetag *py_tt) {
+    device *set_time(time *py_tt) {
         mpr_time *tt = (mpr_time*)py_tt;
         mpr_dev_set_time((mpr_dev)$self, *tt);
         return $self;
@@ -1358,11 +1340,11 @@ typedef struct _signal_list {
         return $self;
     }
     signal *reserve_instances(int num=1) {
-        mpr_sig_reserve_inst((mpr_sig)$self, num, 0, 0);
+        mpr_sig_reserve_inst((mpr_sig)$self, num, 0, 0, 0);
         return $self;
     }
     signal *reserve_instances(int num_ids, mpr_id *argv) {
-        mpr_sig_reserve_inst((mpr_sig)$self, num_ids, argv, 0);
+        mpr_sig_reserve_inst((mpr_sig)$self, num_ids, argv, 0, 0);
         return $self;
     }
     signal *set_callback(PyObject *PyFunc=0, int events=MPR_SIG_UPDATE) {
@@ -1805,45 +1787,45 @@ typedef struct _map_list {
     }
 }
 
-%extend _timetag {
-    _timetag() {
+%extend _time {
+    _time() {
         mpr_time *tt = (mpr_time*)malloc(sizeof(mpr_time));
         mpr_time_set(tt, MPR_NOW);
-        return (timetag*)tt;
+        return (time*)tt;
     }
-    _timetag(double val) {
+    _time(double val) {
         mpr_time *tt = malloc(sizeof(mpr_time));
         mpr_time_set_dbl(tt, val);
-        return (timetag*)tt;
+        return (time*)tt;
     }
-    ~_timetag() {
+    ~_time() {
         free((mpr_time*)$self);
     }
-    timetag *now() {
+    time *now() {
         mpr_time_set((mpr_time*)$self, MPR_NOW);
         return $self;
     }
     double get_double() {
         return mpr_time_as_dbl(*(mpr_time*)$self);
     }
-    timetag *__add__(timetag *addend) {
+    time *__add__(time *addend) {
         mpr_time *tt = malloc(sizeof(mpr_time));
         mpr_time_set(tt, *(mpr_time*)$self);
         mpr_time_add(tt, *(mpr_time*)addend);
-        return (timetag*)tt;
+        return (time*)tt;
     }
-    timetag *__add__(double addend) {
+    time *__add__(double addend) {
         mpr_time *tt = malloc(sizeof(mpr_time));
         mpr_time_set(tt, *(mpr_time*)$self);
         mpr_time_add_dbl(tt, addend);
-        return (timetag*)tt;
+        return (time*)tt;
     }
-    timetag *__iadd__(timetag *addend) {
+    time *__iadd__(time *addend) {
         mpr_time *tt = (mpr_time*)$self;
         mpr_time_add(tt, *(mpr_time*)addend);
         return $self;
     }
-    timetag *__iadd__(double addend) {
+    time *__iadd__(double addend) {
         mpr_time *tt = (mpr_time*)$self;
         mpr_time_add_dbl(tt, addend);
         return $self;
@@ -1851,24 +1833,24 @@ typedef struct _map_list {
     double __radd__(double val) {
         return val + mpr_time_as_dbl(*(mpr_time*)$self);
     }
-    timetag *__sub__(timetag *subtrahend) {
+    time *__sub__(time *subtrahend) {
         mpr_time *tt = malloc(sizeof(mpr_time));
         mpr_time_set(tt, *(mpr_time*)$self);
         mpr_time_sub(tt, *(mpr_time*)subtrahend);
-        return (timetag*)tt;
+        return (time*)tt;
     }
-    timetag *__sub__(double subtrahend) {
+    time *__sub__(double subtrahend) {
         mpr_time *tt = malloc(sizeof(mpr_time));
         mpr_time_set(tt, *(mpr_time*)$self);
         mpr_time_add_dbl(tt, -subtrahend);
-        return (timetag*)tt;
+        return (time*)tt;
     }
-    timetag *__isub__(timetag *subtrahend) {
+    time *__isub__(time *subtrahend) {
         mpr_time *tt = (mpr_time*)$self;
         mpr_time_sub(tt, *(mpr_time*)subtrahend);
         return $self;
     }
-    timetag *__isub__(double subtrahend) {
+    time *__isub__(double subtrahend) {
         mpr_time *tt = (mpr_time*)$self;
         mpr_time_add_dbl(tt, -subtrahend);
         return $self;
@@ -1876,13 +1858,13 @@ typedef struct _map_list {
     double __rsub__(double val) {
         return val - mpr_time_as_dbl(*(mpr_time*)$self);
     }
-    timetag *__mul__(double multiplicand) {
+    time *__mul__(double multiplicand) {
         mpr_time *tt = malloc(sizeof(mpr_time));
         mpr_time_set(tt, *(mpr_time*)$self);
         mpr_time_mul(tt, multiplicand);
-        return (timetag*)tt;
+        return (time*)tt;
     }
-    timetag *__imul__(double multiplicand) {
+    time *__imul__(double multiplicand) {
         mpr_time *tt = (mpr_time*)$self;
         mpr_time_mul(tt, multiplicand);
         return $self;
@@ -1890,13 +1872,13 @@ typedef struct _map_list {
     double __rmul__(double val) {
         return val + mpr_time_as_dbl(*(mpr_time*)$self);
     }
-    timetag *__div__(double divisor) {
+    time *__div__(double divisor) {
         mpr_time *tt = malloc(sizeof(mpr_time));
         mpr_time_set(tt, *(mpr_time*)$self);
         mpr_time_mul(tt, 1/divisor);
-        return (timetag*)tt;
+        return (time*)tt;
     }
-    timetag *__idiv__(double divisor) {
+    time *__idiv__(double divisor) {
         mpr_time *tt = (mpr_time*)$self;
         mpr_time_mul(tt, 1/divisor);
         return $self;
@@ -1905,7 +1887,7 @@ typedef struct _map_list {
         return val / mpr_time_as_dbl(*(mpr_time*)$self);
     }
 
-    booltype __lt__(timetag *rhs) {
+    booltype __lt__(time *rhs) {
         mpr_time *tt = (mpr_time*)$self;
         mpr_time *rhs_tt = (mpr_time*)rhs;
         return (tt->sec < rhs_tt->sec
@@ -1914,7 +1896,7 @@ typedef struct _map_list {
     booltype __lt__(double val) {
         return mpr_time_as_dbl(*(mpr_time*)$self) < val;
     }
-    booltype __le__(timetag *rhs)
+    booltype __le__(time *rhs)
     {
         mpr_time *tt = (mpr_time*)$self;
         mpr_time *rhs_tt = (mpr_time*)rhs;
@@ -1925,7 +1907,7 @@ typedef struct _map_list {
     {
         return mpr_time_as_dbl(*(mpr_time*)$self) <= val;
     }
-    booltype __eq__(timetag *rhs)
+    booltype __eq__(time *rhs)
     {
         mpr_time *tt = (mpr_time*)$self;
         mpr_time *rhs_tt = (mpr_time*)rhs;
@@ -1935,7 +1917,7 @@ typedef struct _map_list {
     {
         return mpr_time_as_dbl(*(mpr_time*)$self) == val;
     }
-    booltype __ge__(timetag *rhs)
+    booltype __ge__(time *rhs)
     {
         mpr_time *tt = (mpr_time*)$self;
         mpr_time *rhs_tt = (mpr_time*)rhs;
@@ -1946,7 +1928,7 @@ typedef struct _map_list {
     {
         return mpr_time_as_dbl(*(mpr_time*)$self) >= val;
     }
-    booltype __gt__(timetag *rhs)
+    booltype __gt__(time *rhs)
     {
         mpr_time *tt = (mpr_time*)$self;
         mpr_time *rhs_tt = (mpr_time*)rhs;

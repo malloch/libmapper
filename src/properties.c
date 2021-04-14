@@ -93,12 +93,13 @@ const char *mpr_steal_strings[] =
 
 int mpr_parse_names(const char *string, char **devnameptr, char **signameptr)
 {
-    RETURN_UNLESS(string, 0);
-    const char *devname = skip_slash(string);
-    RETURN_UNLESS(devname && devname[0] != '/', 0);
+    char *devname, *signame;
+    RETURN_ARG_UNLESS(string, 0);
+    devname = (char*)skip_slash(string);
+    RETURN_ARG_UNLESS(devname && devname[0] != '/', 0);
     if (devnameptr)
         *devnameptr = (char*) devname;
-    char *signame = strchr(devname+1, '/');
+    signame = strchr(devname+1, '/');
     if (!signame) {
         if (signameptr)
             *signameptr = 0;
@@ -117,21 +118,22 @@ int mpr_parse_names(const char *string, char **devnameptr, char **signameptr)
 mpr_msg mpr_msg_parse_props(int argc, const mpr_type *types, lo_arg **argv)
 {
     int i, slot_idx, num_props=0;
-    // get the number of props
+    mpr_msg msg;
+    mpr_msg_atom a;
+    const char *key;
+
+    /* get the number of props */
     for (i = 0; i < argc; i++) {
         if (types[i] != MPR_STR)
             continue;
-        if  (argv[i]->s == '@' || (strncmp(&argv[i]->s, "-@", 2)==0)
-             || (strncmp(&argv[i]->s, "+@", 2)==0))
+        if (argv[i]->s == '@' || !strncmp(&argv[i]->s, "-@", 2) || !strncmp(&argv[i]->s, "+@", 2))
             ++num_props;
     }
-    RETURN_UNLESS(num_props, 0);
+    RETURN_ARG_UNLESS(num_props, 0);
 
-    mpr_msg msg = (mpr_msg) calloc(1, sizeof(struct _mpr_msg));
-    msg->atoms = ((mpr_msg_atom_t*)
-                  calloc(1, sizeof(struct _mpr_msg_atom) * num_props));
-    mpr_msg_atom a = &msg->atoms[0];
-    const char *key;
+    msg = (mpr_msg) calloc(1, sizeof(struct _mpr_msg));
+    msg->atoms = ((mpr_msg_atom_t*) calloc(1, sizeof(struct _mpr_msg_atom) * num_props));
+    a = &msg->atoms[0];
 
     for (i = 0; i < argc; i++) {
         if (!mpr_type_get_is_str(types[i])) {
@@ -146,7 +148,7 @@ mpr_msg mpr_msg_parse_props(int argc, const mpr_type *types, lo_arg **argv)
 #if TRACING
         printf("parsing property key '%s'\n", &argv[i]->s);
 #endif
-        // new property
+        /* new property */
         if (a->types || (a->prop & PROP_REMOVE))
             ++msg->num_atoms;
         a = &msg->atoms[msg->num_atoms];
@@ -160,11 +162,11 @@ mpr_msg mpr_msg_parse_props(int argc, const mpr_type *types, lo_arg **argv)
             a->prop = PROP_REMOVE;
             ++key;
         }
-        if (key[0] != '@') // not a property key
+        if (key[0] != '@') /* not a property key */
             continue;
         a->key = key;
 
-        // try to find matching index for static props
+        /* try to find matching index for static props */
         if (strncmp(a->key, "@dst@", 5)==0) {
             a->prop |= DST_SLOT_PROP;
             a->key += 5;
@@ -175,7 +177,7 @@ mpr_msg mpr_msg_parse_props(int argc, const mpr_type *types, lo_arg **argv)
                 a->key += 5;
             }
             else if (a->key[4] == '.') {
-                // in form 'src.<ordinal>'
+                /* in form 'src.<ordinal>' */
                 slot_idx = atoi(a->key + 5);
                 a->key = strchr(a->key + 5, '@');
                 if (!a->key || !(++a->key)) {
@@ -202,8 +204,7 @@ mpr_msg mpr_msg_parse_props(int argc, const mpr_type *types, lo_arg **argv)
                 break;
             }
             else if (!type_match(types[i], a->types[0])) {
-                trace("Value vector for key '%s' has heterogeneous types.\n",
-                      a->key);
+                trace("Value vector for key '%s' has heterogeneous types.\n", a->key);
                 a->len = a->prop = 0;
                 a->types = 0;
                 break;
@@ -218,7 +219,7 @@ mpr_msg mpr_msg_parse_props(int argc, const mpr_type *types, lo_arg **argv)
                 continue;
             }
         }
-        // check type against static props
+        /* check type against static props */
         else if (MASK_PROP_BITFLAGS(a->prop) < MPR_PROP_EXTRA) {
             static_prop_t prop;
             prop = static_props[PROP_TO_INDEX(a->prop)];
@@ -272,7 +273,7 @@ mpr_msg mpr_msg_parse_props(int argc, const mpr_type *types, lo_arg **argv)
             }
         }
     }
-    // reset last atom if no types unless "remove" flag is set
+    /* reset last atom if no types unless "remove" flag is set */
     if (a->types || a->prop & PROP_REMOVE)
         ++msg->num_atoms;
     else {
@@ -281,7 +282,7 @@ mpr_msg mpr_msg_parse_props(int argc, const mpr_type *types, lo_arg **argv)
         a->vals = 0;
     }
 #if TRACING
-    // print out parsed properties
+    /* print out parsed properties */
     printf("%d parsed mpr_msgs:\n", msg->num_atoms);
     for (i = 0; i < msg->num_atoms; i++) {
         a = &msg->atoms[i];
@@ -320,7 +321,7 @@ mpr_msg_atom mpr_msg_get_prop(mpr_msg msg, mpr_prop prop)
     int i;
     for (i = 0; i < msg->num_atoms; i++) {
         if (msg->atoms[i].prop == prop) {
-            RETURN_UNLESS(msg->atoms[i].len && msg->atoms[i].types, 0);
+            RETURN_ARG_UNLESS(msg->atoms[i].len && msg->atoms[i].types, 0);
             return &msg->atoms[i];
         }
     }
@@ -332,8 +333,7 @@ for (i = 0; i < len; i++)                           \
     lo_message_add_##TYPE(MSG, ((CAST*)VAL)[i]);    \
 
 /* helper for mpr_msg_varargs() */
-void mpr_msg_add_typed_val(lo_message msg, int len, mpr_type type,
-                           const void *val)
+void mpr_msg_add_typed_val(lo_message msg, int len, mpr_type type, const void *val)
 {
     int i;
     if (type && len < 1)
@@ -341,29 +341,15 @@ void mpr_msg_add_typed_val(lo_message msg, int len, mpr_type type,
 
     switch (type) {
         case MPR_STR:
-            if (len == 1)
-                lo_message_add_string(msg, (char*)val);
-            else
-                LO_MESSAGE_ADD_VEC(msg, string, char*, val);
-            break;
-        case MPR_FLT:
-            LO_MESSAGE_ADD_VEC(msg, float, float, val);
-            break;
-        case MPR_DBL:
-            LO_MESSAGE_ADD_VEC(msg, double, double, val);
-            break;
-        case MPR_INT32:
-            LO_MESSAGE_ADD_VEC(msg, int32, int, val);
-            break;
-        case MPR_INT64:
-            LO_MESSAGE_ADD_VEC(msg, int64, int64_t, val);
-            break;
-        case MPR_TIME:
-            LO_MESSAGE_ADD_VEC(msg, timetag, mpr_time, val);
-            break;
-        case MPR_TYPE:
-            LO_MESSAGE_ADD_VEC(msg, char, mpr_type, val);
-            break;
+            if (len == 1)   lo_message_add_string(msg, (char*)val);
+            else            LO_MESSAGE_ADD_VEC(msg, string, char*, val);    	break;
+        case MPR_FLT:       LO_MESSAGE_ADD_VEC(msg, float, float, val);         break;
+        case MPR_DBL:       LO_MESSAGE_ADD_VEC(msg, double, double, val);       break;
+        case MPR_INT32:     LO_MESSAGE_ADD_VEC(msg, int32, int, val);           break;
+        case MPR_INT64:     LO_MESSAGE_ADD_VEC(msg, int64, int64_t, val);       break;
+        case MPR_TIME:      LO_MESSAGE_ADD_VEC(msg, timetag, mpr_time, val);    break;
+        case MPR_TYPE:      LO_MESSAGE_ADD_VEC(msg, char, mpr_type, val);       break;
+        case 0:             lo_message_add_nil(msg);                            break;
         case MPR_BOOL:
             for (i = 0; i < len; i++) {
                 if (((int*)val)[i])
@@ -372,10 +358,6 @@ void mpr_msg_add_typed_val(lo_message msg, int len, mpr_type type,
                     lo_message_add_false(msg);
             }
             break;
-        case 0: {
-            lo_message_add_nil(msg);
-            break;
-        }
         default:
             break;
     }
@@ -383,16 +365,17 @@ void mpr_msg_add_typed_val(lo_message msg, int len, mpr_type type,
 
 const char *mpr_prop_as_str(mpr_prop p, int skip_slash)
 {
+    const char *s;
     p = MASK_PROP_BITFLAGS(p);
     die_unless(p > MPR_PROP_UNKNOWN && p <= MPR_PROP_EXTRA,
                "called mpr_prop_as_str() with bad index %d.\n", p);
-    const char *s = static_props[PROP_TO_INDEX(p)].key;
+    s = static_props[PROP_TO_INDEX(p)].key;
     return skip_slash ? s + 1 : s;
 }
 
 mpr_prop mpr_prop_from_str(const char *string)
 {
-    // property keys are stored alphabetically so we can use a binary search
+    /* property keys are stored alphabetically so we can use a binary search */
     int beg = PROP_TO_INDEX(MPR_PROP_UNKNOWN) + 1;
     int end = PROP_TO_INDEX(MPR_PROP_EXTRA) - 1;
     int mid = (beg + end) * 0.5, cmp;
@@ -424,8 +407,8 @@ const char *mpr_loc_as_str(mpr_loc loc)
 
 mpr_loc mpr_loc_from_str(const char *str)
 {
-    RETURN_UNLESS(str, MPR_LOC_UNDEFINED);
     int i;
+    RETURN_ARG_UNLESS(str, MPR_LOC_UNDEFINED);
     for (i = MPR_LOC_UNDEFINED+1; i < 3; i++) {
         if (strcmp(str, mpr_loc_strings[i])==0)
             return i;
@@ -442,8 +425,8 @@ const char *mpr_protocol_as_str(mpr_proto p)
 
 mpr_proto mpr_protocol_from_str(const char *str)
 {
-    RETURN_UNLESS(str, MPR_PROTO_UNDEFINED);
     int i;
+    RETURN_ARG_UNLESS(str, MPR_PROTO_UNDEFINED);
     for (i = MPR_PROTO_UNDEFINED+1; i < MPR_NUM_PROTO; i++) {
         if (strcmp(str, mpr_protocol_strings[i])==0)
             return i;
@@ -458,7 +441,7 @@ const char *mpr_steal_as_str(mpr_steal_type stl)
     return mpr_steal_strings[stl];
 }
 
-// Helper for setting property value from different data types
+/* Helper for setting property value from different data types */
 int set_coerced_val(int src_len, mpr_type src_type, const void *src_val,
                     int dst_len, mpr_type dst_type, void *dst_val)
 {
@@ -469,9 +452,10 @@ int set_coerced_val(int src_len, mpr_type src_type, const void *src_val,
         do {
             memcpy(dst_val, src_val, size * min_len);
             dst_len -= min_len;
+            dst_val = (void*)((char*)dst_val + size * min_len);
             if (dst_len < min_len)
                 min_len = dst_len;
-        } while (dst_len);
+        } while (dst_len > 0);
         return 0;
     }
 
@@ -560,6 +544,33 @@ int set_coerced_val(int src_len, mpr_type src_type, const void *src_val,
     return 0;
 }
 
+int match_pattern(const char* s, const char* p)
+{
+    int ends_wild;
+    char *str, *tok, *pat;
+    RETURN_ARG_UNLESS(s && p, 1);
+    RETURN_ARG_UNLESS(strchr(p, '*'), strcmp(s, p));
+
+    /* 1) tokenize pattern using strtok() with delimiter character '*'
+     * 2) use strstr() to check if token exists in offset string */
+    str = (char*)s;
+    pat = alloca((strlen(p) + 1) * sizeof(char));
+    strcpy(pat, p);
+    ends_wild = ('*' == p[strlen(p)-1]);
+    while (str && *str) {
+        tok = strtok(pat, "*");
+        RETURN_ARG_UNLESS(tok, !ends_wild);
+        str = strstr(str, tok);
+        if (str && *str)
+            str += strlen(tok);
+        else
+            return 1;
+            /* subsequent calls to strtok() need first argument to be NULL */
+        pat = NULL;
+    }
+    return 0;
+}
+
 void mpr_prop_print(int len, mpr_type type, const void *val)
 {
     int i;
@@ -598,7 +609,7 @@ void mpr_prop_print(int len, mpr_type type, const void *val)
             break;
         case MPR_INT64:
             for (i = 0; i < len; i++)
-                printf("%" PRINTF_LL "d, ", (long long)((int64_t*)val)[i]);
+                printf("%" PRINTF_LL "d, ", ((int64_t*)val)[i]);
             break;
         case MPR_TIME:
             for (i = 0; i < len; i++)
@@ -617,7 +628,7 @@ void mpr_prop_print(int len, mpr_type type, const void *val)
             }
             break;
         case MPR_DEV:
-            // just print device name
+            /* just print device name */
             if (1 == len)
                 printf("'%s', ", mpr_dev_get_name((mpr_dev)val));
             else {
@@ -626,7 +637,7 @@ void mpr_prop_print(int len, mpr_type type, const void *val)
             }
             break;
         case MPR_SIG: {
-            // just print signal name
+            /* just print signal name */
             if (1 == len) {
                 mpr_sig sig = (mpr_sig)val;
                 printf("'%s:%s', ", mpr_dev_get_name(sig->dev), sig->obj.name);
@@ -634,8 +645,7 @@ void mpr_prop_print(int len, mpr_type type, const void *val)
             else {
                 mpr_sig *sig = (mpr_sig*)val;
                 for (i = 0; i < len; i++)
-                    printf("'%s:%s', ", mpr_dev_get_name(sig[i]->dev),
-                           sig[i]->obj.name);
+                    printf("'%s:%s', ", mpr_dev_get_name(sig[i]->dev), sig[i]->obj.name);
             }
             break;
         }

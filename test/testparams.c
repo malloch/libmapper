@@ -1,16 +1,22 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <stdarg.h>
 #include <lo/lo_lowlevel.h>
 #include "../src/types_internal.h"
 #include "../src/mapper_internal.h"
 
 int verbose = 1;
 
-#define eprintf(format, ...) do {               \
-    if (verbose)                                \
-        fprintf(stdout, format, ##__VA_ARGS__); \
-} while(0)
+static void eprintf(const char *format, ...)
+{
+    va_list args;
+    if (!verbose)
+        return;
+    va_start(args, format);
+    vprintf(format, args);
+    va_end(args);
+}
 
 int main(int argc, char **argv)
 {
@@ -21,7 +27,7 @@ int main(int argc, char **argv)
     float r[4] = {1.0, 2.0, -15.0, 25.0};
     int i, j, result = 0;
 
-    // process flags for -v verbose, -h help
+    /* process flags for -v verbose, -h help */
     for (i = 1; i < argc; i++) {
         if (argv[i] && argv[i][0] == '-') {
             int len = strlen(argv[i]);
