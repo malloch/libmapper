@@ -73,10 +73,10 @@ mpr_sig mpr_sig_new(mpr_obj obj, mpr_dir dir, const char *name, int len,
     
     mpr_obj parent = (mpr_obj)dev;
 
-    /* -- This Snippet will generate the hierarchial structure for a signal with a path containing the '/' char-- */
+    /* -- This Snippet will generate the hierarchical structure for a signal with a path containing the '/' char-- */
     char * token = strtok(buff, "/");
     while( token != NULL ) {
-        // Build the hierarchial structure by adding a new child and updating the parent node.
+        // Build the hierarchical structure by adding a new child and updating the parent node.
         parent = mpr_obj_add_child(parent, token, dev->obj.graph);
         token = strtok(NULL, "/"); // Get next token.
     }
