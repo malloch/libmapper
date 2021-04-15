@@ -23,12 +23,6 @@ static int _compare_inst_ids(const void *l, const void *r)
     return memcmp(&(*(mpr_sig_inst*)l)->id, &(*(mpr_sig_inst*)r)->id, sizeof(mpr_id));
 }
 
-//static int _compare_inst_names(const void *l, const void *r)
-//{
-//    // TODO: Check that name is not (null) or set a default string name elsewhere.
-//    return strcmp((*(mpr_sig_inst*)l)->name, (*(mpr_sig_inst*)r)->name);
-//}
-
 static mpr_sig_inst _find_inst_by_id(mpr_local_sig lsig, mpr_id id)
 {
     mpr_sig_inst_t si, *sip, **sipp;
@@ -42,21 +36,13 @@ static mpr_sig_inst _find_inst_by_id(mpr_local_sig lsig, mpr_id id)
 static mpr_sig_inst _find_inst_by_name(mpr_local_sig lsig, const char* name)
 {
     int i;
-    RETURN_ARG_UNLESS(lsig->num_inst, 0);
+    RETURN_ARG_UNLESS(lsig->num_inst && lsig->inst_names, 0);
+    /* TODO: sort instance names for faster search */
     for (i = 0; i < lsig->num_inst; i++) {
-        if (0 == strcmp(name, lsig->inst[i]->name)) {
+        if (0 == strcmp(name, lsig->inst_names[i]))
             return lsig->inst[i];
-        }
     }
     return 0;
-
-    // TODO: Fix the bsearch method for finding by names.
-    // mpr_sig_inst_t si;
-    // mpr_sig_inst sip = &si;
-    // si.name = name; //TODO: Should this be strcpy?
-    // mpr_sig_inst *sipp = bsearch(&sip, lsig->inst, lsig->num_inst,
-    //                              sizeof(mpr_sig_inst), _compare_inst_names);
-    // return (sipp && *sipp) ? *sipp : 0;
 }
 
 /* Add a signal to a parent object. */
@@ -183,6 +169,7 @@ void mpr_sig_init(mpr_sig sig, mpr_dir dir, const char *name, int len, mpr_type 
                  NON_MODIFIABLE | INDIRECT | LOCAL_ACCESS_ONLY);
     mpr_tbl_link(tbl, PROP(DIR), 1, MPR_INT32, &sig->dir, rem_mod);
     mpr_tbl_link(tbl, PROP(ID), 1, MPR_INT64, &sig->obj.id, rem_mod);
+    mpr_tbl_link(sig->obj.props.synced, PROP(INST_NAMES), 0, MPR_STR, NULL, NON_MODIFIABLE);
     mpr_tbl_link(tbl, PROP(JITTER), 1, MPR_FLT, &sig->jitter, NON_MODIFIABLE);
     mpr_tbl_link(tbl, PROP(LEN), 1, MPR_INT32, &sig->len, rem_mod);
     mpr_tbl_link(tbl, PROP(MAX), sig->len, sig->type, &sig->max, MODIFIABLE | INDIRECT);
@@ -592,7 +579,7 @@ int mpr_sig_get_idmap_with_GID(mpr_local_sig lsig, mpr_id GID, int flags, mpr_ti
     return -1;
 }
 
-static int _reserve_inst(mpr_local_sig lsig, mpr_id *id, const char *name, void *data)
+static int _reserve_inst(mpr_local_sig lsig, mpr_id *id, void *data)
 {
     int i, cont;
     mpr_sig_inst si;
@@ -609,8 +596,6 @@ static int _reserve_inst(mpr_local_sig lsig, mpr_id *id, const char *name, void 
     si->val = calloc(1, mpr_sig_get_vector_bytes((mpr_sig)lsig));
     si->has_val_flags = calloc(1, lsig->len / 8 + 1);
     si->has_val = 0;
-
-    si->name = name ? strdup(name) : 0;
 
     if (id)
         si->id = *id;
@@ -646,7 +631,7 @@ static int _reserve_inst(mpr_local_sig lsig, mpr_id *id, const char *name, void 
 
 int mpr_sig_reserve_inst(mpr_sig sig, int num, mpr_id *ids, const char **names, void **data)
 {
-    int i = 0, count = 0, highest = -1, result, old_num = sig->num_inst;
+    int i = 0, j, count = 0, highest = -1, result, old_num = sig->num_inst;
     mpr_local_sig lsig = (mpr_local_sig)sig;
     RETURN_ARG_UNLESS(sig && sig->is_local && num, 0);
 
@@ -656,11 +641,16 @@ int mpr_sig_reserve_inst(mpr_sig sig, int num, mpr_id *ids, const char **names, 
             lsig->inst[0]->id = ids[0];
         if (data)
             lsig->inst[0]->data = data[0];
+        old_num = 0;
         ++i;
         ++count;
     }
+    else if ((lsig->inst_names && !names) || (lsig->num_inst > 1 && names && !lsig->inst_names)) {
+        trace("Cannot mix named and anonymous instances.");
+        return 0;
+    }
     for (; i < num; i++) {
-        result = _reserve_inst(lsig, ids ? &ids[i] : 0, names ? names[i] : 0, data ? data[i] : 0);
+        result = _reserve_inst(lsig, ids ? &ids[i] : 0, data ? data[i] : 0);
         if (result == -1)
             continue;
         highest = result;
@@ -672,8 +662,20 @@ int mpr_sig_reserve_inst(mpr_sig sig, int num, mpr_id *ids, const char **names, 
     if (names) {
         /* No stealing of named instances */
         sig->steal_mode = MPR_STEAL_NONE;
-        /* Report the names of these instances to session manager*/
-        mpr_tbl_set(sig->obj.props.synced, PROP(INST_NAMES), NULL, num, MPR_STR, names, LOCAL_MODIFY);
+
+        if (lsig->inst_names) {
+            lsig->inst_names = realloc(lsig->inst_names, lsig->num_inst * sizeof(char*));
+        }
+        else {
+            lsig->inst_names = (const char**)malloc(lsig->num_inst * sizeof(char*));
+        }
+        for (i = old_num, j = 0; i < lsig->num_inst; i++, j++) {
+            lsig->inst_names[i] = strdup(names[j]);
+        }
+
+        /* relink instance names to signal properties */
+        mpr_tbl_link(sig->obj.props.synced, PROP(INST_NAMES), lsig->num_inst,
+                     MPR_STR, lsig->inst_names, NON_MODIFIABLE);
     }
 
     if (old_num > 0 && (lsig->num_inst / 8) == (old_num / 8))
@@ -1137,8 +1139,10 @@ int mpr_sig_set_from_msg(mpr_sig sig, mpr_msg msg)
     return updated;
 }
 
+/* Returns the name of the signal instance associated with the LID, or NULL. */
 const char* mpr_sig_get_inst_name(mpr_sig sig, mpr_id id) {
-    // Returns the name of the signal instance associated with the LID, or 0.
+    mpr_sig_inst si;
     RETURN_ARG_UNLESS(sig && sig->is_local, NULL);
-    return (_find_inst_by_id((mpr_local_sig)sig, id)->name);
+    si = _find_inst_by_id((mpr_local_sig)sig, id);
+    return si ? ((mpr_local_sig)sig)->inst_names[si->idx] : 0;
 }

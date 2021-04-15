@@ -373,10 +373,17 @@ int mpr_tbl_set(mpr_tbl t, mpr_prop prop, const char *key, int len,
     return set_internal(t, prop, key, len, type, args, flags);
 }
 
-void mpr_tbl_link(mpr_tbl t, mpr_prop prop, int len, mpr_type type, void *val,
-                  int flags)
+void mpr_tbl_link(mpr_tbl t, mpr_prop prop, int len, mpr_type type, void *val, int flags)
 {
-    mpr_tbl_add(t, prop, NULL, len, type, val, flags);
+    mpr_tbl_record rec = mpr_tbl_get(t, prop, NULL);
+    if (!rec) {
+        mpr_tbl_add(t, prop, NULL, len, type, val, flags);
+        return;
+    }
+    rec->len = len;
+    rec->type = type;
+    rec->val = val;
+    rec->flags = flags;
 }
 
 static int update_elements_osc(mpr_tbl_record rec, unsigned int len,

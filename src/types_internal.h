@@ -301,8 +301,6 @@ typedef struct _mpr_sig_inst
     mpr_time created;           /*!< The instance's creation timestamp. */
     char *has_val_flags;        /*!< Indicates which vector elements have a value. */
 
-    const char *name;           /*!< The name of this instance, or NULL. */
-
     void *val;                  /*!< The current value of this signal instance. */
     mpr_time time;              /*!< The time associated with the current value. */
 
@@ -353,6 +351,7 @@ typedef struct _mpr_local_sig
     struct _mpr_sig_idmap *idmaps;  /*!< ID maps and active instances. */
     int idmap_len;
     struct _mpr_sig_inst **inst;    /*!< Array of pointers to the signal insts. */
+    const char **inst_names;
     char *vec_known;                /*!< Bitflags when entire vector is known. */
     char *updated_inst;             /*!< Bitflags to indicate updated instances. */
 

@@ -88,7 +88,7 @@ int setup_devs() {
     seed_srand();
 
 	for (i = 0; i < num_devs; i++) {
-		devices[i] = mpr_dev_new("testmany", 0);
+		devices[i] = mpr_dev_new("testsignalhierarchy", 0);
         if (!devices[i])
 			goto error;
 
