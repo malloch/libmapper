@@ -407,3 +407,19 @@ void mpr_obj_free(mpr_obj obj) {
         mpr_obj_free(child);
     }
 }
+
+int mpr_obj_reserve_instances(mpr_obj obj, int num, mpr_id *ids, const char **names, void **data)
+{
+    if (!obj->is_local)
+        return;
+    if (obj->type == MPR_SIG)
+        return mpr_sig_reserve_inst((mpr_sig)obj, num, ids, names, data);
+    trace("Only signals can be instanced for now!");
+    return 0;
+
+    // TODO:
+    // move instance names to object struct
+    // when creating signal objects, check tree for instancing
+    // when modifying object instances, need to check leaves and reallocate signal instances
+    // add instance count to object constructor
+}
