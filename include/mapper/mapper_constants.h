@@ -22,7 +22,8 @@ enum {
     MPR_MAP_OUT         = 0x10,             /*!< Outgoing maps. */
     MPR_MAP             = 0x18,             /*!< All maps. */
     MPR_OBJ             = 0x1F,             /*!< All objects: devs, sigs, maps. */
-    MPR_LIST            = 0x40,             /*!< object query. */
+    MPR_LIST            = 0x40,             /*!< Object query. */
+    MPR_GRAPH           = 0x41,             /*!< Graph. */
     MPR_BOOL            = 'b',  /* 0x62 */  /*!< Boolean value. */
     MPR_TYPE            = 'c',  /* 0x63 */  /*!< libmapper data type. */
     MPR_DBL             = 'd',  /* 0x64 */  /*!< 64-bit floating point. */
@@ -121,7 +122,7 @@ typedef enum {
 } mpr_proto;
 
 /*! The set of possible directions for a signal.
- *  @ingroup map */
+ *  @ingroup signal */
 typedef enum {
     MPR_DIR_UNDEFINED   = 0x00, /*!< Not yet defined. */
     MPR_DIR_IN          = 0x01, /*!< Signal is an input */

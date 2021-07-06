@@ -30,6 +30,7 @@
  * be repeated, therefore they are refered to by struct name. */
 
 typedef struct _mpr_expr *mpr_expr;
+typedef struct _mpr_expr_stack *mpr_expr_stack;
 
 /* Forward declarations for this file. */
 
@@ -81,7 +82,6 @@ typedef struct _mpr_tbl {
 typedef struct _mpr_dict {
     struct _mpr_tbl *synced;
     struct _mpr_tbl *staged;
-    int mask;
 } mpr_dict_t, *mpr_dict;
 
 /**** Graph ****/
@@ -146,27 +146,6 @@ typedef struct _mpr_net {
     uint32_t next_sub_ping;
     uint8_t graph_methods_added;
 } mpr_net_t, *mpr_net;
-
-typedef struct _mpr_graph {
-    mpr_net_t net;
-    mpr_list devs;                   /*!< List of devices. */
-    mpr_list sigs;                   /*!< List of signals. */
-    mpr_list maps;                   /*!< List of maps. */
-    mpr_list links;                  /*!< List of links. */
-    fptr_list callbacks;             /*!< List of object record callbacks. */
-
-    /*! Linked-list of autorenewing device subscriptions. */
-    mpr_subscription subscriptions;
-
-    /*! Flags indicating whether information on signals and mappings should
-     *  be automatically subscribed to when a new device is seen.*/
-    int autosub;
-
-    int own;
-    int staged_maps;
-
-    uint32_t resource_counter;
-} mpr_graph_t, *mpr_graph;
 
 /**** Messages ****/
 
@@ -247,16 +226,39 @@ typedef struct _mpr_subscriber {
 
 typedef struct _mpr_obj
 {
-    mpr_graph graph;            /*!< Pointer back to the graph. */
+    struct _mpr_graph *graph;   /*!< Pointer back to the graph. */
     mpr_id id;                  /*!< Unique id for this object. */
     char *name;                 /*!< The full name for this object, or zero. */
     void *data;                 /*!< User context pointer. */
     struct _mpr_dict props;     /*!< Properties associated with this signal. */
-    int version;                /*!< Version number. */
-    mpr_type type;              /*!< Object type. */
     mpr_list children;          /*!< List of child objects. */
     mpr_obj parent;             /*!< The parent of this child, from a hierarchy perspective. */
-} mpr_obj_t;
+    int is_local;
+    int version;                /*!< Version number. */
+    mpr_type type;              /*!< Object type. */
+} mpr_obj_t, *mpr_obj;
+
+typedef struct _mpr_graph {
+    mpr_obj_t obj;                  /* always first */
+    mpr_net_t net;
+    mpr_list devs;                  /*!< List of devices. */
+    mpr_list sigs;                  /*!< List of signals. */
+    mpr_list maps;                  /*!< List of maps. */
+    mpr_list links;                 /*!< List of links. */
+    fptr_list callbacks;            /*!< List of object record callbacks. */
+
+    /*! Linked-list of autorenewing device subscriptions. */
+    mpr_subscription subscriptions;
+
+    /*! Flags indicating whether information on signals and mappings should
+     *  be automatically subscribed to when a new device is seen.*/
+    int autosub;
+
+    int own;
+    int staged_maps;
+
+    uint32_t resource_counter;
+} mpr_graph_t, *mpr_graph;
 
 /**** Signal ****/
 
@@ -276,9 +278,10 @@ typedef struct _mpr_value
 {
     mpr_value_buffer inst;      /*!< Array of value histories for each signal instance. */
     int vlen;                   /*!< Vector length. */
-    int num_inst;               /*!< Number of instances. */
+    uint8_t num_inst;           /*!< Number of instances. */
+    uint8_t num_active_inst;    /*!< Number of active instances. */
     mpr_type type;              /*!< The type of this signal. */
-    int8_t mlen;                /*!< History size of the buffer. */
+    int16_t mlen;               /*!< History size of the buffer. */
 } mpr_value_t, *mpr_value;
 
 /*! Bit flags for indicating instance id_map status. */
@@ -333,8 +336,7 @@ typedef struct _mpr_sig_idmap
     int num_maps_in;            /* TODO: use dynamic query instead? */                  \
     int num_maps_out;           /* TODO: use dynamic query instead? */                  \
     mpr_steal_type steal_mode;  /*!< Type of voice stealing to perform. */              \
-    mpr_type type;              /*!< The type of this signal. */                        \
-    int is_local;
+    mpr_type type;              /*!< The type of this signal. */
 
 /*! A record that describes properties of a signal. */
 typedef struct _mpr_sig
@@ -399,13 +401,13 @@ typedef struct _mpr_link {
 #define MAX_NUM_MAP_DST     8       /* arbitrary */
 
 #define MPR_SLOT_STRUCT_ITEMS                                                   \
-    mpr_obj_t obj;                  /* always first */                          \
     mpr_sig sig;                    /*!< Pointer to parent signal */            \
     mpr_link link;                                                              \
-    int num_inst;                                                               \
-    int dir;                        /*!< DI_INCOMING or DI_OUTGOING */          \
-    int causes_update;              /*!< 1 if causes update, 0 otherwise. */    \
-    int is_local;
+    int id;                                                                     \
+    uint8_t num_inst;                                                           \
+    char dir;                       /*!< DI_INCOMING or DI_OUTGOING */          \
+    char causes_update;             /*!< 1 if causes update, 0 otherwise. */    \
+    char is_local;                                                              \
 
 typedef struct _mpr_slot {
     MPR_SLOT_STRUCT_ITEMS
@@ -433,8 +435,7 @@ typedef struct _mpr_local_slot {
     mpr_loc process_loc;                                                        \
     int status;                                                                 \
     int protocol;                   /*!< Data transport protocol. */            \
-    int use_inst;                   /*!< 1 if using instances, 0 otherwise. */  \
-    int is_local;
+    int use_inst;                   /*!< 1 if using instances, 0 otherwise. */
 
 /*! A record that describes the properties of a mapping.
  *  @ingroup map */
@@ -509,8 +510,7 @@ typedef struct _mpr_id_map {
     int num_maps_out;   /*!< Number of associated outgoing maps. */     \
     int num_linked;     /*!< Number of linked devices. */               \
     int status;                                                         \
-    uint8_t subscribed;                                                 \
-    int is_local;
+    uint8_t subscribed;
 
 /*! A record that keeps information about a device. */
 struct _mpr_dev {
@@ -531,6 +531,8 @@ struct _mpr_local_dev {
         struct _mpr_id_map **active;    /*!< The list of active instance id maps. */
         struct _mpr_id_map *reserve;    /*!< The list of reserve instance id maps. */
     } idmaps;
+
+    mpr_expr_stack expr_stack;
 
     mpr_time time;
     int num_sig_groups;

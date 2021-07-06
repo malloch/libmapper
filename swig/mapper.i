@@ -1035,14 +1035,14 @@ typedef struct _device_list {
         return $self;
     }
     device_list *filter(const char *key, propval val=0, mpr_op op=MPR_OP_EQ) {
-        if (key && val) {
+        if (key && val && $self->list) {
             $self->list = mpr_list_filter($self->list, MPR_PROP_UNKNOWN, key,
                                           val->len, val->type, val->val, op);
         }
         return $self;
     }
     device_list *filter(int prop, propval val=0, mpr_op op=MPR_OP_EQ) {
-        if (val) {
+        if (prop && val && $self->list) {
             $self->list = mpr_list_filter($self->list, prop, NULL, val->len,
                                           val->type, val->val, op);
         }
@@ -1050,6 +1050,12 @@ typedef struct _device_list {
     }
     int length() {
         return mpr_list_get_size($self->list);
+    }
+    device *__getitem__(int index) {
+        // python lists allow negative indexes
+        if (index < 0)
+            index += mpr_list_get_size($self->list);
+        return (device*)mpr_list_get_idx($self->list, index);
     }
     %pythoncode {
         def __next__(self):
@@ -1298,14 +1304,14 @@ typedef struct _signal_list {
         return $self;
     }
     signal_list *filter(const char *key, propval val=0, mpr_op op=MPR_OP_EQ) {
-        if (key && val) {
+        if (key && val && $self->list) {
             $self->list = mpr_list_filter($self->list, MPR_PROP_UNKNOWN, key,
                                           val->len, val->type, val->val, op);
         }
         return $self;
     }
     signal_list *filter(int prop, propval val=0, mpr_op op=MPR_OP_EQ) {
-        if (val) {
+        if (prop && val && $self->list) {
             $self->list = mpr_list_filter($self->list, prop, NULL, val->len,
                                           val->type, val->val, op);
         }
@@ -1313,6 +1319,12 @@ typedef struct _signal_list {
     }
     int length() {
         return mpr_list_get_size($self->list);
+    }
+    signal *__getitem__(int index) {
+        // python lists allow negative indexes
+        if (index < 0)
+            index += mpr_list_get_size($self->list);
+        return (signal*)mpr_list_get_idx($self->list, index);
     }
     %pythoncode {
         def __next__(self):
@@ -1560,14 +1572,14 @@ typedef struct _map_list {
         return $self;
     }
     map_list *filter(const char *key, propval val=0, mpr_op op=MPR_OP_EQ) {
-        if (key && val) {
+        if (key && val && $self->list) {
             $self->list = mpr_list_filter($self->list, MPR_PROP_UNKNOWN, key,
                                           val->len, val->type, val->val, op);
         }
         return $self;
     }
     map_list *filter(int prop, propval val=0, mpr_op op=MPR_OP_EQ) {
-        if (val) {
+        if (prop && val && $self->list) {
             $self->list = mpr_list_filter($self->list, prop, NULL, val->len,
                                           val->type, val->val, op);
         }
@@ -1575,6 +1587,12 @@ typedef struct _map_list {
     }
     int length() {
         return mpr_list_get_size($self->list);
+    }
+    map *__getitem__(int index) {
+        // python lists allow negative indexes
+        if (index < 0)
+            index += mpr_list_get_size($self->list);
+        return (map*)mpr_list_get_idx($self->list, index);
     }
     map_list *release() {
         // need to use a copy of query

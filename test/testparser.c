@@ -30,6 +30,9 @@ mpr_type out_types[DST_ARRAY_LEN];
 
 mpr_time time_in = {0, 0}, time_out = {0, 0};
 
+/* evaluation stack */
+mpr_expr_stack eval_stk = 0;
+
 /* signal_history structures */
 mpr_value_t inh[SRC_ARRAY_LEN], outh, user_vars[MAX_VARS], *user_vars_p;
 mpr_value inh_p[SRC_ARRAY_LEN];
@@ -59,9 +62,7 @@ typedef struct _var {
     mpr_type datatype;
     mpr_type casttype;
     uint8_t vec_len;
-    char vec_len_locked;
-    char assigned;
-    char public;
+    uint8_t flags;
 } mpr_var_t, *mpr_var;
 
 struct _mpr_expr
@@ -73,11 +74,13 @@ struct _mpr_expr
     uint8_t n_tokens;
     uint8_t stack_size;
     uint8_t vec_size;
-    uint8_t *in_mem;
-    uint8_t out_mem;
+    uint16_t *in_mem;
+    uint16_t out_mem;
     uint8_t n_vars;
     int8_t inst_ctl;
     int8_t mute_ctl;
+    int8_t n_ins;
+    uint16_t max_in_mem;
 };
 
 /*! A helper function to seed the random number generator. */
@@ -260,7 +263,7 @@ int parse_and_eval(int expectation, int max_tokens, int check, int exp_updates)
         printf("\rExpression %d", expression_count++);
         fflush(stdout);
     }
-    e = mpr_expr_new_from_str(str, n_sources, src_types, src_lens, dst_type, dst_len);
+    e = mpr_expr_new_from_str(eval_stk, str, n_sources, src_types, src_lens, dst_type, dst_len);
     if (!e) {
         eprintf("Parser FAILED (expression %d)\n", expression_count - 1);
         goto fail;
@@ -272,39 +275,26 @@ int parse_and_eval(int expectation, int max_tokens, int check, int exp_updates)
     }
     mpr_time_set(&time_in, MPR_NOW);
     for (i = 0; i < n_sources; i++) {
-        void *v;
+        mpr_value_reset_inst(&inh[i], 0);
         mlen = mpr_expr_get_in_hist_size(e, i);
         mpr_value_realloc(&inh[i], src_lens[i], src_types[i], mlen, 1, 0);
-        inh[i].inst[0].pos = 0;
-        v = mpr_value_get_samp(&inh[i], 0);
         switch (src_types[i]) {
             case MPR_INT32:
-                memcpy(v, src_int, sizeof(int) * src_lens[i]);
+                mpr_value_set_samp(&inh[i], 0, src_int, time_in);
                 break;
             case MPR_FLT:
-                memcpy(v, src_flt, sizeof(float) * src_lens[i]);
+                mpr_value_set_samp(&inh[i], 0, src_flt, time_in);
                 break;
             case MPR_DBL:
-                memcpy(v, src_dbl, sizeof(double) * src_lens[i]);
+                mpr_value_set_samp(&inh[i], 0, src_dbl, time_in);
                 break;
             default:
                 assert(0);
         }
-        memcpy(inh[i].inst[0].times, &time_in, sizeof(mpr_time));
     }
+    mpr_value_reset_inst(&outh, 0);
     mlen = mpr_expr_get_out_hist_size(e);
     mpr_value_realloc(&outh, dst_len, dst_type, mlen, 1, 1);
-
-    /* mpr_value_realloc will not initialize memory if history size is unchanged
-     * so we will explicitly initialise it here. */
-    for (i = 0; i < n_sources; i++) {
-        int samp_size;
-        if (inh[i].mlen <= 1)
-            continue;
-        samp_size = inh[i].vlen * mpr_type_get_size(inh[i].type);
-        memset((char*)inh[i].inst[0].samps + samp_size, 0, (inh[i].mlen - 1) * samp_size);
-    }
-    memset(outh.inst[0].samps, 0, outh.mlen * outh.vlen * mpr_type_get_size(outh.type));
 
     if (mpr_expr_get_num_vars(e) > MAX_VARS) {
         eprintf("Maximum variables exceeded.\n");
@@ -313,13 +303,9 @@ int parse_and_eval(int expectation, int max_tokens, int check, int exp_updates)
 
     /* reallocate variable value histories */
     for (i = 0; i < e->n_vars; i++) {
-        /* eprintf("user_var[%d]: %p\n", i, &user_vars[i]); */
         int vlen = mpr_expr_get_var_vec_len(e, i);
+        mpr_value_reset_inst(&user_vars[i], 0);
         mpr_value_realloc(&user_vars[i], vlen, MPR_DBL, 1, 1, 0);
-
-        /* mpr_value_realloc will not initialize memory if history size is
-         * unchanged so we will explicitly initialise it here. */
-        memset(user_vars[i].inst[0].samps, 0, vlen * mpr_type_get_size(MPR_DBL));
     }
     user_vars_p = user_vars;
 
@@ -347,7 +333,7 @@ int parse_and_eval(int expectation, int max_tokens, int check, int exp_updates)
     then = current_time();
 
     eprintf("Try evaluation once... ");
-    status = mpr_expr_eval(e, inh_p, &user_vars_p, &outh, &time_in, out_types, 0);
+    status = mpr_expr_eval(eval_stk, e, inh_p, &user_vars_p, &outh, &time_in, out_types, 0);
     if (!status) {
         eprintf("FAILED.\n");
         result = 1;
@@ -365,24 +351,21 @@ int parse_and_eval(int expectation, int max_tokens, int check, int exp_updates)
         mpr_time_set(&time_in, MPR_NOW);
         /* copy src values */
         for (j = 0; j < n_sources; j++) {
-            int samp_size = inh[j].vlen * mpr_type_get_size(inh[j].type);
-            inh[j].inst[0].pos = ((inh[j].inst[0].pos + 1) % inh[j].mlen);
             switch (inh[j].type) {
                 case MPR_INT32:
-                    memcpy(mpr_value_get_samp(&inh[j], 0), src_int, samp_size);
+                    mpr_value_set_samp(&inh[j], 0, src_int, time_in);
                     break;
                 case MPR_FLT:
-                    memcpy(mpr_value_get_samp(&inh[j], 0), src_flt, samp_size);
+                    mpr_value_set_samp(&inh[j], 0, src_flt, time_in);
                     break;
                 case MPR_DBL:
-                    memcpy(mpr_value_get_samp(&inh[j], 0), src_dbl, samp_size);
+                    mpr_value_set_samp(&inh[j], 0, src_dbl, time_in);
                     break;
                 default:
                     assert(0);
             }
-            memcpy(mpr_value_get_time(&inh[j], 0), &time_in, sizeof(mpr_time));
         }
-        status = mpr_expr_eval(e, inh_p, &user_vars_p, &outh, &time_in, out_types, 0);
+        status = mpr_expr_eval(eval_stk, e, inh_p, &user_vars_p, &outh, &time_in, out_types, 0);
         if (status & MPR_SIG_UPDATE)
             ++update_count;
         /* sleep here stops compiler from optimizing loop away */
@@ -1008,42 +991,46 @@ int run_tests()
         return 1;
 
     /* 68) Pooled instance functions: any() and all() */
-    snprintf(str, 256, "y=(x-1).pool().any() + (x+1).pool().all();");
+    snprintf(str, 256, "y=(x-1).instances().any() + (x+1).instances().all();");
     setup_test(MPR_INT32, 1, MPR_INT32, 1);
     expect_int[0] = 2;
     if (parse_and_eval(EXPECT_SUCCESS, 0, 1, iterations))
         return 1;
 
     /* 69) Pooled instance functions: sum(), count() and mean() */
-    snprintf(str, 256, "y=(x.pool().sum()/x.pool().count())==x.pool().mean();");
-    setup_test(MPR_INT32, 1, MPR_INT32, 1);
+    snprintf(str, 256, "y=(x.instances().sum()/x.instances().count())==x.instances().mean();");
+    setup_test(MPR_INT32, 3, MPR_INT32, 3);
     expect_int[0] = 1;
+    expect_int[1] = 1;
+    expect_int[2] = 1;
     if (parse_and_eval(EXPECT_SUCCESS, 0, 1, iterations))
         return 1;
 
     /* 70) Pooled instance functions: max(), min(), and size() */
-    snprintf(str, 256, "y=(x.pool().max()-x.pool().min())==x.pool().size();");
+    snprintf(str, 256, "y=(x.instances().max()-x.instances().min())==x.instances().size();");
     setup_test(MPR_INT32, 1, MPR_INT32, 1);
     expect_int[0] = 1;
     if (parse_and_eval(EXPECT_SUCCESS, 0, 1, iterations))
         return 1;
 
     /* 71) Pooled instance function: center() */
-    snprintf(str, 256, "y=x.pool().center()==(x.pool().max()+x.pool().min())*0.5;");
-    setup_test(MPR_INT32, 1, MPR_INT32, 1);
-    if (parse_and_eval(EXPECT_SUCCESS, 0, 0, iterations))
+    snprintf(str, 256, "y=x.instances().center()==(x.instances().max()+x.instances().min())*0.5;");
+    setup_test(MPR_INT32, 2, MPR_INT32, 2);
+    expect_int[0] = 1;
+    expect_int[1] = 1;
+    if (parse_and_eval(EXPECT_SUCCESS, 0, 1, iterations))
         return 1;
 
-    /* 72) Mean pooled length of centered vectors */
-    snprintf(str, 256, "m=x.pool().mean(); y=(x-m).norm().pool().mean()");
+    /* 72) Pooled instance mean length of centered vectors */
+    snprintf(str, 256, "m=x.instances().mean(); y=(x-m).norm().instances().mean()");
     setup_test(MPR_FLT, 2, MPR_FLT, 1);
     if (parse_and_eval(EXPECT_SUCCESS, 0, 0, iterations))
         return 1;
 
-    /* 73) Mean pooled linear displacement */
-    snprintf(str, 256, "y=(x-x{-1}).pool().mean()");
+    /* 73) Pooled instance mean linear displacement */
+    snprintf(str, 256, "y=(x-x{-1}).instances().mean()");
     setup_test(MPR_INT32, 1, MPR_INT32, 1);
-    if (parse_and_eval(EXPECT_SUCCESS, 0, 0, iterations))
+    if (parse_and_eval(EXPECT_SUCCESS, 0, 0, iterations-1))
         return 1;
 
     /* 74) Dot product of two vectors */
@@ -1057,15 +1044,18 @@ int run_tests()
     /* 75) 2D Vector angle */
     snprintf(str, 256, "y=angle([-1,-1], [1,0]);");
     setup_test(MPR_FLT, 2, MPR_FLT, 1);
-    expect_flt[0] = M_PI * -0.75f;
+    expect_flt[0] = M_PI * 0.75f;
     if (parse_and_eval(EXPECT_SUCCESS, 0, 1, iterations))
         return 1;
 
-    /* 76) Mean pooled angular displacement */
-    snprintf(str, 256, "M=x.pool().mean(); y=angle(x{-1}-M,x-M).pool().mean();");
+    /* 76) Pooled instance mean angular displacement */
+    snprintf(str, 256, "c0{-1}=x.instances().center();"
+                       "c1=x.instances().center();"
+                       "y=angle(x{-1}-c0,x-c1).instances().mean();"
+                       "c0=c1;");
     setup_test(MPR_FLT, 2, MPR_FLT, 1);
     expect_flt[0] = 0.f;
-    if (parse_and_eval(EXPECT_SUCCESS, 0, 1, iterations))
+    if (parse_and_eval(EXPECT_SUCCESS, 0, 1, iterations-1))
         return 1;
 
     /* 77) Integer divide-by-zero */
@@ -1075,22 +1065,30 @@ int run_tests()
     if (parse_and_eval(EXPECT_SUCCESS, 0, 0, (iterations + 1) / 2))
         return 1;
 
-    /* 78) Optimization: Vector squashing (8 tokens instead of 12) */
-    snprintf(str, 256, "y=x*[3,3,3]+[1,1,2.6];");
+    /* 78) Optimization: Vector squashing (10 tokens instead of 12) */
+    snprintf(str, 256, "y=x*[3,3,x[1]]+[x[0],1,1];");
     setup_test(MPR_FLT, 3, MPR_FLT, 3);
-    expect_flt[0] = src_flt[0] * 3.0f + 1.0f;
+    expect_flt[0] = src_flt[0] * 3.0f + src_flt[0];
     expect_flt[1] = src_flt[1] * 3.0f + 1.0f;
-    expect_flt[2] = src_flt[2] * 3.0f + 2.6f;
-    if (parse_and_eval(EXPECT_SUCCESS, 8, 1, iterations))
+    expect_flt[2] = src_flt[2] * src_flt[1] + 1.0f;
+    if (parse_and_eval(EXPECT_SUCCESS, 10, 1, iterations))
         return 1;
 
-    /* 79) Wrapping vectors */
+    /* 79) Wrapping vectors, vector variables (6 tokens instead of 11) */
     snprintf(str, 256, "y=x*[3,3,3]+[1.23,4.56];");
     setup_test(MPR_FLT, 3, MPR_FLT, 3);
     expect_flt[0] = src_flt[0] * 3.0f + 1.23f;
     expect_flt[1] = src_flt[1] * 3.0f + 4.56f;
     expect_flt[2] = src_flt[2] * 3.0f + 1.23f;
-    if (parse_and_eval(EXPECT_SUCCESS, 8, 1, iterations))
+    if (parse_and_eval(EXPECT_SUCCESS, 6, 1, iterations))
+        return 1;
+
+    /* 80) Just instance count */
+    snprintf(str, 256, "y=x.instances().count();");
+    setup_test(MPR_FLT, 3, MPR_FLT, 2);
+    expect_flt[0] = 1;
+    expect_flt[1] = 1;
+    if (parse_and_eval(EXPECT_SUCCESS, 2, 1, iterations))
         return 1;
 
     return 0;
@@ -1159,7 +1157,9 @@ int main(int argc, char **argv)
     for (i = 0; i < SRC_ARRAY_LEN; i++)
         inh_p[i] = &inh[i];
 
+    eval_stk = mpr_expr_stack_new();
     result = run_tests();
+    mpr_expr_stack_free(eval_stk);
 
     for (i = 0; i < SRC_ARRAY_LEN; i++)
         mpr_value_free(&inh[i]);

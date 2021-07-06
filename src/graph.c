@@ -143,7 +143,8 @@ void mpr_graph_cleanup(mpr_graph g)
         maps = mpr_list_get_next(maps);
         if (map->status <= MPR_STATUS_STAGED) {
             if (map->status <= MPR_STATUS_EXPIRED) {
-                mpr_rtr_remove_map(g->net.rtr, (mpr_local_map)map);
+                if (map->obj.is_local)
+                    mpr_rtr_remove_map(g->net.rtr, (mpr_local_map)map);
                 mpr_graph_remove_map(g, map, MPR_OBJ_REM);
             }
             else {
@@ -157,25 +158,36 @@ void mpr_graph_cleanup(mpr_graph g)
 
 mpr_graph mpr_graph_new(int subscribe_flags)
 {
+    mpr_tbl tbl;
     mpr_graph g = (mpr_graph) calloc(1, sizeof(mpr_graph_t));
     RETURN_ARG_UNLESS(g, NULL);
 
-    g->net.graph = g;
+    g->obj.type = MPR_GRAPH;
+    g->net.graph = g->obj.graph = g;
+    g->obj.id = 0;
     g->own = 1;
     mpr_net_init(&g->net, 0, 0, 0);
     if (subscribe_flags)
         _autosubscribe(g, subscribe_flags);
+
+    /* TODO: consider whether graph objects should sync properties over the network. */
+    tbl = g->obj.props.synced = mpr_tbl_new();
+    mpr_tbl_link(tbl, PROP(DATA), 1, MPR_PTR, &g->obj.data,
+                 LOCAL_MODIFY | INDIRECT | LOCAL_ACCESS_ONLY);
+    mpr_tbl_set(tbl, PROP(LIBVER), NULL, 1, MPR_STR, PACKAGE_VERSION, NON_MODIFIABLE);
+    /* TODO: add object queries as properties. */
+
     return g;
 }
 
 void mpr_graph_free(mpr_graph g)
 {
     mpr_list list;
-    fptr_list cb;
     RETURN_UNLESS(g);
 
     /* remove callbacks now so they won't be called when removing devices */
-    while ((cb = g->callbacks)) {
+    while (g->callbacks) {
+        fptr_list cb = g->callbacks;
         g->callbacks = g->callbacks->next;
         free(cb);
     }
@@ -189,7 +201,7 @@ void mpr_graph_free(mpr_graph g)
     while (list) {
         mpr_map map = (mpr_map)*list;
         list = mpr_list_get_next(list);
-        if (!map->is_local)
+        if (!map->obj.is_local)
             mpr_graph_remove_map(g, map, MPR_OBJ_REM);
     }
 
@@ -201,7 +213,7 @@ void mpr_graph_free(mpr_graph g)
         int no_local_dev_maps = 1;
         mpr_list sigs;
         list = mpr_list_get_next(list);
-        if (dev->is_local)
+        if (dev->obj.is_local)
             continue;
 
         sigs = mpr_dev_get_sigs(dev, MPR_DIR_ANY);
@@ -210,7 +222,7 @@ void mpr_graph_free(mpr_graph g)
             mpr_sig sig = (mpr_sig)*sigs;
             mpr_list maps = mpr_sig_get_maps(sig, MPR_DIR_ANY);
             while (maps) {
-                if (((mpr_map)*maps)->is_local) {
+                if (((mpr_map)*maps)->obj.is_local) {
                     no_local_dev_maps = no_local_sig_maps = 0;
                     mpr_list_free(maps);
                     break;
@@ -226,6 +238,7 @@ void mpr_graph_free(mpr_graph g)
     }
 
     mpr_net_free(&g->net);
+    FUNC_IF(mpr_tbl_free, g->obj.props.synced);
     free(g);
 }
 
@@ -296,10 +309,11 @@ void mpr_graph_call_cbs(mpr_graph g, mpr_obj o, mpr_type t, mpr_graph_evt e)
     }
 }
 
-int mpr_graph_remove_cb(mpr_graph g, mpr_graph_handler *h, const void *user)
+void *mpr_graph_remove_cb(mpr_graph g, mpr_graph_handler *h, const void *user)
 {
     fptr_list cb = g->callbacks;
     fptr_list prevcb = 0;
+    void *ctx;
     while (cb) {
         if (cb->f == (void*)h && cb->ctx == user)
             break;
@@ -311,8 +325,9 @@ int mpr_graph_remove_cb(mpr_graph g, mpr_graph_handler *h, const void *user)
         prevcb->next = cb->next;
     else
         g->callbacks = cb->next;
+    ctx = cb->ctx;
     free(cb);
-    return 1;
+    return ctx;
 }
 
 static void _remove_by_qry(mpr_graph g, mpr_list l, mpr_graph_evt e)
@@ -346,7 +361,7 @@ mpr_dev mpr_graph_add_dev(mpr_graph g, const char *name, mpr_msg msg)
         dev->obj.id <<= 32;
         dev->obj.type = MPR_DEV;
         dev->obj.graph = g;
-        dev->is_local = 0;
+        dev->obj.is_local = 0;
         init_dev_prop_tbl(dev);
         rc = 1;
     }
@@ -411,8 +426,7 @@ static void _check_dev_status(mpr_graph g, uint32_t time_sec)
     while (devs) {
         mpr_dev dev = (mpr_dev)*devs;
         devs = mpr_list_get_next(devs);
-        /* check if device has "checked in" recently
-         * this could be /sync ping or any sent metadata */
+        /* check if device has "checked in" recently – could be /sync ping or any sent metadata */
         if (dev->synced.sec && (dev->synced.sec < time_sec)) {
             /* remove subscription */
             mpr_graph_subscribe(g, dev, 0, 0);
@@ -431,7 +445,7 @@ mpr_sig mpr_graph_add_sig(mpr_graph g, const char *name, const char *dev_name, m
     mpr_dev dev = mpr_graph_get_dev_by_name(g, dev_name);
     if (dev) {
         sig = mpr_dev_get_sig_by_name(dev, name);
-        if (sig && sig->is_local)
+        if (sig && sig->obj.is_local)
             return sig;
     }
     else
@@ -444,7 +458,7 @@ mpr_sig mpr_graph_add_sig(mpr_graph g, const char *name, const char *dev_name, m
         /* also add device record if necessary */
         sig->dev = dev;
         sig->obj.graph = g;
-        sig->is_local = 0;
+        sig->obj.is_local = 0;
 
         mpr_sig_init(sig, MPR_DIR_UNDEFINED, name, 0, 0, 0, 0, 0, 0);
         rc = 1;
@@ -491,7 +505,7 @@ mpr_link mpr_graph_add_link(mpr_graph g, mpr_dev dev1, mpr_dev dev2)
         return link;
 
     link = (mpr_link)mpr_list_add_item((void**)&g->links, sizeof(mpr_link_t));
-    if (dev2->is_local) {
+    if (dev2->obj.is_local) {
         link->devs[LOCAL_DEV] = dev2;
         link->devs[REMOTE_DEV] = dev1;
     }
@@ -567,7 +581,7 @@ mpr_map mpr_graph_add_map(mpr_graph g, mpr_id id, int num_src, const char **src_
                           const char *dst_name)
 {
     mpr_map map = 0;
-    int rc = 0, updated = 0, i, j, is_local = 0;
+    unsigned char rc = 0, updated = 0, i, j, is_local = 0;
     if (num_src > MAX_NUM_MAP_SRC) {
         trace_graph("error: maximum mapping sources exceeded.\n");
         return 0;
@@ -599,9 +613,9 @@ mpr_map mpr_graph_add_map(mpr_graph g, mpr_id id, int num_src, const char **src_
             src_sigs[i] = add_sig_from_whole_name(g, src_names[i]);
             RETURN_ARG_UNLESS(src_sigs[i], 0);
             mpr_graph_add_link(g, dst_sig->dev, src_sigs[i]->dev);
-            is_local += src_sigs[i]->is_local;
+            is_local += src_sigs[i]->obj.is_local;
         }
-        is_local += dst_sig->is_local;
+        is_local += dst_sig->obj.is_local;
 
         map = (mpr_map)mpr_list_add_item((void**)&g->maps,
                                          is_local ? sizeof(mpr_local_map_t) : sizeof(mpr_map_t));
@@ -609,17 +623,13 @@ mpr_map mpr_graph_add_map(mpr_graph g, mpr_id id, int num_src, const char **src_
         map->obj.graph = g;
         map->obj.id = id;
         map->num_src = num_src;
-        map->is_local = 0;
+        map->obj.is_local = 0;
         map->src = (mpr_slot*)malloc(sizeof(mpr_slot) * num_src);
-        for (i = 0; i < num_src; i++) {
-            map->src[i] = mpr_slot_new(map, src_sigs[i], is_local);
-            /* TODO: do we need to init these here and in slot.c? */
-            map->src[i]->obj.id = i;
-            map->src[i]->obj.graph = g;
-        }
-        map->dst = mpr_slot_new(map, dst_sig, is_local);
-        map->dst->obj.graph = g;
+        for (i = 0; i < num_src; i++)
+            map->src[i] = mpr_slot_new(map, src_sigs[i], is_local, 1);
+        map->dst = mpr_slot_new(map, dst_sig, is_local, 0);
         mpr_map_init(map);
+        ++g->staged_maps;
         rc = 1;
     }
     else {
@@ -627,7 +637,7 @@ mpr_map mpr_graph_add_map(mpr_graph g, mpr_id id, int num_src, const char **src_
         /* may need to add sources to existing map */
         for (i = 0; i < num_src; i++) {
             mpr_sig src_sig = add_sig_from_whole_name(g, src_names[i]);
-            is_local += src_sig->is_local;
+            is_local += src_sig->obj.is_local;
             /* TODO: check if we might need to 'upgrade' existing map to local */
             RETURN_ARG_UNLESS(src_sig, 0);
             for (j = 0; j < map->num_src; j++) {
@@ -638,34 +648,17 @@ mpr_map mpr_graph_add_map(mpr_graph g, mpr_id id, int num_src, const char **src_
                 ++changed;
                 ++map->num_src;
                 map->src = realloc(map->src, sizeof(mpr_slot) * map->num_src);
-                map->src[j] = mpr_slot_new(map, src_sig, is_local);
-                map->src[j]->dir = MPR_DIR_OUT;
-                map->src[j]->obj.graph = g;
-                mpr_slot_init(map->src[j]);
+                map->src[j] = mpr_slot_new(map, src_sig, is_local, 1);
                 ++updated;
             }
         }
         if (changed) {
-            mpr_tbl tab;
-            mpr_tbl_record rec;
             mpr_list maps;
             /* slots should be in alphabetical order */
             qsort(map->src, map->num_src, sizeof(mpr_slot), _compare_slot_names);
             /* fix slot ids */
-            for (i = 0; i < num_src; i++) {
-                map->src[i]->obj.id = i;
-                /* also need to correct slot table indices */
-                tab = map->src[i]->obj.props.synced;
-                for (j = 0; j < tab->count; j++) {
-                    rec = &tab->rec[j];
-                    rec->prop = MASK_PROP_BITFLAGS(rec->prop) | SRC_SLOT_PROP(i);
-                }
-                tab = map->src[i]->obj.props.staged;
-                for (j = 0; j < tab->count; j++) {
-                    rec = &tab->rec[j];
-                    rec->prop = MASK_PROP_BITFLAGS(rec->prop) | SRC_SLOT_PROP(i);
-                }
-            }
+            for (i = 0; i < num_src; i++)
+                map->src[i]->id = i;
             /* check again if this mirrors a staged map */
             maps = mpr_list_from_data(g->maps);
             while (maps) {
@@ -841,7 +834,7 @@ void mpr_graph_subscribe(mpr_graph g, mpr_dev d, int flags, int timeout)
         _autosubscribe(g, flags);
         return;
     }
-    else if (d->is_local) {
+    else if (d->obj.is_local) {
         /* don't bother subscribing to local device */
         trace_graph("aborting subscription, device is local.\n");
         return;

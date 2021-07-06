@@ -44,7 +44,7 @@ if (!(a)) { trace_dev(dev, __VA_ARGS__); return ret; }
 {                                                                                   \
     if (!DEV)                                                                       \
         printf("\x1B[32m-- <device>\x1B[0m ");                                      \
-    else if (DEV->is_local && ((mpr_local_dev)DEV)->registered)                     \
+    else if (DEV->obj.is_local && ((mpr_local_dev)DEV)->registered)                 \
         printf("\x1B[32m-- <device '%s'>\x1B[0m ", mpr_dev_get_name((mpr_dev)DEV)); \
     else                                                                            \
         printf("\x1B[32m-- <device '%s.?'::%p>\x1B[0m ", DEV->prefix, DEV);         \
@@ -343,9 +343,7 @@ void mpr_map_free(mpr_map map);
 
 /**** Slot ****/
 
-mpr_slot mpr_slot_new(mpr_map map, mpr_sig sig, int is_src);
-
-void mpr_slot_init(mpr_slot slot);
+mpr_slot mpr_slot_new(mpr_map map, mpr_sig sig, unsigned char is_local, unsigned char is_src);
 
 void mpr_slot_alloc_values(mpr_local_slot slot, int num_inst, int hist_size);
 
@@ -438,8 +436,9 @@ int set_coerced_val(int src_len, mpr_type src_type, const void *src_val,
 
 /**** Expression parser/evaluator ****/
 
-mpr_expr mpr_expr_new_from_str(const char *str, int num_in, const mpr_type *in_types,
-                               const int *in_vec_lens, mpr_type out_type, int out_vec_len);
+mpr_expr mpr_expr_new_from_str(mpr_expr_stack eval_stk, const char *str, int num_in,
+                               const mpr_type *in_types, const int *in_vec_lens, mpr_type out_type,
+                               int out_vec_len);
 
 int mpr_expr_get_in_hist_size(mpr_expr expr, int idx);
 
@@ -455,8 +454,6 @@ int mpr_expr_get_src_is_muted(mpr_expr expr, int idx);
 
 const char *mpr_expr_get_var_name(mpr_expr expr, int idx);
 
-int mpr_expr_get_var_is_public(mpr_expr expr, int idx);
-
 int mpr_expr_get_manages_inst(mpr_expr expr);
 
 #ifdef DEBUG
@@ -464,6 +461,7 @@ void printexpr(const char*, mpr_expr);
 #endif
 
 /*! Evaluate the given inputs using the compiled expression.
+ *  \param stk          A preallocated expression eval stack.
  *  \param expr         The expression to use.
  *  \param srcs         An array of mpr_value structures for sources.
  *  \param expr_vars    An array of mpr_value structures for user variables.
@@ -479,14 +477,15 @@ void printexpr(const char*, mpr_expr);
  *                      generated an instance release before the update), and
  *                      MPR_SIG_REL_DNSRTM (if the expression generated an
  *                      instance release after an update). */
-int mpr_expr_eval(mpr_expr expr, mpr_value *srcs, mpr_value *expr_vars,
+int mpr_expr_eval(mpr_expr_stack stk, mpr_expr expr, mpr_value *srcs, mpr_value *expr_vars,
                   mpr_value result, mpr_time *t, mpr_type *types, int inst_idx);
 
 int mpr_expr_get_num_input_slots(mpr_expr expr);
 
 void mpr_expr_free(mpr_expr expr);
 
-void mpr_expr_free_buffers();
+mpr_expr_stack mpr_expr_stack_new();
+void mpr_expr_stack_free(mpr_expr_stack stk);
 
 /**** String tables ****/
 
@@ -508,11 +507,11 @@ int mpr_tbl_get_size(mpr_tbl tab);
  *  and fills in value if found. */
 mpr_tbl_record mpr_tbl_get(mpr_tbl tab, mpr_prop prop, const char *key);
 
-int mpr_tbl_get_prop_by_key(mpr_tbl tab, const char *key, int *len,
-                            mpr_type *type, const void **val, int *pub);
+mpr_prop mpr_tbl_get_prop_by_key(mpr_tbl tab, const char *key, int *len,
+                                 mpr_type *type, const void **val, int *pub);
 
-int mpr_tbl_get_prop_by_idx(mpr_tbl tab, mpr_prop prop, const char **key,
-                            int *len, mpr_type *type, const void **val, int *pub);
+mpr_prop mpr_tbl_get_prop_by_idx(mpr_tbl tab, mpr_prop prop, const char **key,
+                                 int *len, mpr_type *type, const void **val, int *pub);
 
 /*! Remove a key-value pair from a table (by index or name). */
 int mpr_tbl_remove(mpr_tbl tab, mpr_prop prop, const char *key, int flags);
@@ -630,7 +629,7 @@ void mpr_value_reset_inst(mpr_value v, int idx);
 
 int mpr_value_remove_inst(mpr_value v, int idx);
 
-void mpr_value_set_sample(mpr_value v, int idx, void *s, mpr_time t);
+void mpr_value_set_samp(mpr_value v, int idx, void *s, mpr_time t);
 
 /*! Helper to find the pointer to the current value in a mpr_value_t. */
 MPR_INLINE static void* mpr_value_get_samp(mpr_value v, int idx)

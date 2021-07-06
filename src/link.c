@@ -22,7 +22,6 @@ void mpr_link_init(mpr_link link)
     char cmd[256];
     if (!link->num_maps)
         link->num_maps = (int*)calloc(1, sizeof(int) * 2);
-    link->obj.props.mask = 0;
     if (!link->obj.props.synced) {
         mpr_tbl t = link->obj.props.synced = mpr_tbl_new();
         mpr_tbl_link(t, MPR_PROP_DEV, 2, MPR_DEV, &link->devs, NON_MODIFIABLE | LOCAL_ACCESS_ONLY);
@@ -32,7 +31,7 @@ void mpr_link_init(mpr_link link)
     if (!link->obj.props.staged)
         link->obj.props.staged = mpr_tbl_new();
 
-    if (!link->obj.id && link->devs[LOCAL_DEV]->is_local)
+    if (!link->obj.id && link->devs[LOCAL_DEV]->obj.is_local)
         link->obj.id = mpr_dev_generate_unique_id(link->devs[LOCAL_DEV]);
 
     link->clock.new = 1;
@@ -81,7 +80,7 @@ void mpr_link_free(mpr_link link)
     FUNC_IF(mpr_tbl_free, link->obj.props.synced);
     FUNC_IF(mpr_tbl_free, link->obj.props.staged);
     FUNC_IF(free, link->num_maps);
-    if (!link->devs[LOCAL_DEV]->is_local)
+    if (!link->devs[LOCAL_DEV]->obj.is_local)
         return;
     FUNC_IF(lo_address_free, link->addr.admin);
     FUNC_IF(lo_address_free, link->addr.udp);
@@ -189,7 +188,7 @@ mpr_list mpr_link_get_maps(mpr_link link)
 
 void mpr_link_remove_map(mpr_link link, mpr_local_map rem)
 {
-    int in = 0, out = 0, rev = link->devs[0]->is_local ? 0 : 1;
+    int in = 0, out = 0, rev = link->devs[0]->obj.is_local ? 0 : 1;
     mpr_list list = mpr_link_get_maps(link);
     while (list) {
         mpr_local_map map = *(mpr_local_map*)list;
@@ -216,5 +215,5 @@ void mpr_link_send(mpr_link link, net_msg_t cmd)
 
 int mpr_link_get_is_local(mpr_link link)
 {
-    return link->devs[0]->is_local || link->devs[1]->is_local;
+    return link->devs[0]->obj.is_local || link->devs[1]->obj.is_local;
 }

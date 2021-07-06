@@ -16,7 +16,7 @@ This should produce a file named `Mapper.dll`
 Run the following command from within the bindings/csharp directory:
 
 ~~~
-csc /unsafe /r:Mapper.dll test.cs
+csc /r:Mapper.dll test.cs
 ~~~
 
 This should produce a file named `test.exe`
@@ -40,4 +40,5 @@ You may need to copy the libmapper dynamic library into the same directory (depe
     * object properties
     * graphs
     * signal instances
+* interact with C# Events
 * add more tests

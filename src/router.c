@@ -171,17 +171,16 @@ void mpr_rtr_process_sig(mpr_rtr rtr, mpr_local_sig sig, int idmap_idx, const vo
             continue;
 
         slot = rs->slots[i];
-        map = slot->map;
+        if (MPR_DIR_IN == slot->dir)
+            continue;
 
+        map = slot->map;
         if (map->status < MPR_STATUS_ACTIVE)
             continue;
 
         in_scope = _is_map_in_scope(map, sig->idmaps[idmap_idx].map->GID);
         /* TODO: should we continue for out-of-scope local destination updates? */
         if (map->use_inst && !in_scope)
-            continue;
-
-        if (slot->dir == MPR_DIR_IN)
             continue;
 
         /* If this signal is non-instanced but the map has other instanced
@@ -198,7 +197,7 @@ void mpr_rtr_process_sig(mpr_rtr rtr, mpr_local_sig sig, int idmap_idx, const vo
         }
 
         /* copy input value */
-        mpr_value_set_sample(&slot->val, inst_idx, (void*)val, t);
+        mpr_value_set_samp(&slot->val, inst_idx, (void*)val, t);
 
         if (!slot->causes_update)
             continue;
@@ -206,7 +205,7 @@ void mpr_rtr_process_sig(mpr_rtr rtr, mpr_local_sig sig, int idmap_idx, const vo
         if (all) {
             /* find a source signal with more instances */
             for (j = 0; j < map->num_src; j++)
-                if (map->src[j]->sig->is_local && map->src[j]->num_inst > slot->num_inst)
+                if (map->src[j]->sig->obj.is_local && map->src[j]->num_inst > slot->num_inst)
                     sig = (mpr_local_sig)map->src[j]->sig;
             idmap_idx = 0;
         }
@@ -292,8 +291,8 @@ static mpr_id _get_unused_map_id(mpr_local_dev dev, mpr_rtr rtr)
 static void _add_local_slot(mpr_rtr rtr, mpr_local_slot slot, int is_src, int *max_inst,
                             int *use_inst)
 {
-    slot->dir = (is_src ^ (slot->sig->is_local ? 1 : 0)) ? MPR_DIR_IN : MPR_DIR_OUT;
-    if (slot->sig->is_local) {
+    slot->dir = (is_src ^ (slot->sig->obj.is_local ? 1 : 0)) ? MPR_DIR_IN : MPR_DIR_OUT;
+    if (slot->sig->obj.is_local) {
         slot->rsig = _add_rtr_sig(rtr, (mpr_local_sig)slot->sig);
         _store_slot(slot->rsig, slot);
 
@@ -304,7 +303,7 @@ static void _add_local_slot(mpr_rtr rtr, mpr_local_slot slot, int is_src, int *m
         if (slot->sig->use_inst)
             *use_inst = 1;
     }
-    if (!slot->sig->is_local || (is_src && slot->map->dst->sig->is_local))
+    if (!slot->sig->obj.is_local || (is_src && slot->map->dst->sig->obj.is_local))
         slot->link = mpr_link_new(rtr->dev, slot->sig->dev);
 
     /* set some sensible defaults */
@@ -314,14 +313,14 @@ static void _add_local_slot(mpr_rtr rtr, mpr_local_slot slot, int is_src, int *m
 void mpr_rtr_add_map(mpr_rtr rtr, mpr_local_map map)
 {
     int i, local_src = 0, local_dst, max_num_inst = 0, use_inst = 0, scope_count;
-    RETURN_UNLESS(!map->is_local);
+    RETURN_UNLESS(!map->obj.is_local);
     for (i = 0; i < map->num_src; i++) {
-        if (map->src[i]->sig->is_local)
+        if (map->src[i]->sig->obj.is_local)
             ++local_src;
     }
-    local_dst = map->dst->sig->is_local ? 1 : 0;
+    local_dst = map->dst->sig->obj.is_local ? 1 : 0;
     map->rtr = rtr;
-    map->is_local = 1;
+    map->obj.is_local = 1;
 
     /* TODO: configure number of instances available for each slot */
     map->num_inst = 0;
@@ -342,12 +341,12 @@ void mpr_rtr_add_map(mpr_rtr rtr, mpr_local_map map)
     /* assign indices to source slots */
     if (local_dst) {
         for (i = 0; i < map->num_src; i++)
-            map->src[i]->obj.id = map->dst->rsig->id_counter++;
+            map->src[i]->id = map->dst->rsig->id_counter++;
     }
     else {
         /* may be overwritten later by message */
         for (i = 0; i < map->num_src; i++)
-            map->src[i]->obj.id = i;
+            map->src[i]->id = i;
     }
 
     /* add scopes */
@@ -495,8 +494,6 @@ int mpr_rtr_remove_map(mpr_rtr rtr, mpr_local_map map)
                 else {
                     mpr_dev_LID_decref(rtr->dev, sig->group, maps[i].map);
                     maps[i].map = 0;
-                    maps[i].inst->active = 0;
-                    maps[i].inst = 0;
                 }
             }
         }
@@ -573,6 +570,7 @@ int mpr_rtr_loop_check(mpr_rtr rtr, mpr_local_sig sig, int num_remotes, const ch
     return 0;
 }
 
+/* TODO: speed this up with sorted slots and binary search */
 mpr_local_slot mpr_rtr_get_slot(mpr_rtr rtr, mpr_local_sig sig, int slot_id)
 {
     int i, j;
@@ -580,14 +578,13 @@ mpr_local_slot mpr_rtr_get_slot(mpr_rtr rtr, mpr_local_sig sig, int slot_id)
     /* only interested in incoming slots */
     mpr_rtr_sig rs = _find_rtr_sig(rtr, sig);
     RETURN_ARG_UNLESS(rs, NULL);
-
     for (i = 0; i < rs->num_slots; i++) {
-        if (!rs->slots[i] || rs->slots[i]->dir == MPR_DIR_OUT)
+        if (!rs->slots[i] || sig->dir != rs->slots[i]->dir)
             continue;
         map = rs->slots[i]->map;
         /* check incoming slots for this map */
         for (j = 0; j < map->num_src; j++) {
-            if ((int)map->src[j]->obj.id == slot_id)
+            if ((int)map->src[j]->id == slot_id)
                 return map->src[j];
         }
     }

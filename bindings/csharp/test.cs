@@ -4,12 +4,8 @@ using Mapper;
 
 public class TestCSharp
 {
-    private static void handler(Signal sig, Mapper.Signal.Event evt, UInt64 instance, int length,
-                                Mapper.Type type, IntPtr value, IntPtr time) {
-        unsafe {
-            float fvalue = *(float*)value;
-            Console.WriteLine("received value " + fvalue);
-        }
+    private static void handler(Signal sig, Mapper.Signal.Event evt, float value) {
+        Console.WriteLine("received value " + value);
     }
 
     public static void Main(string[] args) {
@@ -19,12 +15,13 @@ public class TestCSharp
         Device dev = new Device("CSmapper");
         Console.WriteLine("created dev CSmapper");
 
-        Signal outsig = dev.addSignal(Direction.Outgoing, "outsig", 1, Mapper.Type.Float);
+        int[] min = {1,2,3,4};
+        int[] max = {10,11,12,13};
+        Mapper.Signal outsig = dev.addSignal(Direction.Outgoing, "outsig", 1, Mapper.Type.Float);
         Console.WriteLine("created signal outsig");
 
-        Signal insig = dev.addSignal(Direction.Incoming, "insig", 1, Mapper.Type.Float, null,
-                                     IntPtr.Zero, IntPtr.Zero, IntPtr.Zero, handler,
-                                     (int)Mapper.Signal.Event.Update);
+        Signal insig = dev.addSignal(Direction.Incoming, "insig", 1, Mapper.Type.Float)
+                          .setCallback((Action<Signal, Signal.Event, float>)handler, (int)Mapper.Signal.Event.Update);
         Console.WriteLine("created signal insig");
 
         Console.Write("Waiting for device");
@@ -32,6 +29,8 @@ public class TestCSharp
             dev.poll(25);
         }
         Console.WriteLine("Device ready...");
+
+        dev.setProperty("foo", 1000);
 
         // Map map = new Map(outsig, insig);
         Map map = new Map("%y=%x*1000", insig, outsig);
@@ -49,7 +48,7 @@ public class TestCSharp
             dev.poll(100);
             sig_val += 0.1F;
             if (sig_val > 100)
-              sig_val = 0F;
+                sig_val = 0.0F;
             Console.Write("Sig updated to ");
             Console.WriteLine(sig_val.ToString());
         }

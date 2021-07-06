@@ -142,12 +142,12 @@ test_config test_configs[] = {
     { 30, MIXED_SIG, INSTANCED, INSTANCED, MPR_LOC_DST, NONE, NULL, 4.0, 0. },
 
     /* singleton ––> instanced; in-map instance management */
-    { 31, SINGLETON, INSTANCED, SINGLETON, MPR_LOC_SRC, NONE, "alive=count>=5;y=x;count=(count+1)%10;", 1.5, 0. },
-    { 32, SINGLETON, INSTANCED, SINGLETON, MPR_LOC_DST, NONE, "alive=count>=5;y=x;count=(count+1)%10;", 1.5, 0. },
+    { 31, SINGLETON, INSTANCED, SINGLETON, MPR_LOC_SRC, NONE, "alive=n>=5;y=x;n=(n+1)%10;", 1.5, 0. },
+    { 32, SINGLETON, INSTANCED, SINGLETON, MPR_LOC_DST, NONE, "alive=n>=5;y=x;n=(n+1)%10;", 1.5, 0. },
 
     /* singleton ==> instanced; in-map instance management */
-    { 33, SINGLETON, INSTANCED, INSTANCED, MPR_LOC_SRC, NONE, "alive=count>=5;y=x;count=(count+1)%10;", 0.5, 0. },
-    { 34, SINGLETON, INSTANCED, INSTANCED, MPR_LOC_DST, NONE, "alive=count>=5;y=x;count=(count+1)%10;", 0.5, 0. },
+    { 33, SINGLETON, INSTANCED, INSTANCED, MPR_LOC_SRC, NONE, "alive=n>=5;y=x;n=(n+1)%10;", 0.5, 0. },
+    { 34, SINGLETON, INSTANCED, INSTANCED, MPR_LOC_DST, NONE, "alive=n>=5;y=x;n=(n+1)%10;", 0.5, 0. },
 
     /* work in progress:
      * instanced ––> instanced; in-map instance management (late start, early release, ad hoc)
@@ -156,8 +156,8 @@ test_config test_configs[] = {
      * mixed ==> instanced; in-map instance management (late start, early release, ad hoc)
      */
 
-/*    { 35, INSTANCED, INSTANCED, INSTANCED, MPR_LOC_SRC, NONE, "alive=count>=3;y=x;count=(count+1)%10;", 0.5, 0. },
-    { 36, INSTANCED, INSTANCED, INSTANCED, MPR_LOC_DST, NONE, "alive=count>=3;y=x;count=(count+1)%10;", 0.5, 0. },*/
+/*    { 35, INSTANCED, INSTANCED, INSTANCED, MPR_LOC_SRC, NONE, "alive=n>=3;y=x;n=(n+1)%10;", 0.5, 0. },
+    { 36, INSTANCED, INSTANCED, INSTANCED, MPR_LOC_DST, NONE, "alive=n>=3;y=x;n=(n+1)%10;", 0.5, 0. },*/
 
     /* future work:
      * src instance pooling (convergent maps)
@@ -169,7 +169,7 @@ const int NUM_TESTS =
     sizeof(test_configs)/sizeof(test_configs[0]);
 
 /*! Creation of a local source. */
-int setup_src()
+int setup_src(const char *iface)
 {
     float mn=0, mx=10;
     int num_inst = 10, stl = MPR_STEAL_OLDEST;
@@ -177,6 +177,10 @@ int setup_src()
     src = mpr_dev_new("testinstance-send", 0);
     if (!src)
         goto error;
+    if (iface)
+        mpr_graph_set_interface(mpr_obj_get_graph((mpr_obj)src), iface);
+    eprintf("source created using interface %s.\n",
+            mpr_graph_get_interface(mpr_obj_get_graph((mpr_obj)src)));
 
     multisend = mpr_sig_new((mpr_obj)src, MPR_DIR_OUT, "multisend", 1, MPR_FLT, NULL,
                             &mn, &mx, &num_inst, NULL, 0);
@@ -230,7 +234,7 @@ void handler(mpr_sig sig, mpr_sig_evt e, mpr_id inst, int len, mpr_type type,
 }
 
 /*! Creation of a local destination. */
-int setup_dst()
+int setup_dst(const char *iface)
 {
     float mn=0;
     int i, num_inst;
@@ -238,6 +242,10 @@ int setup_dst()
     dst = mpr_dev_new("testinstance-recv", 0);
     if (!dst)
         goto error;
+    if (iface)
+        mpr_graph_set_interface(mpr_obj_get_graph((mpr_obj)dst), iface);
+    eprintf("destination created using interface %s.\n",
+            mpr_graph_get_interface(mpr_obj_get_graph((mpr_obj)dst)));
 
     /* Specify 0 instances since we wish to use specific ids */
     num_inst = 0;
@@ -607,8 +615,7 @@ int run_test(test_config *config)
 
     if (!verbose) {
         if (result)
-            printf(" (expected %4d ± %2d) \x1B[31mFAILED\x1B[0m.\n", compare_count,
-                   count_epsilon);
+            printf(" (expected %4d ± %2d) \x1B[31mFAILED\x1B[0m.\n", compare_count, count_epsilon);
         else
             printf(" (expected) ......... \x1B[32mPASSED\x1B[0m.\n");
     }
@@ -619,6 +626,7 @@ int run_test(test_config *config)
 int main(int argc, char **argv)
 {
     int i, j, result = 0;
+    char *iface = 0;
 
     /* process flags for -v verbose, -t terminate, -h help */
     for (i = 1; i < argc; i++) {
@@ -631,7 +639,8 @@ int main(int argc, char **argv)
                                "-f fast (execute quickly), "
                                "-q quiet (suppress output), "
                                "-t terminate automatically, "
-                               "-h help\n");
+                               "-h help, "
+                               "--iface network interface\n");
                         return 1;
                         break;
                     case 'f':
@@ -643,6 +652,13 @@ int main(int argc, char **argv)
                     case 't':
                         terminate = 1;
                         break;
+                    case '-':
+                        if (strcmp(argv[i], "--iface")==0 && argc>i+1) {
+                            i++;
+                            iface = argv[i];
+                            j = 1;
+                        }
+                        break;
                     default:
                         break;
                 }
@@ -652,12 +668,12 @@ int main(int argc, char **argv)
 
     signal(SIGINT, ctrlc);
 
-    if (setup_dst()) {
+    if (setup_dst(iface)) {
         eprintf("Error initializing destination.\n");
         result = 1;
         goto done;
     }
-    if (setup_src()) {
+    if (setup_src(iface)) {
         eprintf("Done initializing source.\n");
         result = 1;
         goto done;

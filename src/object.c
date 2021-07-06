@@ -46,7 +46,7 @@ mpr_prop mpr_obj_get_prop_by_idx(mpr_obj o, mpr_prop p, const char **k, int *l,
                                  mpr_type *t, const void **v, int *pub)
 {
     RETURN_ARG_UNLESS(o, 0);
-    return mpr_tbl_get_prop_by_idx(o->props.synced, p | o->props.mask, k, l, t, v, pub);
+    return mpr_tbl_get_prop_by_idx(o->props.synced, p, k, l, t, v, pub);
 }
 
 int mpr_obj_get_prop_as_int32(mpr_obj o, mpr_prop p, const char *s)
@@ -141,8 +141,7 @@ mpr_prop mpr_obj_set_prop(mpr_obj o, mpr_prop p, const char *s, int len,
     flags = local ? LOCAL_MODIFY : REMOTE_MODIFY;
     if (!publish)
         flags |= LOCAL_ACCESS_ONLY;
-    updated = mpr_tbl_set(local ? o->props.synced : o->props.staged,
-                          p | o->props.mask, s, len, type, val, flags);
+    updated = mpr_tbl_set(local ? o->props.synced : o->props.staged, p, s, len, type, val, flags);
     if (updated)
         mpr_obj_increment_version(o);
     return updated;
@@ -174,7 +173,7 @@ void mpr_obj_push(mpr_obj o)
 
     if (MPR_DEV == o->type) {
         mpr_dev d = (mpr_dev)o;
-        if (d->is_local) {
+        if (d->obj.is_local) {
             mpr_net_use_subscribers(n, (mpr_local_dev)d, o->type);
             mpr_dev_send_state(d, MSG_DEV);
         }
@@ -185,7 +184,7 @@ void mpr_obj_push(mpr_obj o)
     }
     else if (o->type & MPR_SIG) {
         mpr_sig s = (mpr_sig)o;
-        if (s->is_local) {
+        if (s->obj.is_local) {
             mpr_type type = ((s->dir == MPR_DIR_OUT) ? MPR_SIG_OUT : MPR_SIG_IN);
             mpr_net_use_subscribers(n, (mpr_local_dev)s->dev, type);
             mpr_sig_send_state(s, MSG_SIG);
@@ -411,7 +410,7 @@ void mpr_obj_free(mpr_obj obj) {
 int mpr_obj_reserve_instances(mpr_obj obj, int num, mpr_id *ids, const char **names, void **data)
 {
     if (!obj->is_local)
-        return;
+        return 0;
     if (obj->type == MPR_SIG)
         return mpr_sig_reserve_inst((mpr_sig)obj, num, ids, names, data);
     trace("Only signals can be instanced for now!");
