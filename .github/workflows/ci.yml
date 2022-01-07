@@ -57,7 +57,7 @@ jobs:
       run: cd test && make tests
     - name: python wheels
       run:
-        cd bindings/python && pip wheel -w ./wheelhouse/
+        cd bindings/python && pip3 wheel . -w ./wheelhouse/
     - uses: actions/upload-artifact@v2
       with:
         path: ./wheelhouse/*.whl
