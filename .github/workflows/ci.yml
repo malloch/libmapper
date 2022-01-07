@@ -64,7 +64,7 @@ jobs:
         && ls wheelhouse
       env:
         CIBW_BUILD: "cp3*"
-        CIBW_BEFORE_BUILD: "cd {package}; for package in $(pwd); do cd $package/../liblo-0.31 && ./configure --prefix=$package/../inst --disable-shared --enable-static --disable-tests --disable-tools --disable-debug --disable-examples CFLAGS=-fPIC && make clean && make install && cd $package/.. && env NOCONFIGURE=1 ./autogen.sh && ./configure PKG_CONFIG_PATH=$package/../inst/lib/pkgconfig --enable-static --disable-shared --disable-tests --disable-jni --disable-docs --disable-audio --disable-debug CFLAGS=-fPIC && make clean && make -C src; done"
+        CIBW_BEFORE_BUILD: "cd {package}; for package in $(pwd); do cd $package/../../liblo-0.31 && ./configure --prefix=$package/../../inst --disable-shared --enable-static --disable-tests --disable-tools --disable-debug --disable-examples CFLAGS=-fPIC && make clean && make install && cd $package/../.. && env NOCONFIGURE=1 ./autogen.sh && ./configure PKG_CONFIG_PATH=$package/../../inst/lib/pkgconfig --enable-static --disable-shared --disable-tests --disable-jni --disable-docs --disable-audio --disable-debug CFLAGS=-fPIC && make clean && make -C src; done"
     - uses: actions/upload-artifact@v2
       with:
         path: ./wheelhouse/*.whl
