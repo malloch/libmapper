@@ -28,7 +28,7 @@ jobs:
         cd bindings/python && pip3 wheel . -w ./wheelhouse/
     - uses: actions/upload-artifact@v2
       with:
-        path: ./wheelhouse/*.whl
+        path: ./bindings/python/wheelhouse/*.whl
 
   MacOS:
     runs-on: macOS-latest
@@ -51,7 +51,7 @@ jobs:
         cd bindings/python && pip3 wheel . -w ./wheelhouse/
     - uses: actions/upload-artifact@v2
       with:
-        path: ./wheelhouse/*.whl
+        path: ./bindings/python/wheelhouse/*.whl
   
   MinGW:
     runs-on: ubuntu-latest
