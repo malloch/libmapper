@@ -25,16 +25,7 @@ jobs:
       run: cd test && make tests
     - name: python wheels
       run:
-        sudo apt-get -y install python3-pip python3-setuptools python3-venv
-        && python3 -m pip install git+https://github.com/henryiii/cibuildwheel@henryiii/chore/intreebuild
-        && make clean
-        && rm -rf inst liblo-0.31 && tar -xzf liblo-0.31.tar.gz
-        && python3 -m cibuildwheel --output-dir wheelhouse ./bindings/python
-        && ls wheelhouse
-      env:
-        CIBW_BUILD: "cp3*"
-        CIBW_BEFORE_ALL: "yum install -y libtool automake autoconf zlib-devel"
-        CIBW_BEFORE_BUILD: "cd {package}; for package in $(pwd); do cd $package/../liblo-0.31 && ./configure --prefix=$package/../inst --disable-shared --enable-static --disable-tests --disable-tools --disable-debug --disable-examples CFLAGS=-fPIC && make clean && make install && cd $package/.. && env NOCONFIGURE=1 ./autogen.sh && ./configure PKG_CONFIG_PATH=$package/../inst/lib/pkgconfig --enable-static --disable-shared --disable-tests --disable-jni --disable-docs --disable-audio --disable-debug CFLAGS=-fPIC && make clean && make -C src; done"
+        cd bindings/python && pip3 wheel . -w ./wheelhouse/
     - uses: actions/upload-artifact@v2
       with:
         path: ./wheelhouse/*.whl
