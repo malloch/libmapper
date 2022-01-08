@@ -48,8 +48,7 @@ jobs:
       run: cd test && make tests
     - name: python wheels
       run:
-        cd bindings/python && pip3 wheel . -w ./wheelhouse/ && pip3 install delocate
-        && delocate-listdeps ./wheelhouse/*.whl && delocate-wheel -v ./wheelhouse/*.whl
+        cd bindings/python && pip3 wheel . -w ./wheelhouse/
     - uses: actions/upload-artifact@v2
       with:
         path: ./bindings/python/wheelhouse/*.whl
