@@ -146,12 +146,12 @@ void mpr_rtr_process_sig(mpr_rtr rtr, mpr_local_sig sig, int idmap_idx, const vo
 
             /* send release to upstream */
             for (j = 0; j < map->num_src; j++) {
-                slot = map->src[j];
-                if (!slot->sig->use_inst)
+                mpr_local_slot slot2 = map->src[j];
+                if (!slot2->sig->use_inst)
                     continue;
 
                 /* reset associated input memory */
-                mpr_value_reset_inst(&slot->val, inst_idx);
+                mpr_value_reset_inst(&slot2->val, inst_idx);
 
                 if (!in_scope)
                     continue;
@@ -159,9 +159,9 @@ void mpr_rtr_process_sig(mpr_rtr rtr, mpr_local_sig sig, int idmap_idx, const vo
                 if (sig->idmaps[idmap_idx].status & RELEASED_REMOTELY)
                     continue;
 
-                if (slot->dir == MPR_DIR_IN) {
-                    msg = mpr_map_build_msg(map, slot, 0, 0, idmap);
-                    mpr_link_add_msg(slot->link, slot->sig, msg, t, map->protocol, bundle_idx);
+                if (slot2->dir == MPR_DIR_IN) {
+                    msg = mpr_map_build_msg(map, slot2, 0, 0, idmap);
+                    mpr_link_add_msg(slot2->link, slot2->sig, msg, t, map, bundle_idx);
                 }
             }
 
@@ -172,12 +172,13 @@ void mpr_rtr_process_sig(mpr_rtr rtr, mpr_local_sig sig, int idmap_idx, const vo
             mpr_value_reset_inst(&dst_slot->val, inst_idx);
 
             /* send release to downstream */
-            if (slot->dir == MPR_DIR_OUT) {
+            if (dst_slot->dir == MPR_DIR_OUT) {
                 msg = 0;
                 if (in_scope) {
+                    if (MPR_LOC_DST != map->process_loc)
+                        slot = 0;
                     msg = mpr_map_build_msg(map, slot, 0, 0, idmap);
-                    mpr_link_add_msg(dst_slot->link, dst_slot->sig, msg, t, map->protocol,
-                                     bundle_idx);
+                    mpr_link_add_msg(dst_slot->link, dst_slot->sig, msg, t, map, bundle_idx);
                 }
             }
         }
@@ -213,7 +214,7 @@ void mpr_rtr_process_sig(mpr_rtr rtr, mpr_local_sig sig, int idmap_idx, const vo
             char *types = alloca(sig->len * sizeof(char));
             memset(types, sig->type, sig->len);
             msg = mpr_map_build_msg(map, slot, val, types, sig->use_inst ? idmap : 0);
-            mpr_link_add_msg(map->dst->link, map->dst->sig, msg, t, map->protocol, bundle_idx);
+            mpr_link_add_msg(map->dst->link, map->dst->sig, msg, t, map, bundle_idx);
             continue;
         }
 
@@ -360,15 +361,9 @@ void mpr_rtr_add_map(mpr_rtr rtr, mpr_local_map map)
         map->obj.id = _get_unused_map_id(rtr->dev, rtr);
 
     /* assign indices to source slots */
-    if (local_dst) {
-        for (i = 0; i < map->num_src; i++)
-            map->src[i]->id = map->dst->rsig->id_counter++;
-    }
-    else {
-        /* may be overwritten later by message */
-        for (i = 0; i < map->num_src; i++)
-            map->src[i]->id = i;
-    }
+    /* may be overwritten later by message */
+    for (i = 0; i < map->num_src; i++)
+        map->src[i]->idx = i;
 
     /* add scopes */
     scope_count = 0;
@@ -482,8 +477,8 @@ int mpr_rtr_remove_map(mpr_rtr rtr, mpr_local_map map)
         if (map->dst->rsig) {
             lo_message msg = mpr_map_build_msg(map, 0, 0, 0, map->idmap);
             mpr_dev_bundle_start(t, NULL);
-            mpr_dev_handler(NULL, lo_message_get_types(msg), lo_message_get_argv(msg),
-                            lo_message_get_argc(msg), msg, (void*)map->dst->sig);
+            mpr_dev_sig_handler(NULL, lo_message_get_types(msg), lo_message_get_argv(msg),
+                                lo_message_get_argc(msg), msg, (void*)map->dst->sig);
             lo_message_free(msg);
         }
         if (map->dst->dir == MPR_DIR_OUT || map->is_local_only)
@@ -588,27 +583,4 @@ int mpr_rtr_loop_check(mpr_rtr rtr, mpr_local_sig sig, int num_remotes, const ch
         }
     }
     return 0;
-}
-
-/* TODO: speed this up with sorted slots and binary search */
-mpr_local_slot mpr_rtr_get_slot(mpr_rtr rtr, mpr_local_sig sig, int slot_id)
-{
-    int i, j;
-    mpr_local_map map;
-    mpr_rtr_sig rs = _find_rtr_sig(rtr, sig);
-    RETURN_ARG_UNLESS(rs, NULL);
-    for (i = 0; i < rs->num_slots; i++) {
-        /* Check if signal direction matches the slot direction. This handles both 'incoming'
-         * destination slots (for processing map updates) and outgoing source slots (for
-         * processing 'downstream instance release' events). */
-        if (!rs->slots[i] || sig->dir != rs->slots[i]->dir)
-            continue;
-        map = rs->slots[i]->map;
-        /* check incoming slots for this map */
-        for (j = 0; j < map->num_src; j++) {
-            if ((int)map->src[j]->id == slot_id)
-                return map->src[j];
-        }
-    }
-    return NULL;
 }

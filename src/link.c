@@ -102,9 +102,10 @@ void mpr_link_free(mpr_link link)
 /* note on memory handling of mpr_link_add_msg():
  * message: will be owned, will be freed when done */
 void mpr_link_add_msg(mpr_link link, mpr_sig dst, lo_message msg, mpr_time t,
-                      mpr_proto proto, int idx)
+                      mpr_local_map map, int idx)
 {
     lo_bundle *b;
+    mpr_proto proto = map->protocol;
     RETURN_UNLESS(msg);
     if (link->devs[0] == link->devs[1])
         proto = MPR_PROTO_UDP;
@@ -113,7 +114,9 @@ void mpr_link_add_msg(mpr_link link, mpr_sig dst, lo_message msg, mpr_time t,
     b = (proto == MPR_PROTO_UDP) ? &link->bundles[idx].udp : &link->bundles[idx].tcp;
     if (!(*b))
         *b = lo_bundle_new(t);
-    lo_bundle_add_message(*b, dst->path, msg);
+    /* TODO: check if remote src slots have rsig (this function is also used for sending instance)
+     * releases upstream. We also need to add a test involving upstream releases. */
+    lo_bundle_add_message(*b, map->expr ? dst->path : "/_m", msg);
 }
 
 /* TODO: pass in bundle index as argument */
@@ -159,8 +162,9 @@ int mpr_link_process_bundles(mpr_link link, mpr_time t, int idx)
             mpr_rtr_sig rs = link->obj.graph->net.rtr->sigs;
             while (rs) {
                 if (0 == strcmp(path, rs->sig->path)) {
-                    mpr_dev_handler(NULL, lo_message_get_types(m), lo_message_get_argv(m),
-                                    lo_message_get_argc(m), m, (void*)rs->sig);
+                    /* TODO: check if we can just pass NULLs for types */
+                    mpr_dev_sig_handler(NULL, lo_message_get_types(m), lo_message_get_argv(m),
+                                        lo_message_get_argc(m), m, (void*)rs->sig);
                     break;
                 }
                 rs = rs->next;

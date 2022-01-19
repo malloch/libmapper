@@ -141,8 +141,11 @@ mpr_id mpr_dev_get_unused_sig_id(mpr_local_dev dev);
 int mpr_dev_add_link(mpr_dev dev, mpr_dev rem);
 void mpr_dev_remove_link(mpr_dev dev, mpr_dev rem);
 
-int mpr_dev_handler(const char *path, const char *types, lo_arg **argv, int argc,
-                    lo_message msg, void *data);
+int mpr_dev_sig_handler(const char *path, const char *types, lo_arg **argv, int argc,
+                        lo_message msg, void *data);
+
+int mpr_dev_map_handler(const char *path, const char *types, lo_arg **argv, int argc,
+                        lo_message msg, void *data);
 
 int mpr_dev_bundle_start(lo_timetag t, void *data);
 
@@ -227,8 +230,6 @@ void mpr_rtr_add_map(mpr_rtr rtr, mpr_local_map map);
 void mpr_rtr_remove_link(mpr_rtr rtr, mpr_link lnk);
 
 int mpr_rtr_remove_map(mpr_rtr rtr, mpr_local_map map);
-
-mpr_local_slot mpr_rtr_get_slot(mpr_rtr rtr, mpr_local_sig sig, int slot_num);
 
 int mpr_rtr_loop_check(mpr_rtr rtr, mpr_local_sig sig, int n_remote, const char **remote);
 
@@ -315,7 +316,8 @@ void mpr_link_connect(mpr_link link, const char *host, int admin_port,
                       int data_port);
 void mpr_link_free(mpr_link link);
 int mpr_link_process_bundles(mpr_link link, mpr_time t, int idx);
-void mpr_link_add_msg(mpr_link link, mpr_sig dst, lo_message msg, mpr_time t, mpr_proto proto, int idx);
+void mpr_link_add_msg(mpr_link link, mpr_sig dst, lo_message msg, mpr_time t,
+                      mpr_local_map map, int idx);
 
 mpr_link mpr_graph_add_link(mpr_graph g, mpr_dev dev1, mpr_dev dev2);
 

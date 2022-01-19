@@ -24,7 +24,7 @@ mpr_slot mpr_slot_new(mpr_map map, mpr_sig sig, unsigned char is_local, unsigned
 
 static int slot_mask(mpr_slot slot)
 {
-    return slot == slot->map->dst ? DST_SLOT_PROP : SRC_SLOT_PROP(slot->id);
+    return slot == slot->map->dst ? DST_SLOT_PROP : SRC_SLOT_PROP(slot->idx);
 }
 
 void mpr_slot_free(mpr_slot slot)
@@ -102,10 +102,10 @@ void mpr_slot_add_props_to_msg(lo_message msg, mpr_slot slot, int is_dst)
     char temp[32];
     if (is_dst)
         snprintf(temp, 32, "@dst");
-    else if (0 == (int)slot->id)
+    else if (0 == (int)slot->idx)
         snprintf(temp, 32, "@src");
     else
-        snprintf(temp, 32, "@src.%d", (int)slot->id);
+        snprintf(temp, 32, "@src.%d", (int)slot->idx);
     len = strlen(temp);
 
     if (slot->sig->is_local) {
@@ -136,10 +136,10 @@ void mpr_slot_print(mpr_slot slot, int is_dst)
     char temp[16];
     if (is_dst)
         snprintf(temp, 16, "@dst");
-    else if (0 == (int)slot->id)
+    else if (0 == (int)slot->idx)
         snprintf(temp, 16, "@src");
     else
-        snprintf(temp, 16, "@src.%d", (int)slot->id);
+        snprintf(temp, 16, "@src.%d", (int)slot->idx);
 
     printf(", %s%s=%d", temp, mpr_prop_as_str(MPR_PROP_LEN, 0), slot->sig->type);
     printf(", %s%s=%c", temp, mpr_prop_as_str(MPR_PROP_TYPE, 0), slot->sig->type);

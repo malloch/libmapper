@@ -683,9 +683,9 @@ mpr_map mpr_graph_add_map(mpr_graph g, mpr_id id, int num_src, const char **src_
             mpr_list maps;
             /* slots should be in alphabetical order */
             qsort(map->src, map->num_src, sizeof(mpr_slot), _compare_slot_names);
-            /* fix slot ids */
+            /* fix slot idxs */
             for (i = 0; i < num_src; i++)
-                map->src[i]->id = i;
+                map->src[i]->idx = i;
             /* check again if this mirrors a staged map */
             maps = mpr_list_from_data(g->maps);
             while (maps) {

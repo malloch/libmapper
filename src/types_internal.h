@@ -420,7 +420,7 @@ typedef struct _mpr_link {
 #define MPR_SLOT_STRUCT_ITEMS                                                   \
     mpr_sig sig;                    /*!< Pointer to parent signal */            \
     mpr_link link;                                                              \
-    int id;                                                                     \
+    int idx;                                                                    \
     uint8_t num_inst;                                                           \
     char dir;                       /*!< DI_INCOMING or DI_OUTGOING */          \
     char causes_update;             /*!< 1 if causes update, 0 otherwise. */    \
