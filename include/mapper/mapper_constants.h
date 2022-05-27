@@ -30,6 +30,8 @@ enum {
     MPR_FLT             = 'f',  /* 0x66 */  /*!< 32-bit floating point. */
     MPR_INT64           = 'h',  /* 0x68 */  /*!< 64-bit integer. */
     MPR_INT32           = 'i',  /* 0x69 */  /*!< 32-bit integer. */
+    MPR_QUAT32          = 'q',  /* 0x71 */  /*!< Quaternion. */
+    MPR_QUAT64          = 'Q',  /* 0x51 */  /*!< Double-precision quaternion. */
     MPR_STR             = 's',  /* 0x73 */  /*!< String. */
     MPR_TIME            = 't',  /* 0x74 */  /*!< 64-bit NTP timestamp. */
     MPR_PTR             = 'v',  /* 0x76 */  /*!< pointer. */
