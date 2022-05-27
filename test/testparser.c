@@ -1363,6 +1363,34 @@ int run_tests()
     if (parse_and_eval(EXPECT_FAILURE, 0, 1, iterations))
         return 1;
 
+    /* 103) quaternion multiplication */
+    set_expr_str("q1=[0.877583,0,0.479426,0];q2=[0.877583,0.479426,0,0];y=qmult(q1,q2);");
+    setup_test(MPR_FLT, 1, MPR_FLT, 4);
+    expect_flt[0] = 0.770151972771f;
+    expect_flt[1] = 0.420736193657f;
+    expect_flt[2] = 0.420736134052f;
+    expect_flt[3] = -0.229849368334f;
+    if (parse_and_eval(EXPECT_SUCCESS, 0, 1, iterations))
+        return 1;
+
+    /* 104) quaternion slerp */
+    set_expr_str("q1=[0.877583,0,0.479426,0];q2=[0.877583,0.479426,0,0];y=qslerp(q1,q2,0.5);");
+    setup_test(MPR_FLT, 1, MPR_FLT, 4);
+    expect_flt[0] = 0.932819902897f;
+    expect_flt[1] = 0.254800498486f;
+    expect_flt[2] = 0.254801571369f;
+    expect_flt[3] = 0.f;
+    if (parse_and_eval(EXPECT_SUCCESS, 0, 1, iterations))
+        return 1;
+
+    setup_test(MPR_FLT, 1, MPR_FLT, 4);
+    expect_flt[0] = 0.932819902897f;
+    expect_flt[1] = 0.254800498486f;
+    expect_flt[2] = 0.254801571369f;
+    expect_flt[3] = 0.f;
+    if (parse_and_eval(EXPECT_SUCCESS, 0, 1, iterations))
+        return 1;
+
     return 0;
 }
 

@@ -176,6 +176,8 @@ EXTREMA_VFUNC(vmind, <, double, d)
 
 #define powd pow
 #define sqrtd sqrt
+#define cosd cos
+#define sind sin
 #define acosd acos
 
 #define NORM_VFUNC(NAME, TYPE, T)                                   \
@@ -254,6 +256,110 @@ static void NAME(mpr_expr_val stk, uint8_t *dim, int idx, int inc)  \
 SUMNUM_VFUNC(vsumnumi, int, i)
 SUMNUM_VFUNC(vsumnumf, float, f)
 SUMNUM_VFUNC(vsumnumd, double, d)
+
+/* Fast quaternion multiplication adapted from:
+ * http://www.j3d.org/matrix_faq/matrfaq_latest.html#Q53 */
+#define MULT_QFUNC(NAME, TYPE, T)                                   \
+static void NAME(mpr_expr_val stk, uint8_t *dim, int idx, int inc)  \
+{                                                                   \
+    mpr_expr_val l = stk + idx * inc, r = l + inc;                  \
+    TYPE ww = (l[3].T + l[1].T) * (r[1].T + r[2].T);                \
+    TYPE yy = (l[0].T - l[2].T) * (r[0].T + r[3].T);                \
+    TYPE zz = (l[0].T + l[2].T) * (r[0].T - r[3].T);                \
+    TYPE xx = ww + yy + zz;                                         \
+    TYPE qq = 0.5 * (xx + (l[3].T - l[1].T) * (r[1].T - r[2].T));   \
+    TYPE w = qq - ww + (l[3].T - l[2].T) * (r[2].T - r[3].T);       \
+    TYPE x = qq - xx + (l[1].T + l[0].T) * (r[1].T + r[0].T);       \
+    TYPE y = qq - yy + (l[0].T - l[1].T) * (r[2].T + r[3].T);       \
+    TYPE z = qq - zz + (l[3].T + l[2].T) * (r[0].T - r[1].T);       \
+    l[0].T = w;                                                     \
+    l[1].T = x;                                                     \
+    l[2].T = y;                                                     \
+    l[3].T = z;                                                     \
+}
+MULT_QFUNC(qmultf, float, f)
+MULT_QFUNC(qmultd, double, d)
+
+#define CONJ_QFUNC(NAME, TYPE, T)                                   \
+static void NAME(mpr_expr_val stk, uint8_t *dim, int idx, int inc)  \
+{                                                                   \
+    mpr_expr_val q = stk + idx * inc;                               \
+    q[1].T *= -1;                                                   \
+    q[2].T *= -1;                                                   \
+    q[3].T *= -1;                                                   \
+}
+CONJ_QFUNC(qconjf, float, f)
+CONJ_QFUNC(qconjd, double, d)
+
+#define qmagf(Q) (sqrt(Q[0].f * Q[0].f + Q[1].f * Q[1].f + Q[2].f * Q[2].f + Q[3].f * Q[3].f))
+#define qmagd(Q) (sqrt(Q[0].d * Q[0].d + Q[1].d * Q[1].d + Q[2].d * Q[2].d + Q[3].d * Q[3].d))
+#define qinvmagf(Q) (1. / qmagf(Q))
+#define qinvmagd(Q) (1. / qmagd(Q))
+
+#define INV_QFUNC(NAME, TYPE, T)                                    \
+static void NAME(mpr_expr_val stk, uint8_t *dim, int idx, int inc)  \
+{                                                                   \
+    mpr_expr_val q = stk + idx * inc;                               \
+    TYPE m = qmag##T(q);                                            \
+    if (m == 0)                                                     \
+        return;                                                     \
+    m = 1. / m;                                                     \
+    q[0].T *= m;                                                    \
+    m *= -1.;                                                       \
+    q[1].T *= m;                                                    \
+    q[2].T *= m;                                                    \
+    q[3].T *= m;                                                    \
+}
+INV_QFUNC(qinvf, float, f)
+INV_QFUNC(qinvd, double, d)
+
+#define SLERP_QFUNC(NAME, TYPE, T)                                                              \
+static void NAME(mpr_expr_val stk, uint8_t *dim, int idx, int inc)                              \
+{                                                                                               \
+    mpr_expr_val l = stk + idx * inc, r = l + inc;                                              \
+    TYPE w = (r + inc)[0].T;                                                                    \
+    int i;                                                                                      \
+    TYPE dot = l[0].T * r[0].T + l[1].T * r[1].T + l[2].T * r[2].T + l[3].T * r[3].T;           \
+    if (dot < 0.) {                                                                             \
+        for (i = 0; i < 4; i++)                                                                 \
+            r[i].T *= -1.;                                                                      \
+        dot = l[0].T * r[0].T + l[1].T * r[1].T + l[2].T * r[2].T + l[3].T * r[3].T;            \
+    }                                                                                           \
+    if (dot > 0.9995) {                                                                         \
+        l[0].T += (r[0].T - l[0].T) * w;                                                        \
+        l[1].T += (r[1].T - l[1].T) * w;                                                        \
+        l[2].T += (r[2].T - l[2].T) * w;                                                        \
+        l[3].T += (r[3].T - l[3].T) * w;                                                        \
+        /* normalize */                                                                         \
+        TYPE m = qmag##T(l);                                                                    \
+        if (0 == m)                                                                             \
+            return;                                                                             \
+        m = 1. / m;                                                                             \
+        for (i = 0; i < 4; i++)                                                                 \
+            l[i].T *= m;                                                                        \
+        return;                                                                                 \
+    }                                                                                           \
+    else if (dot > 1)                                                                           \
+        dot = 1.;                                                                               \
+    else if (dot < -1)                                                                          \
+        dot = -1.;                                                                              \
+    TYPE theta0 = acos##T(dot);                                                                 \
+    /*TYPE theta = (0. < theta0 && theta0 < (M_PI * 0.5)) ? theta0 * w : (theta0 - M_PI) * w;*/ \
+    TYPE theta = theta0 * w;                                                                    \
+    TYPE o[4];                                                                                  \
+    for (i = 0; i < 4; i++)                                                                     \
+        o[i] = r[i].T - l[i].T * dot;                                                           \
+    /* normalize */                                                                             \
+    TYPE invmag = 1. / sqrt##T(o[0] * o[0] + o[1] * o[1] + o[2] * o[2] + o[3] * o[3]);          \
+    for (i = 0; i < 4; i++)                                                                     \
+        o[i] *= invmag;                                                                         \
+    TYPE costheta = cos##T(theta);                                                              \
+    TYPE sintheta = sin##T(theta);                                                              \
+    for (i = 0; i < 4; i++)                                                                     \
+       l[i].T = l[i].T * costheta + o[i] * sintheta;                                            \
+}
+SLERP_QFUNC(qslerpf, float, f)
+SLERP_QFUNC(qslerpd, double, d)
 
 #define TYPED_EMA(TYPE, T)                              \
 static TYPE ema##T(TYPE memory, TYPE val, TYPE weight)  \
@@ -444,6 +550,10 @@ typedef enum {
     VFN_SUMNUM,
     VFN_ANGLE,
     VFN_DOT,
+    QFN_CONJ,
+    QFN_INV,
+    QFN_MUL,
+    QFN_SLERP,
     N_VFN
 } expr_vfn_t;
 
@@ -452,22 +562,27 @@ static struct {
     uint8_t arity;
     uint8_t reduce; /* TODO: use bitflags */
     uint8_t dot_notation;
+    uint8_t len;
     void (*fn_int)(mpr_expr_val, uint8_t*, int, int);
     void (*fn_flt)(mpr_expr_val, uint8_t*, int, int);
     void (*fn_dbl)(mpr_expr_val, uint8_t*, int, int);
 } vfn_tbl[] = {
-    { "all",    1, 1, 1, valli,    vallf,    valld    },
-    { "any",    1, 1, 1, vanyi,    vanyf,    vanyd    },
-    { "center", 1, 1, 1, 0,        vcenterf, vcenterd },
-    { "max",    1, 1, 1, vmaxi,    vmaxf,    vmaxd    },
-    { "mean",   1, 1, 1, 0,        vmeanf,   vmeand   },
-    { "min",    1, 1, 1, vmini,    vminf,    vmind    },
-    { "sum",    1, 1, 1, vsumi,    vsumf,    vsumd    },
-    { "norm",   1, 1, 1, 0,        vnormf,   vnormd   },
-    { "maxmin", 3, 0, 0, vmaxmini, vmaxminf, vmaxmind },
-    { "sumnum", 3, 0, 0, vsumnumi, vsumnumf, vsumnumd },
-    { "angle",  2, 1, 0, 0,        vanglef,  vangled  },
-    { "dot",    2, 1, 0, vdoti,    vdotf,    vdotd    }
+    { "all",    1, 1, 1, 0, valli,    vallf,    valld    },
+    { "any",    1, 1, 1, 0, vanyi,    vanyf,    vanyd    },
+    { "center", 1, 1, 1, 0, 0,        vcenterf, vcenterd },
+    { "max",    1, 1, 1, 0, vmaxi,    vmaxf,    vmaxd    },
+    { "mean",   1, 1, 1, 0, 0,        vmeanf,   vmeand   },
+    { "min",    1, 1, 1, 0, vmini,    vminf,    vmind    },
+    { "sum",    1, 1, 1, 0, vsumi,    vsumf,    vsumd    },
+    { "norm",   1, 1, 1, 0, 0,        vnormf,   vnormd   },
+    { "maxmin", 3, 0, 0, 0, vmaxmini, vmaxminf, vmaxmind },
+    { "sumnum", 3, 0, 0, 0, vsumnumi, vsumnumf, vsumnumd },
+    { "angle",  2, 1, 0, 2, 0,        vanglef,  vangled  },
+    { "dot",    2, 1, 0, 0, vdoti,    vdotf,    vdotd    },
+    { "qconj",  1, 0, 0, 4, 0,        qconjf,   qconjd   },
+    { "qinv",   1, 0, 0, 4, 0,        qinvf,    qinvd    },
+    { "qmult",  2, 0, 0, 4, 0,        qmultf,   qmultd   },
+    { "qslerp", 3, 0, 0, 4, 0,        qslerpf,  qslerpd  }
 };
 
 typedef enum {
@@ -1881,7 +1996,7 @@ static int check_type(mpr_expr_stack eval_stk, mpr_token_t *stk, int sp, mpr_var
     }
 
     if (!(stk[sp].gen.flags & VEC_LEN_LOCKED)) {
-        if (stk[sp].toktype != TOK_VFN)
+        if (TOK_VFN != stk[sp].toktype || !vfn_tbl[stk[sp].fn.idx].reduce)
             stk[sp].gen.vec_len = vec_len;
     }
     /* if stack within bounds of arity was only constants, we're ok to compute */
@@ -2394,7 +2509,6 @@ mpr_expr mpr_expr_new_from_str(mpr_expr_stack eval_stk, const char *str, int n_i
                     tok.gen.datatype = in_types[slot];
                     tok.gen.vec_len = (TOK_VAR == tok.toktype) ? in_vec_lens[slot] : 1;
                     in_vec_len = tok.gen.vec_len;
-                    tok.gen.flags |= VEC_LEN_LOCKED;
                     is_const = 0;
                 }
                 else if (tok.var.idx == VAR_Y) {
@@ -2514,8 +2628,8 @@ mpr_expr mpr_expr_new_from_str(mpr_expr_stack eval_stk, const char *str, int n_i
                 tok.toktype = TOK_VFN;
                 tok.gen.datatype = vfn_tbl[tok.fn.idx].fn_int ? MPR_INT32 : MPR_FLT;
                 tok.fn.arity = vfn_tbl[tok.fn.idx].arity;
-                if (VFN_ANGLE == tok.fn.idx) {
-                    tok.gen.vec_len = 2;
+                if (vfn_tbl[tok.fn.idx].len) {
+                    tok.gen.vec_len = vfn_tbl[tok.fn.idx].len;
                     tok.gen.flags |= VEC_LEN_LOCKED;
                 }
                 else
@@ -2663,6 +2777,7 @@ mpr_expr mpr_expr_new_from_str(mpr_expr_stack eval_stk, const char *str, int n_i
                                     x_ref = 1;
                                     /* upgrade vector length to maximum */
                                     out[out_idx - i].var.vec_len = max_vec_len;
+                                    out[out_idx - i].gen.flags |= VEC_LEN_LOCKED;
                                 }
                             }
                             {FAIL_IF(!x_ref, "signal reduce requires reference to input 'x'.");}
