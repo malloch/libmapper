@@ -6,6 +6,11 @@
 #include <limits.h>
 
 #include "mapper_internal.h"
+#include "mapper_list.h"
+#include "mapper_router.h"
+#include "mapper_slot.h"
+#include "mapper_table.h"
+#include "mapper_time.h"
 #include "types_internal.h"
 #include <mapper/mapper.h>
 

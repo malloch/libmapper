@@ -4,6 +4,7 @@
 #include <string.h>
 
 #include "mapper_internal.h"
+#include "mapper_list.h"
 
 /* we will sort so that indexed records come before keyed records */
 static int compare_rec(const void *l, const void *r)

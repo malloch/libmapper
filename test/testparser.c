@@ -111,6 +111,7 @@ static void seed_srand()
 {
     unsigned int s;
     double d;
+    mpr_time t;
 
 #ifndef WIN32
     FILE *f = fopen("/dev/urandom", "rb");

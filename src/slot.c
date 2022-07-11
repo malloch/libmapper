@@ -6,6 +6,8 @@
 #include <limits.h>
 
 #include "mapper_internal.h"
+#include "mapper_slot.h"
+#include "mapper_table.h"
 #include "types_internal.h"
 #include <mapper/mapper.h>
 

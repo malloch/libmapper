@@ -4,6 +4,9 @@
 #include <assert.h>
 
 #include "mapper_internal.h"
+#include "mapper_list.h"
+#include "mapper_slot.h"
+#include "mapper_table.h"
 #include "types_internal.h"
 
 mpr_graph mpr_obj_get_graph(mpr_obj o)

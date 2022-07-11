@@ -9,6 +9,11 @@
 
 #endif
 #include "mapper_internal.h"
+#include "mapper_list.h"
+#include "mapper_router.h"
+#include "mapper_slot.h"
+#include "mapper_table.h"
+#include "mapper_time.h"
 
 #ifdef HAVE_LIBPTHREAD
 #include <pthread.h>

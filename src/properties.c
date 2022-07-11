@@ -5,6 +5,7 @@
 #include <assert.h>
 
 #include "types_internal.h"
+#include "mapper_list.h"
 #include "mapper_internal.h"
 
 #ifdef DEBUG

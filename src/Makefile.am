@@ -1,6 +1,11 @@
 
 noinst_HEADERS = mapper_internal.h \
-    types_internal.h
+    types_internal.h \
+    mapper_list.h \
+    mapper_router.h \
+    mapper_slot.h \
+    mapper_table.h \
+    mapper_time.h
 EXTRA_DIST = libmapper.def
 
 if WINDOWS_DLL

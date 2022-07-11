@@ -5,6 +5,8 @@
 #include <lo/lo.h>
 
 #include "mapper_internal.h"
+#include "mapper_router.h"
+#include "mapper_slot.h"
 #include "types_internal.h"
 #include <mapper/mapper.h>
 
