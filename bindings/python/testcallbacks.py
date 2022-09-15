@@ -64,3 +64,5 @@ for i in range(100):
 
 src.free()
 dst.free()
+
+print('done')
