@@ -137,7 +137,7 @@ mpr_dev mpr_dev_new(const char *name_prefix, mpr_graph g)
     dev->prefix = strdup(name_prefix);
     mpr_dev_start_servers(dev);
 
-    if (!dev->servers[SERVER_UDP] || !dev->servers[SERVER_TCP]) {
+    if (!dev->servers[SERVER_DATA_UDP] || !dev->servers[SERVER_DATA_TCP]) {
         mpr_dev_free((mpr_dev)dev);
         return NULL;
     }
@@ -197,6 +197,7 @@ void mpr_dev_free(mpr_dev dev)
     while (ldev->subscribers) {
         mpr_subscriber sub = ldev->subscribers;
         FUNC_IF(lo_address_free, sub->addr);
+        FUNC_IF(lo_address_free, sub->addr_alt);
         ldev->subscribers = sub->next;
         free(sub);
     }
@@ -256,8 +257,8 @@ void mpr_dev_free(mpr_dev dev)
 
     mpr_expr_stack_free(ldev->expr_stack);
 
-    FUNC_IF(lo_server_free, ldev->servers[SERVER_UDP]);
-    FUNC_IF(lo_server_free, ldev->servers[SERVER_TCP]);
+    FUNC_IF(lo_server_free, ldev->servers[SERVER_DATA_UDP]);
+    FUNC_IF(lo_server_free, ldev->servers[SERVER_DATA_TCP]);
 
     mpr_graph_remove_dev(gph, dev, MPR_OBJ_REM, 1);
     if (!gph->own)
@@ -585,16 +586,16 @@ mpr_id mpr_dev_get_unused_sig_id(mpr_local_dev dev)
 void mpr_dev_add_sig_methods(mpr_local_dev dev, mpr_local_sig sig)
 {
     RETURN_UNLESS(sig && sig->is_local);
-    lo_server_add_method(dev->servers[SERVER_UDP], sig->path, NULL, mpr_dev_handler, (void*)sig);
-    lo_server_add_method(dev->servers[SERVER_TCP], sig->path, NULL, mpr_dev_handler, (void*)sig);
+    lo_server_add_method(dev->servers[SERVER_DATA_UDP], sig->path, NULL, mpr_dev_handler, (void*)sig);
+    lo_server_add_method(dev->servers[SERVER_DATA_TCP], sig->path, NULL, mpr_dev_handler, (void*)sig);
     ++dev->n_output_callbacks;
 }
 
 void mpr_dev_remove_sig_methods(mpr_local_dev dev, mpr_local_sig sig)
 {
     RETURN_UNLESS(sig && sig->is_local);
-    lo_server_del_method(dev->servers[SERVER_UDP], sig->path, NULL);
-    lo_server_del_method(dev->servers[SERVER_TCP], sig->path, NULL);
+    lo_server_del_method(dev->servers[SERVER_DATA_UDP], sig->path, NULL);
+    lo_server_del_method(dev->servers[SERVER_DATA_TCP], sig->path, NULL);
     --dev->n_output_callbacks;
 }
 
@@ -753,7 +754,7 @@ void mpr_dev_update_maps(mpr_dev dev) {
 
 int mpr_dev_poll(mpr_dev dev, int block_ms)
 {
-    int admin_count = 0, device_count = 0, status[4];
+    int admin_count = 0, device_count = 0, status[5];
     mpr_local_dev ldev = (mpr_local_dev)dev;
     mpr_net net;
     RETURN_ARG_UNLESS(dev && dev->is_local, 0);
@@ -762,8 +763,8 @@ int mpr_dev_poll(mpr_dev dev, int block_ms)
     mpr_graph_housekeeping(dev->obj.graph);
 
     if (!ldev->registered) {
-        if (lo_servers_recv_noblock(net->servers, status, 2, block_ms)) {
-            admin_count = (status[0] > 0) + (status[1] > 0);
+        if (lo_servers_recv_noblock(net->servers, status, 3, block_ms)) {
+            admin_count = (status[0] > 0) + (status[1] > 0) + (status[2] > 0);
             net->msgs_recvd |= admin_count;
         }
         ldev->bundle_idx = 1;
@@ -777,9 +778,9 @@ int mpr_dev_poll(mpr_dev dev, int block_ms)
     ldev->polling = 0;
 
     if (!block_ms) {
-        if (lo_servers_recv_noblock(ldev->servers, status, 4, 0)) {
-            admin_count = (status[0] > 0) + (status[1] > 0);
-            device_count = (status[2] > 0) + (status[3] > 0);
+        if (lo_servers_recv_noblock(ldev->servers, status, 5, 0)) {
+            admin_count = (status[0] > 0) + (status[1] > 0) + (status[2] > 0);
+            device_count = (status[3] > 0) + (status[4] > 0);
             net->msgs_recvd |= admin_count;
         }
     }
@@ -791,9 +792,9 @@ int mpr_dev_poll(mpr_dev dev, int block_ms)
             if (left_ms > 100)
                 left_ms = 100;
             ldev->polling = 1;
-            if (lo_servers_recv_noblock(ldev->servers, status, 4, left_ms)) {
-                admin_count += (status[0] > 0) + (status[1] > 0);
-                device_count += (status[2] > 0) + (status[3] > 0);
+            if (lo_servers_recv_noblock(ldev->servers, status, 5, left_ms)) {
+                admin_count += (status[0] > 0) + (status[1] > 0) + (status[2] > 0);
+                device_count += (status[3] > 0) + (status[4] > 0);
             }
             /* check if any signal update bundles need to be sent */
             _process_incoming_maps(ldev);
@@ -815,8 +816,8 @@ int mpr_dev_poll(mpr_dev dev, int block_ms)
      * now, but perhaps could be a heuristic based on a recent number of
      * messages per channel per poll. */
     while (device_count < (dev->num_inputs + ldev->n_output_callbacks)*1
-           && (lo_servers_recv_noblock(ldev->servers, &status[2], 2, 0)))
-        device_count += (status[2] > 0) + (status[3] > 0);
+           && (lo_servers_recv_noblock(ldev->servers, status, 2, 0)))
+        device_count += (status[0] > 0) + (status[1] > 0);
 
     /* process incoming maps */
     ldev->polling = 1;
@@ -1065,43 +1066,43 @@ mpr_id_map mpr_dev_get_idmap_by_GID(mpr_local_dev dev, int group, mpr_id GID)
 /* Internal LibLo error handler */
 static void handler_error(int num, const char *msg, const char *where)
 {
-    trace_net("[libmapper] liblo server error %d in path %s: %s\n", num, where, msg);
+    trace("[libmapper] liblo server error %d in path %s: %s\n", num, where, msg);
 }
 
 static void mpr_dev_start_servers(mpr_local_dev dev)
 {
     int portnum;
     char port[16], *pport = 0, *url, *host;
-    if (!dev->servers[SERVER_UDP] && !dev->servers[SERVER_TCP]) {
-        while (!(dev->servers[SERVER_UDP] = lo_server_new(pport, handler_error)))
+    if (!dev->servers[SERVER_DATA_UDP] && !dev->servers[SERVER_DATA_TCP]) {
+        while (!(dev->servers[SERVER_DATA_UDP] = lo_server_new(pport, handler_error)))
             pport = 0;
-        snprintf(port, 16, "%d", lo_server_get_port(dev->servers[SERVER_UDP]));
+        snprintf(port, 16, "%d", lo_server_get_port(dev->servers[SERVER_DATA_UDP]));
         pport = port;
-        while (!(dev->servers[SERVER_TCP] = lo_server_new_with_proto(pport, LO_TCP, handler_error)))
+        while (!(dev->servers[SERVER_DATA_TCP] = lo_server_new_with_proto(pport, LO_TCP, handler_error)))
             pport = 0;
 
         /* Disable liblo message queueing */
-        lo_server_enable_queue(dev->servers[SERVER_UDP], 0, 1);
-        lo_server_enable_queue(dev->servers[SERVER_TCP], 0, 1);
+        lo_server_enable_queue(dev->servers[SERVER_DATA_UDP], 0, 1);
+        lo_server_enable_queue(dev->servers[SERVER_DATA_TCP], 0, 1);
 
         /* Add bundle handlers */
-        lo_server_add_bundle_handlers(dev->servers[SERVER_UDP], mpr_dev_bundle_start, NULL, (void*)dev);
-        lo_server_add_bundle_handlers(dev->servers[SERVER_TCP], mpr_dev_bundle_start, NULL, (void*)dev);
+        lo_server_add_bundle_handlers(dev->servers[SERVER_DATA_UDP], mpr_dev_bundle_start, NULL, (void*)dev);
+        lo_server_add_bundle_handlers(dev->servers[SERVER_DATA_TCP], mpr_dev_bundle_start, NULL, (void*)dev);
     }
 
-    portnum = lo_server_get_port(dev->servers[SERVER_UDP]);
+    portnum = lo_server_get_port(dev->servers[SERVER_DATA_UDP]);
     mpr_tbl_set(dev->obj.props.synced, PROP(PORT), NULL, 1, MPR_INT32, &portnum, NON_MODIFIABLE);
 
     trace_dev(dev, "bound to UDP port %i\n", portnum);
-    trace_dev(dev, "bound to TCP port %i\n", lo_server_get_port(dev->servers[SERVER_TCP]));
+    trace_dev(dev, "bound to TCP port %i\n", lo_server_get_port(dev->servers[SERVER_DATA_TCP]));
 
-    url = lo_server_get_url(dev->servers[SERVER_UDP]);
+    url = lo_server_get_url(dev->servers[SERVER_DATA_UDP]);
     host = lo_url_get_hostname(url);
     mpr_tbl_set(dev->obj.props.synced, PROP(HOST), NULL, 1, MPR_STR, host, NON_MODIFIABLE);
     free(host);
     free(url);
 
-    memcpy(dev->servers + 2, dev->obj.graph->net.servers, sizeof(lo_server) * 2);
+    memcpy(dev->servers + 2, dev->obj.graph->net.servers, sizeof(lo_server) * 3);
 }
 
 const char *mpr_dev_get_name(mpr_dev dev)
@@ -1307,27 +1308,30 @@ void mpr_dev_manage_subscriber(mpr_local_dev dev, lo_address addr, int flags,
                                int timeout_sec, int revision)
 {
     mpr_time t;
-    mpr_net net;
-    mpr_subscriber *s = &dev->subscribers;
+    mpr_net net = &dev->obj.graph->net;
+    mpr_subscriber sub = NULL, *sublist = &dev->subscribers;
     const char *ip = lo_address_get_hostname(addr);
     const char *port = lo_address_get_port(addr);
     RETURN_UNLESS(ip && port);
     mpr_time_set(&t, MPR_NOW);
 
     if (timeout_sec >= 0) {
-        while (*s) {
-            const char *s_ip = lo_address_get_hostname((*s)->addr);
-            const char *s_port = lo_address_get_port((*s)->addr);
+        const char *s_ip;
+        const char *s_port;
+        while (*sublist) {
+            sub = *sublist;
+            s_ip = lo_address_get_hostname(sub->addr);
+            s_port = lo_address_get_port(sub->addr);
             if (strcmp(ip, s_ip)==0 && strcmp(port, s_port)==0) {
                 /* subscriber already exists */
                 if (!flags || !timeout_sec) {
                     /* remove subscription */
-                    mpr_subscriber temp = *s;
-                    int prev_flags = temp->flags;
+                    int prev_flags = sub->flags;
                     trace_dev(dev, "removing subscription from %s:%s\n", s_ip, s_port);
-                    *s = temp->next;
-                    FUNC_IF(lo_address_free, temp->addr);
-                    free(temp);
+                    *sublist = sub->next;
+                    FUNC_IF(lo_address_free, sub->addr);
+                    FUNC_IF(lo_address_free, sub->addr_alt);
+                    free(sub);
                     RETURN_UNLESS(flags && (flags &= ~prev_flags));
                 }
                 else {
@@ -1338,37 +1342,59 @@ void mpr_dev_manage_subscriber(mpr_local_dev dev, lo_address addr, int flags,
                               s_ip, s_port, timeout_sec);
                     print_subscription_flags(flags);
     #endif
-                    (*s)->lease_exp = t.sec + timeout_sec;
-                    flags &= ~(*s)->flags;
-                    (*s)->flags = temp;
+                    sub->lease_exp = t.sec + timeout_sec;
+                    flags &= ~sub->flags;
+                    sub->flags = temp;
+
+                    if (sub->addr_alt) {
+                        if (LO_TCP == lo_address_get_protocol(addr)) {
+                            /* remove UDP address and make TCP the default */
+                            trace_dev(dev, "upgrading subscription to TCP only.\n");
+                            lo_address_free(sub->addr);
+                            sub->addr = sub->addr_alt;
+                            sub->addr_alt = NULL;
+                        }
+                        else {
+                            /* remove alternate address if TCP comms have failed */
+                            trace_dev(dev, "setting subscription to UDP only.\n");
+                            lo_address_free(sub->addr_alt);
+                            sub->addr_alt = NULL;
+                        }
+                    }
                 }
                 break;
             }
-            s = &(*s)->next;
+            sublist = &sub->next;
         }
     }
 
     RETURN_UNLESS(flags);
 
-    if (!(*s) && timeout_sec > 0) {
+    if (!sub && timeout_sec > 0) {
         /* add new subscriber */
 #ifdef DEBUG
         trace_dev(dev, "adding new subscription from %s:%s with flags ", ip, port);
         print_subscription_flags(flags);
 #endif
-        mpr_subscriber sub = malloc(sizeof(struct _mpr_subscriber));
+        sub = malloc(sizeof(struct _mpr_subscriber));
         sub->addr = lo_address_new(ip, port);
+        sub->addr_alt = lo_address_new_with_proto(LO_TCP, ip, port);
+        lo_address_set_tcp_nodelay(sub->addr_alt, 1);
         sub->lease_exp = t.sec + timeout_sec;
         sub->flags = flags;
         sub->next = dev->subscribers;
         dev->subscribers = sub;
-    }
 
-    /* bring new subscriber up to date */
-    net = &dev->obj.graph->net;
+        /* try a /sync message on TCP */
+        mpr_net_use_mesh(net, sub->addr_alt);
+        mpr_net_send_device_sync(net, dev);
+    }
+    if (sub)
+        addr = sub->addr;
+
+    /* bring subscriber up to date */
     mpr_net_use_mesh(net, addr);
     mpr_dev_send_state((mpr_dev)dev, MSG_DEV);
-    mpr_net_send(net);
 
     if (flags & MPR_SIG) {
         mpr_dir dir = 0;
@@ -1376,9 +1402,7 @@ void mpr_dev_manage_subscriber(mpr_local_dev dev, lo_address addr, int flags,
             dir |= MPR_DIR_IN;
         if (flags & MPR_SIG_OUT)
             dir |= MPR_DIR_OUT;
-        mpr_net_use_mesh(net, addr);
         mpr_dev_send_sigs(dev, dir);
-        mpr_net_send(net);
     }
     if (flags & MPR_MAP) {
         mpr_dir dir = 0;
@@ -1386,8 +1410,7 @@ void mpr_dev_manage_subscriber(mpr_local_dev dev, lo_address addr, int flags,
             dir |= MPR_DIR_IN;
         if (flags & MPR_MAP_OUT)
             dir |= MPR_DIR_OUT;
-        mpr_net_use_mesh(net, addr);
         mpr_dev_send_maps(dev, dir, MSG_MAPPED);
-        mpr_net_send(net);
     }
+    mpr_net_send(net);
 }

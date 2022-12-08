@@ -56,11 +56,13 @@ void mpr_link_init(mpr_link link)
 
     msg = lo_message_new();
     if (!msg) {
-        trace_net("couldn't allocate lo_message\n");
+        trace("couldn't allocate lo_message\n");
         return;
     }
 
     lo_message_add_string(msg, "device");
+    lo_message_add_string(msg, "@port");
+    lo_message_add_int32(msg, lo_server_get_port(net->servers[SERVER_MESH_TCP]));
     mpr_net_use_bus(net);
     mpr_net_add_msg(net, cmd, 0, msg);
     mpr_net_send(net);
@@ -75,10 +77,13 @@ void mpr_link_connect(mpr_link link, const char *host, int admin_port, int data_
         mpr_tbl_set(link->devs[REMOTE_DEV]->obj.props.synced, MPR_PROP_PORT, NULL, 1,
                     MPR_INT32, &data_port, REMOTE_MODIFY);
         sprintf(str, "%d", data_port);
-        link->addr.udp = lo_address_new(host, str);
-        link->addr.tcp = lo_address_new_with_proto(LO_TCP, host, str);
+        link->addr.data_udp = lo_address_new(host, str);
+        link->addr.data_tcp = lo_address_new_with_proto(LO_TCP, host, str);
+        lo_address_set_tcp_nodelay(link->addr.data_tcp, 1);
         sprintf(str, "%d", admin_port);
         link->addr.admin = lo_address_new(host, str);
+        link->addr.admin_alt = lo_address_new_with_proto(LO_TCP, host, str);
+        lo_address_set_tcp_nodelay(link->addr.admin_alt, 1);
         trace_dev(link->devs[LOCAL_DEV], "activated link to device '%s' at %s:%d\n",
                   link->devs[REMOTE_DEV]->name, host, data_port);
     }
@@ -98,8 +103,9 @@ void mpr_link_free(mpr_link link)
     if (!link->devs[LOCAL_DEV]->is_local)
         return;
     FUNC_IF(lo_address_free, link->addr.admin);
-    FUNC_IF(lo_address_free, link->addr.udp);
-    FUNC_IF(lo_address_free, link->addr.tcp);
+    FUNC_IF(lo_address_free, link->addr.admin_alt);
+    FUNC_IF(lo_address_free, link->addr.data_udp);
+    FUNC_IF(lo_address_free, link->addr.data_tcp);
     for (i = 0; i < NUM_BUNDLES; i++) {
         FUNC_IF(lo_bundle_free_recursive, link->bundles[i].udp);
         FUNC_IF(lo_bundle_free_recursive, link->bundles[i].tcp);
@@ -141,7 +147,7 @@ int mpr_link_process_bundles(mpr_link link, mpr_time t, int idx)
         if ((lb = b->udp)) {
             b->udp = 0;
             if ((num = lo_bundle_count(lb))) {
-                lo_send_bundle_from(link->addr.udp, ldev->servers[SERVER_UDP], lb);
+                lo_send_bundle_from(link->addr.data_udp, ldev->servers[SERVER_DATA_UDP], lb);
             }
             lo_bundle_free_recursive(lb);
         }
@@ -149,7 +155,7 @@ int mpr_link_process_bundles(mpr_link link, mpr_time t, int idx)
             b->tcp = 0;
             if ((tmp = lo_bundle_count(lb))) {
                 num += tmp;
-                lo_send_bundle_from(link->addr.tcp, ldev->servers[SERVER_TCP], lb);
+                lo_send_bundle_from(link->addr.data_tcp, ldev->servers[SERVER_DATA_TCP], lb);
             }
             lo_bundle_free_recursive(lb);
         }

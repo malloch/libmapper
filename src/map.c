@@ -1220,7 +1220,7 @@ static void _check_status(mpr_local_map m)
         m->dst->status |= MPR_STATUS_LENGTH_KNOWN;
     if (m->dst->sig->type)
         m->dst->status |= MPR_STATUS_TYPE_KNOWN;
-    if (m->dst->rsig || (m->dst->link && m->dst->link->addr.udp))
+    if (m->dst->rsig || (m->dst->link && m->dst->link->addr.data_udp))
         m->dst->status |= MPR_STATUS_LINK_KNOWN;
     m->status &= (m->dst->status | mask);
 
@@ -1229,7 +1229,7 @@ static void _check_status(mpr_local_map m)
             m->src[i]->status |= MPR_STATUS_LENGTH_KNOWN;
         if (m->src[i]->sig->type)
             m->src[i]->status |= MPR_STATUS_TYPE_KNOWN;
-        if (m->src[i]->rsig || (m->src[i]->link && m->src[i]->link->addr.udp))
+        if (m->src[i]->rsig || (m->src[i]->link && m->src[i]->link->addr.data_udp))
             m->src[i]->status |= MPR_STATUS_LINK_KNOWN;
         m->status &= (m->src[i]->status | mask);
     }
@@ -1522,7 +1522,7 @@ int mpr_map_send_state(mpr_map m, int slot, net_msg_t cmd)
         return slot;
     msg = lo_message_new();
     if (!msg) {
-        trace_net("couldn't allocate lo_message\n");
+        trace("couldn't allocate lo_message\n");
         return slot;
     }
     snprintf(dst_name, 256, "%s%s", m->dst->sig->dev->name, m->dst->sig->path);

@@ -105,16 +105,18 @@ typedef struct _mpr_subscription {
 } *mpr_subscription;
 
 #define SERVER_BUS      0   /* Multicast comms. */
-#define SERVER_MESH     1   /* Mesh comms. */
+#define SERVER_MESH_UDP 1   /* UDP Mesh comms. */
+#define SERVER_MESH_TCP 2   /* TCP Mesh comms. */
+#define NUM_NET_SERVERS 3
 
-#define SERVER_UDP      0
-#define SERVER_TCP      1
+#define SERVER_DATA_UDP 0
+#define SERVER_DATA_TCP 1
 
 /*! A structure that keeps information about network communications. */
 typedef struct _mpr_net {
     struct _mpr_graph *graph;
 
-    lo_server servers[2];
+    lo_server servers[3];
 
     struct {
         lo_address bus;             /*!< LibLo address for the multicast bus. */
@@ -216,6 +218,7 @@ typedef struct _mpr_sync_clock_t {
 typedef struct _mpr_subscriber {
     struct _mpr_subscriber *next;
     lo_address addr;
+    lo_address addr_alt;
     uint32_t lease_exp;
     int flags;
 } *mpr_subscriber;
@@ -374,9 +377,10 @@ typedef struct _mpr_link {
     int num_maps[2];
 
     struct {
-        lo_address admin;               /*!< Network address of remote endpoint */
-        lo_address udp;                 /*!< Network address of remote endpoint */
-        lo_address tcp;                 /*!< Network address of remote endpoint */
+        lo_address admin;           /*!< Network address of remote endpoint */
+        lo_address admin_alt;       /*!< Alternate network address of remote endpoint */
+        lo_address data_udp;        /*!< Network address of remote endpoint */
+        lo_address data_tcp;        /*!< Network address of remote endpoint */
     } addr;
 
     int is_local_only;

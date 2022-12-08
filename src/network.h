@@ -20,15 +20,17 @@ void mpr_net_add_msg(mpr_net n, const char *str, net_msg_t cmd, lo_message msg);
 
 void mpr_net_send(mpr_net n);
 
+void mpr_net_send_device_sync(mpr_net net, mpr_local_dev dev);
+
 void mpr_net_free_msgs(mpr_net n);
 
 void mpr_net_free(mpr_net n);
 
-#define NEW_LO_MSG(VARNAME, FAIL)                   \
-lo_message VARNAME = lo_message_new();              \
-if (!VARNAME) {                                     \
-    trace_net("couldn't allocate lo_message\n");    \
-    FAIL;                                           \
+#define NEW_LO_MSG(VARNAME, FAIL)           \
+lo_message VARNAME = lo_message_new();      \
+if (!VARNAME) {                             \
+    trace("couldn't allocate lo_message\n");\
+    FAIL;                                   \
 }
 
 #endif /* __MAPPER_NETWORK_H__ */

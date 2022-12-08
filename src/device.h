@@ -51,7 +51,7 @@ struct _mpr_dev {
 struct _mpr_local_dev {
     MPR_DEV_STRUCT_ITEMS
 
-    lo_server servers[4];
+    lo_server servers[5];
 
     mpr_allocated_t ordinal_allocator;  /*!< A unique ordinal for this device instance. */
     int registered;                     /*!< Non-zero if this device has been registered. */
