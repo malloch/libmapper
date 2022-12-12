@@ -212,7 +212,10 @@ void mpr_obj_push(mpr_obj o)
             mpr_dev_send_state(d, MSG_DEV);
         }
         else {
-            mpr_net_use_bus(n);
+            if (d->addr)
+                mpr_net_use_mesh(n, d->addr);
+            else
+                mpr_net_use_bus(n);
             mpr_dev_send_state(d, MSG_DEV_MOD);
         }
     }
@@ -225,13 +228,20 @@ void mpr_obj_push(mpr_obj o)
             mpr_sig_send_state(s, MSG_SIG);
         }
         else {
-            mpr_net_use_bus(n);
+            if (s->dev->addr)
+                mpr_net_use_mesh(n, s->dev->addr);
+            else
+                mpr_net_use_bus(n);
             mpr_sig_send_state(s, MSG_SIG_MOD);
         }
     }
     else if (o->type & MPR_MAP) {
         mpr_map m = (mpr_map)o;
-        mpr_net_use_bus(n);
+        lo_address a = mpr_map_get_mesh_addr(m);
+        if (a)
+            mpr_net_use_mesh(n, a);
+        else
+            mpr_net_use_bus(n);
         if (m->status >= MPR_STATUS_ACTIVE)
             mpr_map_send_state(m, -1, MSG_MAP_MOD);
         else {

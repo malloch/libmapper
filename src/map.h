@@ -37,4 +37,6 @@ void mpr_map_free(mpr_map map);
 /*! Prepare a lo_message for sending based on a map struct. */
 const char *mpr_map_prepare_msg(mpr_map map, lo_message msg, int slot_idx);
 
+lo_address mpr_map_get_mesh_addr(mpr_map map);
+
 #endif /* __MAPPER_MAP_H__ */

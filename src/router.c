@@ -69,13 +69,13 @@ void mpr_rtr_num_inst_changed(mpr_rtr rtr, mpr_local_sig sig, int size)
 
         if (MPR_DIR_OUT == map->dst->dir) {
             /* Inform remote destination */
-            mpr_net_use_mesh(rtr->net, map->dst->link->addr.admin);
+            mpr_net_use_mesh(rtr->net, map->dst->link->remote_dev->addr);
             mpr_map_send_state((mpr_map)map, -1, MSG_MAPPED);
         }
         else {
             /* Inform remote sources */
             for (i = 0; i < map->num_src; i++) {
-                mpr_net_use_mesh(rtr->net, map->src[i]->link->addr.admin);
+                mpr_net_use_mesh(rtr->net, map->src[i]->link->remote_dev->addr);
                 i = mpr_map_send_state((mpr_map)map, ((mpr_local_map)map)->one_src ? -1 : i,
                                        MSG_MAPPED);
             }

@@ -94,4 +94,6 @@ int mpr_graph_subscribed_by_dev(mpr_graph g, const char *name);
 
 int mpr_graph_subscribed_by_sig(mpr_graph g, const char *name);
 
+void mpr_graph_send_subscribe_msg(mpr_graph g, mpr_dev d, int flags, int timeout);
+
 #endif /* __MAPPER_GRAPH_H__ */

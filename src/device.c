@@ -131,6 +131,7 @@ mpr_dev mpr_dev_new(const char *name_prefix, mpr_graph g)
     dev->obj.type = MPR_DEV;
     dev->obj.graph = g;
     dev->is_local = 1;
+    dev->addr = NULL;
 
     init_dev_prop_tbl((mpr_dev)dev);
 
@@ -196,8 +197,8 @@ void mpr_dev_free(mpr_dev dev)
     /* remove subscribers */
     while (ldev->subscribers) {
         mpr_subscriber sub = ldev->subscribers;
-        FUNC_IF(lo_address_free, sub->addr);
-        FUNC_IF(lo_address_free, sub->addr_alt);
+        if (sub->addr && LO_UDP == lo_address_get_protocol(sub->addr))
+            lo_address_free(sub->addr);
         ldev->subscribers = sub->next;
         free(sub);
     }
@@ -1312,6 +1313,7 @@ void mpr_dev_manage_subscriber(mpr_local_dev dev, lo_address addr, int flags,
     mpr_subscriber sub = NULL, *sublist = &dev->subscribers;
     const char *ip = lo_address_get_hostname(addr);
     const char *port = lo_address_get_port(addr);
+    int proto = lo_address_get_protocol(addr);
     RETURN_UNLESS(ip && port);
     mpr_time_set(&t, MPR_NOW);
 
@@ -1329,10 +1331,11 @@ void mpr_dev_manage_subscriber(mpr_local_dev dev, lo_address addr, int flags,
                     int prev_flags = sub->flags;
                     trace_dev(dev, "removing subscription from %s:%s\n", s_ip, s_port);
                     *sublist = sub->next;
-                    FUNC_IF(lo_address_free, sub->addr);
-                    FUNC_IF(lo_address_free, sub->addr_alt);
+                    if (sub->addr && LO_UDP == lo_address_get_protocol(sub->addr))
+                        lo_address_free(sub->addr);
                     free(sub);
                     RETURN_UNLESS(flags && (flags &= ~prev_flags));
+                    sub = *sublist;
                 }
                 else {
                     /* reset timeout */
@@ -1345,26 +1348,11 @@ void mpr_dev_manage_subscriber(mpr_local_dev dev, lo_address addr, int flags,
                     sub->lease_exp = t.sec + timeout_sec;
                     flags &= ~sub->flags;
                     sub->flags = temp;
-
-                    if (sub->addr_alt) {
-                        if (LO_TCP == lo_address_get_protocol(addr)) {
-                            /* remove UDP address and make TCP the default */
-                            trace_dev(dev, "upgrading subscription to TCP only.\n");
-                            lo_address_free(sub->addr);
-                            sub->addr = sub->addr_alt;
-                            sub->addr_alt = NULL;
-                        }
-                        else {
-                            /* remove alternate address if TCP comms have failed */
-                            trace_dev(dev, "setting subscription to UDP only.\n");
-                            lo_address_free(sub->addr_alt);
-                            sub->addr_alt = NULL;
-                        }
-                    }
                 }
                 break;
             }
             sublist = &sub->next;
+            sub = *sublist;
         }
     }
 
@@ -1377,17 +1365,16 @@ void mpr_dev_manage_subscriber(mpr_local_dev dev, lo_address addr, int flags,
         print_subscription_flags(flags);
 #endif
         sub = malloc(sizeof(struct _mpr_subscriber));
-        sub->addr = lo_address_new(ip, port);
-        sub->addr_alt = lo_address_new_with_proto(LO_TCP, ip, port);
-        lo_address_set_tcp_nodelay(sub->addr_alt, 1);
+        if (LO_TCP == proto) {
+            sub->addr = addr;
+            lo_address_set_tcp_nodelay(sub->addr, 1);
+        }
+        else
+            sub->addr = lo_address_new(ip, port);
         sub->lease_exp = t.sec + timeout_sec;
         sub->flags = flags;
         sub->next = dev->subscribers;
         dev->subscribers = sub;
-
-        /* try a /sync message on TCP */
-        mpr_net_use_mesh(net, sub->addr_alt);
-        mpr_net_send_device_sync(net, dev);
     }
     if (sub)
         addr = sub->addr;

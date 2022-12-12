@@ -218,7 +218,6 @@ typedef struct _mpr_sync_clock_t {
 typedef struct _mpr_subscriber {
     struct _mpr_subscriber *next;
     lo_address addr;
-    lo_address addr_alt;
     uint32_t lease_exp;
     int flags;
 } *mpr_subscriber;
@@ -368,17 +367,19 @@ typedef struct _mpr_bundle {
 } mpr_bundle_t, *mpr_bundle;
 
 #define NUM_BUNDLES 1
-#define LOCAL_DEV   0
-#define REMOTE_DEV  1
 
 typedef struct _mpr_link {
     mpr_obj_t obj;                  /* always first */
-    mpr_dev devs[2];
+    union {
+        mpr_dev devs[2];
+        struct {
+            mpr_dev local_dev;
+            mpr_dev remote_dev;
+        };
+    };
     int num_maps[2];
 
     struct {
-        lo_address admin;           /*!< Network address of remote endpoint */
-        lo_address admin_alt;       /*!< Alternate network address of remote endpoint */
         lo_address data_udp;        /*!< Network address of remote endpoint */
         lo_address data_tcp;        /*!< Network address of remote endpoint */
     } addr;

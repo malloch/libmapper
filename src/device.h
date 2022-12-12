@@ -32,6 +32,8 @@
     mpr_dev *linked;                                                    \
     char *prefix;       /*!< The identifier (prefix) for this device. */\
     char *name;         /*!< The full name for this device, or zero. */ \
+    lo_address addr;                                                    \
+    lo_address addr_alt;                                                \
     mpr_time synced;    /*!< Timestamp of last sync. */                 \
     int ordinal;                                                        \
     int num_inputs;     /*!< Number of associated input signals. */     \

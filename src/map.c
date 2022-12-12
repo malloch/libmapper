@@ -237,10 +237,30 @@ mpr_map mpr_map_new(int num_src, mpr_sig *src, int num_dst, mpr_sig *dst)
     return m;
 }
 
+lo_address mpr_map_get_mesh_addr(mpr_map m)
+{
+    int i;
+    if (!m || (m->status <= MPR_STATUS_STAGED && !m->dst->sig->dev->addr))
+        return NULL;
+    if (m->dst->sig->dev->addr) {
+        return m->dst->sig->dev->addr;
+    }
+    for (i = 0; i < m->num_src; i++) {
+        if (m->src[i]->sig->dev->addr) {
+            return m->src[i]->sig->dev->addr;
+        }
+    }
+    return NULL;
+}
+
 /* TODO: if map is local handle locally and don't send unmap to network bus */
 void mpr_map_release(mpr_map m)
 {
-    mpr_net_use_bus(&m->obj.graph->net);
+    lo_address mesh_addr = mpr_map_get_mesh_addr(m);
+    if (mesh_addr)
+        mpr_net_use_mesh(&m->obj.graph->net, mesh_addr);
+    else
+        mpr_net_use_bus(&m->obj.graph->net);
     mpr_map_send_state(m, -1, MSG_UNMAP);
 }
 

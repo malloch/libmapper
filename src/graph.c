@@ -79,19 +79,13 @@ static void _on_dev_autosub(mpr_graph g, mpr_obj o, mpr_graph_evt e, const void 
         mpr_graph_subscribe(g, (mpr_dev)o, 0, 0);
 }
 
-static void set_net_dst(mpr_graph g, mpr_dev d)
+void mpr_graph_send_subscribe_msg(mpr_graph g, mpr_dev d, int flags, int timeout)
 {
-    /* TODO: look up device info, maybe send directly */
-    mpr_net_use_bus(&g->net);
-}
-
-static void send_subscribe_msg(mpr_graph g, mpr_dev d, int flags, int timeout)
-{
+    mpr_net n = &g->net;
     char cmd[1024];
     NEW_LO_MSG(msg, return);
     snprintf(cmd, 1024, "/%s/subscribe", d->name); /* MSG_SUBSCRIBE */
 
-    set_net_dst(g, d);
     if (MPR_OBJ == flags)
         lo_message_add_string(msg, "all");
     else {
@@ -120,8 +114,18 @@ static void send_subscribe_msg(mpr_graph g, mpr_dev d, int flags, int timeout)
     lo_message_add_string(msg, "@version");
     lo_message_add_int32(msg, d->obj.version);
 
-    mpr_net_add_msg(&g->net, cmd, 0, msg);
-    mpr_net_send(&g->net);
+    if (d->addr_alt) {
+        lo_message copy = lo_message_clone(msg);
+        mpr_net_use_mesh(n, d->addr_alt);
+        mpr_net_add_msg(n, cmd, 0, copy);
+        mpr_net_send(n);
+    }
+    if (d->addr)
+        mpr_net_use_mesh(n, d->addr);
+    else
+        mpr_net_use_bus(n);
+    mpr_net_add_msg(n, cmd, 0, msg);
+    mpr_net_send(n);
 }
 
 static void _autosubscribe(mpr_graph g, int flags)
@@ -136,7 +140,7 @@ static void _autosubscribe(mpr_graph g, int flags)
             trace_graph("adjusting flags for existing autorenewing subscription to %s.\n",
                         mpr_dev_get_name(s->dev));
             if (flags & ~s->flags) {
-                send_subscribe_msg(g, s->dev, flags, AUTOSUB_INTERVAL);
+                mpr_graph_send_subscribe_msg(g, s->dev, flags, AUTOSUB_INTERVAL);
                 /* leave 10-second buffer for subscription renewal */
                 s->lease_expiration_sec = (t.sec + AUTOSUB_INTERVAL - 10);
             }
@@ -423,6 +427,7 @@ mpr_dev mpr_graph_add_dev(mpr_graph g, const char *name, mpr_msg msg)
         dev->obj.type = MPR_DEV;
         dev->obj.graph = g;
         dev->is_local = 0;
+        dev->addr = dev->addr_alt = NULL;
         init_dev_prop_tbl(dev);
         trace_graph("added device '%s'\n", name);
         rc = 1;
@@ -473,6 +478,8 @@ void mpr_graph_remove_dev(mpr_graph g, mpr_dev d, mpr_graph_evt e, int quiet)
     FUNC_IF(mpr_tbl_free, d->obj.props.staged);
     FUNC_IF(free, d->linked);
     FUNC_IF(free, d->name);
+    FUNC_IF(lo_address_free, d->addr);
+    FUNC_IF(lo_address_free, d->addr_alt);
     mpr_list_free_item(d);
 }
 
@@ -562,16 +569,16 @@ mpr_link mpr_graph_add_link(mpr_graph g, mpr_dev dev1, mpr_dev dev2)
 
     link = (mpr_link)mpr_list_add_item((void**)&g->links, sizeof(mpr_link_t));
     if (dev2->is_local) {
-        link->devs[LOCAL_DEV] = dev2;
-        link->devs[REMOTE_DEV] = dev1;
+        link->local_dev = dev2;
+        link->remote_dev = dev1;
         if (dev1->is_local)
             link->is_local_only = 1;
         else
             link->is_local_only = 0;
     }
     else {
-        link->devs[LOCAL_DEV] = dev1;
-        link->devs[REMOTE_DEV] = dev2;
+        link->local_dev = dev1;
+        link->remote_dev = dev2;
     }
     link->obj.type = MPR_LINK;
     link->obj.graph = g;
@@ -774,7 +781,8 @@ void mpr_graph_print(mpr_graph g)
            mpr_list_get_size(devs), mpr_list_get_size(sigs));
     mpr_list_free(sigs);
     while (devs) {
-        printf(" └─ ");
+        printf(" └─%s ",
+               LO_TCP == lo_address_get_protocol(((mpr_dev)*devs)->addr) ? "tcp" : "udp");
         mpr_obj_print(*devs, 0);
         sigs = mpr_dev_get_sigs((mpr_dev)*devs, MPR_DIR_ANY);
         while (sigs) {
@@ -850,7 +858,7 @@ void mpr_graph_housekeeping(mpr_graph g)
         if (s->lease_expiration_sec <= t.sec) {
             trace_graph("Automatically renewing subscription to %s for %d secs.\n",
                         mpr_dev_get_name(s->dev), AUTOSUB_INTERVAL);
-            send_subscribe_msg(g, s->dev, s->flags, AUTOSUB_INTERVAL);
+            mpr_graph_send_subscribe_msg(g, s->dev, s->flags, AUTOSUB_INTERVAL);
             /* leave 10-second buffer for subscription renewal */
             s->lease_expiration_sec = (t.sec + AUTOSUB_INTERVAL - 10);
         }
@@ -1024,7 +1032,7 @@ void mpr_graph_subscribe(mpr_graph g, mpr_dev d, int flags, int timeout)
                 temp = *s;
                 *s = temp->next;
                 free(temp);
-                send_subscribe_msg(g, d, 0, 0);
+                mpr_graph_send_subscribe_msg(g, d, 0, 0);
                 return;
             }
             s = &(*s)->next;
@@ -1071,7 +1079,7 @@ void mpr_graph_subscribe(mpr_graph g, mpr_dev d, int flags, int timeout)
     }
 #endif
 
-    send_subscribe_msg(g, d, flags, timeout);
+    mpr_graph_send_subscribe_msg(g, d, flags, timeout);
 }
 
 void mpr_graph_unsubscribe(mpr_graph g, mpr_dev d)
