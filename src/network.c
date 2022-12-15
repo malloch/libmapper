@@ -902,7 +902,7 @@ static int handler_who(const char *path, const char *types, lo_arg **av, int ac,
     mpr_net net = &gph->net;
 
     RETURN_ARG_UNLESS(net->devs, 0);
-    trace_net();
+    trace_net(net);
     mpr_net_maybe_send_ping(net, 1);
     return 0;
 }
@@ -926,7 +926,7 @@ static int handler_dev(const char *path, const char *types, lo_arg **av, int ac,
     net = &graph->net;
     name = &av[0]->s;
 
-    trace_net();
+    trace_net(net);
 
     if (graph->autosub || mpr_graph_subscribed_by_dev(graph, name)) {
         props = mpr_msg_parse_props(ac-1, &types[1], &av[1]);
@@ -1094,7 +1094,7 @@ static int handler_logout(const char *path, const char *types, lo_arg **av,
     mpr_link lnk;
 
     RETURN_ARG_UNLESS(ac && MPR_STR == types[0], 0);
-    trace_net();
+    trace_net(net);
     remote = mpr_graph_get_dev_by_name(gph, &av[0]->s);
     if (net->num_devs) {
         int i = 0, diff, ordinal;
@@ -1141,7 +1141,7 @@ static int handler_subscribe(const char *path, const char *types, lo_arg **av,
     int i, version = -1, flags = 0, timeout_seconds = -1;
 
 #ifdef DEBUG
-    trace_net();
+    trace_net(&dev->obj.graph->net);
     trace_dev(dev, "received /subscribe\n");
 #endif
 
@@ -1202,7 +1202,7 @@ static int handler_sig(const char *path, const char *types, lo_arg **av, int ac,
     int devnamelen;
     mpr_msg props;
 
-    trace_net();
+    trace_net(&gph->net);
 
     RETURN_ARG_UNLESS(ac >= 2 && MPR_STR == types[0], 1);
     full_sig_name = &av[0]->s;
@@ -1423,7 +1423,7 @@ static int handler_name_probe(const char *path, const char *types, lo_arg **av,
     int i, temp_id = av[1]->i;
     mpr_id id = (mpr_id) crc32(0L, (const Bytef *)name, strlen(name)) << 32;
 
-    trace_net();
+    trace_net(net);
     for (i = 0; i < net->num_devs; i++)
         _handler_name_probe(net, net->devs[i], name, temp_id, id);
 
@@ -1655,6 +1655,7 @@ void mpr_net_handle_map(mpr_net net, mpr_local_map map, mpr_msg props)
             trace_dev(dev, "delaying map handshake while waiting for network link.\n");
             continue;
         }
+        trace_dev(dev, "sending /mapTo to remote source.\n");
         mpr_net_use_mesh(net, map->src[i]->link->remote_dev->addr);
         i = mpr_map_send_state((mpr_map)map, map->one_src ? -1 : i, MSG_MAP_TO);
     }
@@ -1674,7 +1675,7 @@ static int handler_map(const char *path, const char *types, lo_arg **av, int ac,
     mpr_msg props;
 
     RETURN_ARG_UNLESS(net->num_devs, 0);
-    trace_net();
+    trace_net(net);
     map = (mpr_local_map)find_map(net, types, ac, av, MPR_LOC_DST, ADD | UPDATE);
     RETURN_ARG_UNLESS(map && MPR_MAP_ERROR != (mpr_map)map, 0);
 
@@ -1685,6 +1686,7 @@ static int handler_map(const char *path, const char *types, lo_arg **av, int ac,
 
     if (map->status >= MPR_STATUS_ACTIVE) {
         /* Forward to handler_map_mod() and stop. */
+        trace("forwarding to modication handler.\n");
         handler_map_mod(path, types, av, ac, msg, user);
         return 0;
     }
@@ -1693,6 +1695,18 @@ static int handler_map(const char *path, const char *types, lo_arg **av, int ac,
     mpr_msg_free(props);
     return 0;
 }
+
+#ifdef DEBUG
+static void address_pp(lo_address a)
+{
+    if (a) {
+        printf("osc.%s://%s:%s\n", LO_TCP == lo_address_get_protocol(a) ? "tcp" : "udp",
+               lo_address_get_hostname(a), lo_address_get_port(a));
+    }
+    else
+        printf("NULL\n");
+}
+#endif
 
 /*! When the /mapTo message is received by a peer device, create a tentative
  *  map and respond with own signal metadata. */
@@ -1703,7 +1717,7 @@ static int handler_map_to(const char *path, const char *types, lo_arg **av,
     mpr_net net = &gph->net;
     mpr_local_map map = (mpr_local_map)find_map(net, types, ac, av, MPR_LOC_ANY, ADD | UPDATE);
 
-    trace_net();
+    trace_net(net);
     RETURN_ARG_UNLESS(map && MPR_MAP_ERROR != (mpr_map)map, 0);
     mpr_rtr_add_map(net->rtr, map);
 
@@ -1717,6 +1731,15 @@ static int handler_map_to(const char *path, const char *types, lo_arg **av,
     if (map->status >= MPR_STATUS_READY) {
         int i;
         if (MPR_DIR_OUT == map->dst->dir) {
+#ifdef DEBUG
+            for (i = 0; i < map->num_src; i++) {
+                if (map->src[i]->sig->is_local) {
+                    trace_dev(map->src[i]->sig->dev, "sending /mapped to remote destination ");
+                    address_pp(map->dst->link->remote_dev->addr);
+                    break;
+                }
+            }
+#endif
             mpr_net_use_mesh(net, map->dst->link->remote_dev->addr);
             mpr_map_send_state((mpr_map)map, -1, MSG_MAPPED);
             for (i = 0; i < map->num_src; i++) {
@@ -1727,6 +1750,10 @@ static int handler_map_to(const char *path, const char *types, lo_arg **av,
         }
         else {
             for (i = 0; i < map->num_src; i++) {
+#ifdef DEBUG
+                trace_dev(map->dst->sig->dev, "sending /mapped to remote source ");
+                address_pp(map->src[i]->link->remote_dev->addr);
+#endif
                 mpr_net_use_mesh(net, map->src[i]->link->remote_dev->addr);
                 i = mpr_map_send_state((mpr_map)map, map->one_src ? -1 : i, MSG_MAPPED);
                 mpr_sig_send_state(map->dst->sig, MSG_SIG);
@@ -1748,7 +1775,7 @@ static int handler_mapped(const char *path, const char *types, lo_arg **av,
     mpr_msg props;
     int i, rc = 0, updated;
 
-    trace_net();
+    trace_net(net);
     map = find_map(net, types, ac, av, 0, UPDATE);
     RETURN_ARG_UNLESS(MPR_MAP_ERROR != map, 0);
     if (!map) {
@@ -1780,7 +1807,7 @@ static int handler_mapped(const char *path, const char *types, lo_arg **av,
     updated = mpr_map_set_from_msg(map, props, 0);
     mpr_msg_free(props);
 #ifdef DEBUG
-    trace("  updated %d map properties. (1)\n", updated);
+    trace("  updated %d properties for %s map. (1)\n", updated, map->is_local ? "local" : "remote");
 #endif
     if (map->is_local) {
         RETURN_ARG_UNLESS(map->status >= MPR_STATUS_READY, 0);
@@ -1790,12 +1817,25 @@ static int handler_mapped(const char *path, const char *types, lo_arg **av,
 
             if (MPR_DIR_OUT == map->dst->dir) {
                 /* Inform remote destination */
+#ifdef DEBUG
+                for (i = 0; i < map->num_src; i++) {
+                    if (map->src[i]->sig->is_local) {
+                        trace_dev(map->src[i]->sig->dev, "sending /mapped to remote destination ");
+                        address_pp(map->dst->link->remote_dev->addr);
+                        break;
+                    }
+                }
+#endif
                 mpr_net_use_mesh(net, map->dst->link->remote_dev->addr);
                 mpr_map_send_state(map, -1, MSG_MAPPED);
             }
             else {
                 /* Inform remote sources */
                 for (i = 0; i < map->num_src; i++) {
+#ifdef DEBUG
+                    trace_dev(map->dst->sig->dev, "sending /mapped to remote source ");
+                    address_pp(map->src[i]->link->remote_dev->addr);
+#endif
                     mpr_net_use_mesh(net, map->src[i]->link->remote_dev->addr);
                     i = mpr_map_send_state(map, ((mpr_local_map)map)->one_src ? -1 : i, MSG_MAPPED);
                 }
@@ -1861,7 +1901,7 @@ static int handler_map_mod(const char *path, const char *types, lo_arg **av,
     int i, updated;
 
     RETURN_ARG_UNLESS(ac >= 4, 0);
-    trace_net();
+    trace_net(net);
 
     map = (mpr_local_map)find_map(net, types, ac, av, MPR_LOC_ANY, FIND);
     RETURN_ARG_UNLESS(map && MPR_MAP_ERROR != (mpr_map)map, 0);
@@ -1966,7 +2006,7 @@ static int handler_unmap(const char *path, const char *types, lo_arg **av,
     mpr_local_map map;
     int i;
 
-    trace_net();
+    trace_net(net);
     map = (mpr_local_map)find_map(net, types, ac, av, MPR_LOC_ANY, FIND);
     /* TODO: make sure dev is actually involved in the map */
     RETURN_ARG_UNLESS(map && MPR_MAP_ERROR != (mpr_map)map, 0);
@@ -2029,7 +2069,7 @@ static int handler_unmapped(const char *path, const char *types, lo_arg **av,
 {
     mpr_graph gph = (mpr_graph)user;
 
-    trace_net();
+    trace_net(&gph->net);
     mpr_map map = find_map(&gph->net, types, ac, av, 0, FIND);
     RETURN_ARG_UNLESS(map && MPR_MAP_ERROR != map, 0);
     mpr_graph_remove_map(gph, map, MPR_OBJ_REM);
@@ -2050,7 +2090,7 @@ static int handler_ping(const char *path, const char *types, lo_arg **av,
     RETURN_ARG_UNLESS(net->num_devs, 0);
     mpr_time_set(&now, MPR_NOW);
     then = lo_message_get_timestamp(msg);
-    trace_net();
+    trace_net(net);
     remote = (mpr_dev)mpr_graph_get_obj(net->graph, av[0]->h, MPR_DEV);
     for (i = 0; i < net->num_devs; i++) {
         mpr_local_dev dev = net->devs[i];
@@ -2064,6 +2104,7 @@ static int handler_ping(const char *path, const char *types, lo_arg **av,
             && LO_TCP == lo_address_get_protocol(lo_message_get_source(msg))) {
             /* remove UDP address and make TCP the default */
             trace("  upgrading link to TCP only.\n");
+            mpr_net_send(net);
             lo_address_free(lnk->remote_dev->addr);
             lnk->remote_dev->addr = lnk->remote_dev->addr_alt;
             lnk->remote_dev->addr_alt = NULL;
@@ -2072,6 +2113,7 @@ static int handler_ping(const char *path, const char *types, lo_arg **av,
             if (lnk->remote_dev->addr_alt) {
                 /* remove alternate address if TCP comms have failed */
                 trace("  setting link to UDP only.\n");
+                mpr_net_send(net);
                 lo_address_free(lnk->remote_dev->addr_alt);
                 lnk->remote_dev->addr_alt = NULL;
             }
@@ -2124,7 +2166,7 @@ static int handler_sync(const char *path, const char *types, lo_arg **av,
     mpr_net net = &graph->net;
 
     RETURN_ARG_UNLESS(net && ac && MPR_STR == types[0], 0);
-    trace_net();
+    trace_net(net);
     graph = net->graph;
     dev = mpr_graph_get_dev_by_name(graph, &av[0]->s);
     if (dev) {
@@ -2135,6 +2177,7 @@ static int handler_sync(const char *path, const char *types, lo_arg **av,
         if (dev->addr && dev->addr_alt) {
             if (LO_TCP == lo_address_get_protocol(lo_message_get_source(msg))) {
                 trace("upgrading device communication to TCP\n");
+                mpr_net_send(net);
                 lo_address tcp = dev->addr_alt;
                 dev->addr_alt = NULL;
 

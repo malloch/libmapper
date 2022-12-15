@@ -33,9 +33,9 @@ if (!(a)) { trace_net(__VA_ARGS__); return ret; }
 #include <assert.h>
 #define trace(...) { printf("-- " __VA_ARGS__); }
 #define trace_graph(...)  { printf("\x1B[31m-- <graph>\x1B[0m " __VA_ARGS__);}
-#define trace_net(...)                                                                      \
+#define trace_net(NET)                                                                      \
 {                                                                                           \
-    printf("\x1B[33m-- <network.%s>",                                                       \
+    printf("\x1B[33m-- <network.%p.%s>", NET,                                               \
            LO_TCP == lo_address_get_protocol(lo_message_get_source(msg)) ? "TCP" : "UDP");  \
     printf("\x1B[0m received %s ", path);                                                   \
     lo_message_pp(msg);                                                                     \
