@@ -1348,6 +1348,7 @@ void mpr_dev_manage_subscriber(mpr_local_dev dev, lo_address addr, int flags,
                     sub->lease_exp = t.sec + timeout_sec;
                     flags &= ~sub->flags;
                     sub->flags = temp;
+                    addr = sub->addr;
                 }
                 break;
             }
@@ -1366,18 +1367,16 @@ void mpr_dev_manage_subscriber(mpr_local_dev dev, lo_address addr, int flags,
 #endif
         sub = malloc(sizeof(struct _mpr_subscriber));
         if (LO_TCP == proto) {
-            sub->addr = addr;
+            addr = sub->addr = addr;
             lo_address_set_tcp_nodelay(sub->addr, 1);
         }
         else
-            sub->addr = lo_address_new(ip, port);
+            addr = sub->addr = lo_address_new(ip, port);
         sub->lease_exp = t.sec + timeout_sec;
         sub->flags = flags;
         sub->next = dev->subscribers;
         dev->subscribers = sub;
     }
-    if (sub)
-        addr = sub->addr;
 
     /* bring subscriber up to date */
     mpr_net_use_mesh(net, addr);

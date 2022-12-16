@@ -160,7 +160,7 @@ mpr_prop mpr_obj_set_prop(mpr_obj o, mpr_prop p, const char *s, int len,
 {
     int local, flags, updated;
     RETURN_ARG_UNLESS(o, 0);
-    /* TODO: ensure ID property can't be changed by user code */
+
     if (MPR_PROP_UNKNOWN == p || !MASK_PROP_BITFLAGS(p)) {
         if (!s || '@' == s[0])
             return MPR_PROP_UNKNOWN;

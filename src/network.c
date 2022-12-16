@@ -512,14 +512,15 @@ void mpr_net_send(mpr_net net)
         while (*sub) {
             if ((*sub)->lease_exp < t.sec || !(*sub)->flags) {
                 /* subscription expired, remove from subscriber list */
-#ifdef DEBUG
-                char *addr = lo_address_get_url((*sub)->addr);
-                trace_dev(net->addr.dev, "removing expired subscription from %s\n", addr);
-                free(addr);
-#endif
                 mpr_subscriber temp = *sub;
                 *sub = temp->next;
-                FUNC_IF(lo_address_free, temp->addr);
+#ifdef DEBUG
+                char *url = lo_address_get_url(temp->addr);
+                trace_dev(net->addr.dev, "removing expired subscription from %s\n", url);
+                free(url);
+#endif
+                if (temp->addr && LO_UDP == lo_address_get_protocol(temp->addr))
+                    lo_address_free(temp->addr);
                 free(temp);
                 continue;
             }
