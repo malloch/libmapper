@@ -965,7 +965,7 @@ static int handler_dev(const char *path, const char *types, lo_arg **av, int ac,
         cpy = mpr_list_get_cpy(links);
         while (cpy) {
             mpr_link link = (mpr_link)*cpy;
-            if (!link->remote_dev->addr)
+            if (!link->is_local_only && !link->addr.data_udp)
                 break;
             cpy = mpr_list_get_next(cpy);
         }
