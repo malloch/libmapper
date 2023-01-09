@@ -197,8 +197,10 @@ void mpr_dev_free(mpr_dev dev)
     /* remove subscribers */
     while (ldev->subscribers) {
         mpr_subscriber sub = ldev->subscribers;
-        if (sub->addr && LO_UDP == lo_address_get_protocol(sub->addr))
+        if (sub->addr && LO_UDP == sub->protocol)
             lo_address_free(sub->addr);
+        FUNC_IF(free, sub->host);
+        FUNC_IF(free, sub->port);
         ldev->subscribers = sub->next;
         free(sub);
     }
@@ -1311,28 +1313,32 @@ void mpr_dev_manage_subscriber(mpr_local_dev dev, lo_address addr, int flags,
     mpr_time t;
     mpr_net net = &dev->obj.graph->net;
     mpr_subscriber sub = NULL, *sublist = &dev->subscribers;
-    const char *ip = lo_address_get_hostname(addr);
+    const char *host = lo_address_get_hostname(addr);
     const char *port = lo_address_get_port(addr);
     int proto = lo_address_get_protocol(addr);
-    RETURN_UNLESS(ip && port);
+    RETURN_UNLESS(host && port);
     mpr_time_set(&t, MPR_NOW);
 
+    trace_dev(dev, "checking subscriber: osc.%s://%s:%s\n",
+              LO_TCP == proto ? "tcp" : "udp", host, port);
+
     if (timeout_sec >= 0) {
-        const char *s_ip;
-        const char *s_port;
         while (*sublist) {
             sub = *sublist;
-            s_ip = lo_address_get_hostname(sub->addr);
-            s_port = lo_address_get_port(sub->addr);
-            if (strcmp(ip, s_ip)==0 && strcmp(port, s_port)==0) {
+            if (!sub->host || !sub->port)
+                { trace_dev(dev, "error: subscription is missing host or port info\n"); }
+            else if (   proto == sub->protocol
+                     && strcmp(host, sub->host)==0 && strcmp(port, sub->port)==0) {
                 /* subscriber already exists */
                 if (!flags || !timeout_sec) {
                     /* remove subscription */
                     int prev_flags = sub->flags;
-                    trace_dev(dev, "removing subscription from %s:%s\n", s_ip, s_port);
+                    trace_dev(dev, "removing subscription from %s:%s\n", sub->host, sub->port);
                     *sublist = sub->next;
-                    if (sub->addr && LO_UDP == lo_address_get_protocol(sub->addr))
+                    if (sub->addr && LO_UDP == sub->protocol)
                         lo_address_free(sub->addr);
+                    FUNC_IF(free, sub->host);
+                    FUNC_IF(free, sub->port);
                     free(sub);
                     RETURN_UNLESS(flags && (flags &= ~prev_flags));
                     sub = *sublist;
@@ -1342,9 +1348,11 @@ void mpr_dev_manage_subscriber(mpr_local_dev dev, lo_address addr, int flags,
                     int temp = flags;
     #ifdef DEBUG
                     trace_dev(dev, "renewing subscription from %s:%s for %d seconds with flags ",
-                              s_ip, s_port, timeout_sec);
+                              sub->host, sub->port, timeout_sec);
                     print_subscription_flags(flags);
     #endif
+                    if (LO_TCP == proto)
+                        sub->addr = addr;
                     sub->lease_exp = t.sec + timeout_sec;
                     flags &= ~sub->flags;
                     sub->flags = temp;
@@ -1362,7 +1370,7 @@ void mpr_dev_manage_subscriber(mpr_local_dev dev, lo_address addr, int flags,
     if (!sub && timeout_sec > 0) {
         /* add new subscriber */
 #ifdef DEBUG
-        trace_dev(dev, "adding new subscription from %s:%s with flags ", ip, port);
+        trace_dev(dev, "adding new subscription from %s:%s with flags ", host, port);
         print_subscription_flags(flags);
 #endif
         sub = malloc(sizeof(struct _mpr_subscriber));
@@ -1371,7 +1379,10 @@ void mpr_dev_manage_subscriber(mpr_local_dev dev, lo_address addr, int flags,
             lo_address_set_tcp_nodelay(sub->addr, 1);
         }
         else
-            addr = sub->addr = lo_address_new(ip, port);
+            addr = sub->addr = lo_address_new(host, port);
+        sub->protocol = proto;
+        sub->host = strdup(lo_address_get_hostname(addr));
+        sub->port = strdup(lo_address_get_port(addr));
         sub->lease_exp = t.sec + timeout_sec;
         sub->flags = flags;
         sub->next = dev->subscribers;

@@ -218,6 +218,9 @@ typedef struct _mpr_sync_clock_t {
 typedef struct _mpr_subscriber {
     struct _mpr_subscriber *next;
     lo_address addr;
+    int protocol;
+    char *host;
+    char *port;
     uint32_t lease_exp;
     int flags;
 } *mpr_subscriber;

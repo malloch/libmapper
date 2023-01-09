@@ -464,30 +464,28 @@ int mpr_net_init(mpr_net net, const char *iface, const char *group, int port)
     FUNC_IF(lo_server_free, temp_server2);
 
     /* Open UDP and TCP servers for mesh-style communications */
-    while (!(temp_server1 = lo_server_new(0, handler_error))) {}
+    if (!net->servers[SERVER_MESH_UDP]) {
+        while (!(temp_server1 = lo_server_new(0, handler_error))) {}
 
-    /* Disable liblo message queueing and add methods. */
-    lo_server_enable_queue(temp_server1, 0, 1);
-    mpr_net_add_graph_methods(net, temp_server1);
+        /* Disable liblo message queueing and add methods. */
+        lo_server_enable_queue(temp_server1, 0, 1);
+        mpr_net_add_graph_methods(net, temp_server1);
 
-    /* Swap and free old server structure if necessary */
-    temp_server2 = net->servers[SERVER_MESH_UDP];
-    net->servers[SERVER_MESH_UDP] = temp_server1;
-    FUNC_IF(lo_server_free, temp_server2);
+        net->servers[SERVER_MESH_UDP] = temp_server1;
+    }
 
-    /* Extract port from UDP admin server. */
-    snprintf(port_str, 10, "%d", lo_server_get_port(temp_server1));
+    if (!net->servers[SERVER_MESH_TCP]) {
+        /* Extract port from UDP admin server. */
+        snprintf(port_str, 10, "%d", lo_server_get_port(temp_server1));
 
-    while (!(temp_server1 = lo_server_new_with_proto(s_port, LO_TCP, handler_error))) {}
+        while (!(temp_server1 = lo_server_new_with_proto(s_port, LO_TCP, handler_error))) {}
 
-    /* Disable liblo message queueing and add methods. */
-    lo_server_enable_queue(temp_server1, 0, 1);
-    mpr_net_add_graph_methods(net, temp_server1);
+        /* Disable liblo message queueing and add methods. */
+        lo_server_enable_queue(temp_server1, 0, 1);
+        mpr_net_add_graph_methods(net, temp_server1);
 
-    /* Swap and free old server structure if necessary */
-    temp_server2 = net->servers[SERVER_MESH_TCP];
-    net->servers[SERVER_MESH_TCP] = temp_server1;
-    FUNC_IF(lo_server_free, temp_server2);
+        net->servers[SERVER_MESH_TCP] = temp_server1;
+    }
 
     for (i = 0; i < net->num_devs; i++)
         mpr_net_add_dev(net, net->devs[i]);
@@ -515,17 +513,16 @@ void mpr_net_send(mpr_net net)
                 mpr_subscriber temp = *sub;
                 *sub = temp->next;
 #ifdef DEBUG
-                char *url = lo_address_get_url(temp->addr);
-                trace_dev(net->addr.dev, "removing expired subscription from %s\n", url);
-                free(url);
+                trace_dev(net->addr.dev, "removing expired subscription from osc.%s://%s:%s\n",
+                          LO_UDP == temp->protocol ? "udp" : "tcp", temp->host, temp->port);
 #endif
-                if (temp->addr && LO_UDP == lo_address_get_protocol(temp->addr))
+                if (temp->addr && LO_UDP == temp->protocol)
                     lo_address_free(temp->addr);
                 free(temp);
                 continue;
             }
             if ((*sub)->flags & net->msg_type) {
-                if (LO_UDP == lo_address_get_protocol((*sub)->addr))
+                if (LO_UDP == (*sub)->protocol)
                     lo_send_bundle_from((*sub)->addr, net->servers[SERVER_MESH_UDP], net->bundle);
                 else
                     lo_send_bundle_from((*sub)->addr, net->servers[SERVER_MESH_TCP], net->bundle);
@@ -750,7 +747,7 @@ static void mpr_net_maybe_send_ping(mpr_net net, int force)
             if (clk->rcvd.msg_id > 0) {
                 if (num_maps)
                     trace_dev(lnk->local_dev, "Lost contact with linked device '%s' "
-                              "(%g seconds since sync).\n", lnk->remote_dev->name, elapsed);
+                              "(%g seconds since link ping).\n", lnk->remote_dev->name, elapsed);
                 /* tentatively mark link as expired */
                 clk->rcvd.msg_id = -1;
                 clk->rcvd.time.sec = now.sec;
@@ -2069,9 +2066,10 @@ static int handler_unmapped(const char *path, const char *types, lo_arg **av,
                             int ac, lo_message msg, void *user)
 {
     mpr_graph gph = (mpr_graph)user;
+    mpr_map map;
 
     trace_net(&gph->net);
-    mpr_map map = find_map(&gph->net, types, ac, av, 0, FIND);
+    map = find_map(&gph->net, types, ac, av, 0, FIND);
     RETURN_ARG_UNLESS(map && MPR_MAP_ERROR != map, 0);
     mpr_graph_remove_map(gph, map, MPR_OBJ_REM);
     return 0;
@@ -2097,10 +2095,11 @@ static int handler_ping(const char *path, const char *types, lo_arg **av,
         mpr_local_dev dev = net->devs[i];
         mpr_sync_clock clk;
         lnk = remote ? mpr_dev_get_link_by_remote(dev, remote) : 0;
-        if (!lnk)
+        if (!lnk || lnk->is_local_only)
             continue;
         clk = &lnk->clock;
-        trace_dev(dev, "ping received from device '%s'\n", lnk->remote_dev->name);
+        trace_graph("  updating sync record for device '%s'\n", lnk->remote_dev->name);
+        mpr_time_set(&lnk->remote_dev->synced, MPR_NOW);
         if (lnk->remote_dev->addr_alt
             && LO_TCP == lo_address_get_protocol(lo_message_get_source(msg))) {
             /* remove UDP address and make TCP the default */
@@ -2111,13 +2110,6 @@ static int handler_ping(const char *path, const char *types, lo_arg **av,
             lnk->remote_dev->addr_alt = NULL;
         }
         if (av[2]->i == clk->sent.msg_id) {
-            if (lnk->remote_dev->addr_alt) {
-                /* remove alternate address if TCP comms have failed */
-                trace("  setting link to UDP only.\n");
-                mpr_net_send(net);
-                lo_address_free(lnk->remote_dev->addr_alt);
-                lnk->remote_dev->addr_alt = NULL;
-            }
             /* total elapsed time since ping sent */
             double elapsed = mpr_time_get_diff(now, clk->sent.time);
             /* assume symmetrical latency */
@@ -2148,11 +2140,16 @@ static int handler_ping(const char *path, const char *types, lo_arg **av,
                     clk->latency = clk->latency * 0.9 + latency * 0.1;
                 }
             }
+            if (lnk->remote_dev->addr_alt) {
+                /* remove alternate address if TCP comms have failed */
+                trace("  setting link to UDP only.\n");
+                mpr_net_send(net);
+                lo_address_free(lnk->remote_dev->addr_alt);
+                lnk->remote_dev->addr_alt = NULL;
+            }
         }
 
         /* update sync status */
-        if (lnk->is_local_only)
-            continue;
         mpr_time_set(&clk->rcvd.time, now);
         clk->rcvd.msg_id = av[1]->i;
     }
@@ -2177,10 +2174,9 @@ static int handler_sync(const char *path, const char *types, lo_arg **av,
 
         if (dev->addr && dev->addr_alt) {
             if (LO_TCP == lo_address_get_protocol(lo_message_get_source(msg))) {
-                trace("upgrading device communication to TCP\n");
-                mpr_net_send(net);
                 lo_address tcp = dev->addr_alt;
                 dev->addr_alt = NULL;
+                trace("upgrading device communication to TCP\n");
 
                 if (dev->subscribed) {
                     /* unsubscribe from udp updates */
