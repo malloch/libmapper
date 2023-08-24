@@ -56,7 +56,7 @@ setup (name         = 'libmapper',
        url          = "http://libmapper.org",
        description  = "A library for representing input and output signals on a network and allowing arbitrary 'mappings' to be dynamically created between them.",
        license      = "GNU LGPL version 2.1 or later",
-       packages     = ["libmapper"],
+       packages     = ["src/libmapper"],
        package_data = {"libmapper": packages},
        cmdclass     = {
         'bdist_wheel': bdist_wheel,
