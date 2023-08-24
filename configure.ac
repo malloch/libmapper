@@ -193,7 +193,7 @@ if test x$enable_python = xyes; then
      3*) PY3=" -py3"; AC_SUBST(PY3)
      esac
      python_explain="($(basename $PYTHON)$PY3)"
-     AC_CONFIG_LINKS([bindings/python/libmapper/__init__.py:bindings/python/libmapper/__init__.py])
+     AC_CONFIG_LINKS([bindings/python/src/libmapper/__init__.py:bindings/python/src/libmapper/__init__.py])
    else
      enable_python=no
      python_explain="(python not found)"
@@ -381,7 +381,7 @@ AM_CONDITIONAL(HAVE_AUDIO, test "x$enable_audio" = xyes)
 AM_CONDITIONAL(ENABLE_THREADS, test "x$enable_threads" = xyes)
 
 AM_COND_IF([HAVE_CSHARP], [AC_CONFIG_FILES(bindings/csharp/Makefile)])
-AM_COND_IF([HAVE_PYTHON], [AC_CONFIG_FILES(bindings/python/Makefile bindings/python/setup.py bindings/python/libmapper/mapper.py)])
+AM_COND_IF([HAVE_PYTHON], [AC_CONFIG_FILES(bindings/python/Makefile bindings/python/setup.py bindings/python/src/libmapper/mapper.py)])
 AM_COND_IF([HAVE_JAVA], [AC_CONFIG_FILES(bindings/java/Makefile bindings/java/mapper/NativeLib.java)])
 
 AC_CONFIG_FILES([

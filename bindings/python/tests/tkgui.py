@@ -1,8 +1,22 @@
 #!/usr/bin/env python
 
 import tkinter
-import sys
-import libmapper as mpr
+
+try:
+    import libmapper as mpr
+except:
+    import sys, os
+    try:
+        # Try the "../src" directory, relative to the location of this
+        # program, which is where it should be if the module has not been installed.
+        sys.path.append(
+                        os.path.join(os.path.join(os.getcwd(),
+                                                  os.path.dirname(sys.argv[0])),
+                                     '../src'))
+        import libmapper as mpr
+    except:
+        print('Error importing libmapper module.')
+        sys.exit(1)
 
 def on_gui_change(x):
     sig_out.set_value(int(x))

@@ -121,7 +121,7 @@ jobs:
       run: cd test && make tests
     - name: python wheels
       run:
-        cp -v $PWD/inst/lib/libmapper.*.dylib bindings/python/libmapper/libmapper.dylib
+        cp -v $PWD/inst/lib/libmapper.*.dylib bindings/python/src/libmapper/libmapper.dylib
         && pip3 install wheel
         && pip3 wheel bindings/python -w ./wheelhouse
         && unzip -t wheelhouse/*.whl
@@ -168,7 +168,7 @@ jobs:
         run:
           mkdir testpython
           && cd testpython
-          && cp ../bindings/python/test*.py .
+          && cp ../bindings/python/tests/test*.py .
           && for i in test*.py; do echo running $i; if ! python3 $i; then exit 1; fi; done
 
   MacOS-Latest-check-wheel:
@@ -196,7 +196,7 @@ jobs:
         run:
           mkdir testpython
           && cd testpython
-          && cp ../bindings/python/test*.py .
+          && cp ../bindings/python/tests/test*.py .
           && for i in test*.py; do echo running $i; if ! python3 $i; then exit 1; fi; done
 
   Windows-Latest-check-wheel:
@@ -223,7 +223,7 @@ jobs:
         run:
           mkdir testpython
           && cd testpython
-          && cp ../bindings/python/test*.py .
+          && cp ../bindings/python/tests/test*.py .
           && python3 ./test.py
           && python3 ./testcallbacks.py
           && python3 ./testconvergent.py

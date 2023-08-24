@@ -1,6 +1,20 @@
 #!/usr/bin/env python
 
-import libmapper as mpr
+try:
+    import libmapper as mpr
+except:
+    import sys, os
+    try:
+        # Try the "../src" directory, relative to the location of this
+        # program, which is where it should be if the module has not been installed.
+        sys.path.append(
+                        os.path.join(os.path.join(os.getcwd(),
+                                                  os.path.dirname(sys.argv[0])),
+                                     '../src'))
+        import libmapper as mpr
+    except:
+        print('Error importing libmapper module.')
+        sys.exit(1)
 
 print('starting test.py')
 print('libmapper version:', mpr.__version__, 'with' if mpr.has_numpy() else 'without', 'numpy support')

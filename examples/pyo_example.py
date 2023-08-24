@@ -10,13 +10,14 @@ import math
 try:
     import libmapper as mpr
 except:
+    import sys, os
     try:
-        # Try the "bindings/python" directory, relative to the location of this
+        # Try the "bindings/python/src" directory, relative to the location of this
         # program, which is where it should be if the module has not been installed.
         sys.path.append(
                         os.path.join(os.path.join(os.getcwd(),
                                                   os.path.dirname(sys.argv[0])),
-                                     '../bindings/python'))
+                                     '../bindings/python/src'))
         import libmapper as mpr
     except:
         print('Error importing libmapper module.')
