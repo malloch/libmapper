@@ -146,7 +146,7 @@ jobs:
         ls
         && cd ./build/test/Release
         && ls
-        && test -qtf
+        && ./test -qtf
     - name: Build python wheel
       run: .\bindings\python\windows_build_wheel.ps1
     - uses: actions/upload-artifact@v3
