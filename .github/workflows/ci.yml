@@ -140,6 +140,10 @@ jobs:
     - name: Run windows PowerShell build script
       shell: pwsh
       run: .\windows_build.ps1
+    - name: run tests
+      run:
+        cd test
+        && ./test -qtf
     - name: Build python wheel
       run: .\bindings\python\windows_build_wheel.ps1
     - uses: actions/upload-artifact@v3
