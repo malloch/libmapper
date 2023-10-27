@@ -141,9 +141,11 @@ jobs:
       shell: pwsh
       run: .\windows_build.ps1
     - name: run tests
+      shell: pwsh
       run:
-        cd test
-        && ./test -qtf
+        cd /build/test/Release
+        && ls
+        && test -qtf
     - name: Build python wheel
       run: .\bindings\python\windows_build_wheel.ps1
     - uses: actions/upload-artifact@v3
