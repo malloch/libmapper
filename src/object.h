@@ -61,4 +61,6 @@ MPR_INLINE static mpr_tbl mpr_obj_get_prop_tbl(mpr_obj obj)
 MPR_INLINE static void mpr_obj_add_props_to_msg(mpr_obj obj, lo_message msg)
     { mpr_tbl_add_to_msg(obj->is_local ? obj->props.synced : 0, obj->props.staged, msg); }
 
+int mpr_obj_get_prop_is_set(mpr_obj obj, mpr_prop prop);
+
 #endif /* __MPR_OBJECT_H__ */

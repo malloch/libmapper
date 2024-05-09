@@ -212,6 +212,8 @@ void loop()
                 num_maps += (mpr_map_get_is_ready(maps[i]));
             }
         }
+        mpr_dev_poll(src, 10);
+        mpr_dev_poll(dst, 10);
     }
 
     i = 0;

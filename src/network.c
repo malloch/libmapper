@@ -845,6 +845,10 @@ static int handler_who(const char *path, const char *types, lo_arg **av, int ac,
 static int handler_dev(const char *path, const char *types, lo_arg **av, int ac,
                        lo_message msg, void *user)
 {
+    printf("handler_dev: ");
+    lo_message_pp(msg);
+    printf("\n");
+
     mpr_net net;
     mpr_dev remote;
     mpr_graph graph = (mpr_graph)user;
@@ -862,6 +866,11 @@ static int handler_dev(const char *path, const char *types, lo_arg **av, int ac,
 
     props = mpr_msg_parse_props(ac-1, &types[1], &av[1]);
     remote = mpr_graph_add_dev(graph, name, props, 0);
+
+    printf("added remote dev: ");
+    mpr_obj_print((mpr_obj)remote, 0);
+    printf("\n");
+
     if (!remote || !net->devs)
         goto done;
     TRACE_NET_RETURN_UNLESS(!mpr_obj_get_is_local((mpr_obj)remote), 0,
@@ -1474,6 +1483,9 @@ static void mpr_net_handle_map(mpr_net net, mpr_local_map map, mpr_msg props)
 static int handler_map(const char *path, const char *types, lo_arg **av, int ac,
                        lo_message msg, void *user)
 {
+    printf("handler_map: ");
+    lo_message_pp(msg);
+    printf("\n");
     mpr_graph gph = (mpr_graph)user;
     mpr_net net = mpr_graph_get_net(gph);
     mpr_local_map map;

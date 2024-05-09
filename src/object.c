@@ -385,3 +385,9 @@ void mpr_obj_print(mpr_obj o, int staged)
     }
     printf("\n");
 }
+
+int mpr_obj_get_prop_is_set(mpr_obj obj, mpr_prop prop)
+{
+    return (   mpr_tbl_get_prop_is_set(obj->props.synced, prop)
+            || mpr_tbl_get_record_by_idx(obj->props.staged, prop, NULL, NULL, NULL, NULL, 0));
+}

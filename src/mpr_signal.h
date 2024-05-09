@@ -75,8 +75,9 @@ int mpr_sig_get_num_inst_internal(mpr_sig sig);
 
 int mpr_sig_get_use_inst(mpr_sig sig);
 
-void mpr_local_sig_set_inst_value(mpr_local_sig sig, mpr_value val, int inst_idx, mpr_id_map id_map,
-                                  int status, int map_manages_inst, mpr_time time);
+mpr_id_map mpr_local_sig_set_inst_value(mpr_local_sig sig, mpr_value val, int inst_idx,
+                                        mpr_id_map id_map, int status, int map_manages_inst,
+                                        mpr_time time);
 
 /* Functions below are only used by testinstance.c for printing instance indices */
 mpr_sig_inst *mpr_local_sig_get_insts(mpr_local_sig sig);
@@ -84,5 +85,8 @@ mpr_sig_inst *mpr_local_sig_get_insts(mpr_local_sig sig);
 uint8_t mpr_sig_inst_get_idx(mpr_sig_inst si);
 
 int mpr_local_sig_get_num_id_maps(mpr_local_sig sig);
+
+lo_message mpr_local_sig_add_to_map_msg(mpr_local_sig sig, lo_message msg,
+                                        mpr_local_map map, mpr_local_slot slot);
 
 #endif /* __MPR_SIGNAL_H__ */

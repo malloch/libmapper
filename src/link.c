@@ -179,6 +179,7 @@ void mpr_link_add_msg(mpr_link link, const char *path, lo_message msg, mpr_time 
     if (!(*b))
         *b = lo_bundle_new(t);
     lo_bundle_add_message(*b, path, msg);
+    // TODO: check size of message and dispatch if necessary!
 }
 
 /* TODO: interrupt driven signal updates may not be followed by mpr_dev_process_outputs(); in the

@@ -13,6 +13,17 @@
 #include <signal.h>
 #include <string.h>
 
+/* NOTES:
+ * src and dst num_inst should be parameterized
+ * cross with ephemeral property?
+ * need to test with 'alive' expression for each config
+ * future: need to add explicit instance indexing in expression
+ *      e.g. `n=n_floor(t_x); y=x#n;` // new instance each second
+ * should 'steal' property be moved to map?
+ *      could avoid overflow handling by signal
+ *      could be matched with max_inst map property
+ */
+
 int verbose = 1;
 int terminate = 0;
 int shared_graph = 0;
@@ -75,91 +86,143 @@ typedef struct _test_config {
     int             same_val;
 } test_config;
 
-#define EXPR1 "alive=n>=5;y=x;n=(n+1)%10;"
+#define EXPR1 "alive=n>=5; y=x;n=(n+1)%10;"
+#define EXPR2 "n=floor(t_x); y=x#n;"
+#define EXPR3 "y#0=x;"
 
 /* TODO: test received values */
 /* TODO: these should work with count_epsilon=0.0 */
 test_config test_configs[] = {
     /* singleton ––> singleton; shouldn't make a difference if map is instanced */
-    {  1, SINGLETON, SINGLETON, SINGLETON, MPR_LOC_SRC, NONE, NULL,  1.0,  1.0,  0.0,   0 },
-    {  2, SINGLETON, SINGLETON, SINGLETON, MPR_LOC_DST, NONE, NULL,  1.0,  1.0,  0.0,   0 },
+    {  1, SINGLETON, SINGLETON, SINGLETON, MPR_LOC_SRC, NONE, NULL,   1.0,  1.0,  0.0,   0 },
+    {  2, SINGLETON, SINGLETON, SINGLETON, MPR_LOC_SRC, NONE, EXPR1,  0.5,  0.5,  0.0,   0 },
+//    {  3, SINGLETON, SINGLETON, SINGLETON, MPR_LOC_SRC, NONE, EXPR2,  1.0,  1.0,  0.0,   0 },
+//    {  4, SINGLETON, SINGLETON, SINGLETON, MPR_LOC_SRC, NONE, EXPR3,  1.0,  1.0,  0.0,   0 },
+
+    {  5, SINGLETON, SINGLETON, SINGLETON, MPR_LOC_DST, NONE, NULL,   1.0,  1.0,  0.0,   0 },
+    {  6, SINGLETON, SINGLETON, SINGLETON, MPR_LOC_DST, NONE, EXPR1,  0.5,  0.5,  0.0,   0 },
+//    {  7, SINGLETON, SINGLETON, SINGLETON, MPR_LOC_DST, NONE, EXPR2,  1.0,  1.0,  0.0,   0 },
+//    {  8, SINGLETON, SINGLETON, SINGLETON, MPR_LOC_DST, NONE, EXPR3,  1.0,  1.0,  0.0,   0 },
 
     /* singleton ==> singleton; shouldn't make a difference if map is instanced */
-    {  3, SINGLETON, SINGLETON, INSTANCED, MPR_LOC_SRC, NONE, NULL,  1.0,  1.0,  0.0,   0 },
-    {  4, SINGLETON, SINGLETON, INSTANCED, MPR_LOC_DST, NONE, NULL,  1.0,  1.0,  0.0,   0 },
+    {  9, SINGLETON, SINGLETON, INSTANCED, MPR_LOC_SRC, NONE, NULL,   1.0,  1.0,  0.0,   0 },
+    { 10, SINGLETON, SINGLETON, INSTANCED, MPR_LOC_SRC, NONE, EXPR1,  0.5,  0.5,  0.0,   0 },
+//    { 11, SINGLETON, SINGLETON, INSTANCED, MPR_LOC_SRC, NONE, EXPR2,  1.0,  1.0,  0.0,   0 },
+//    { 12, SINGLETON, SINGLETON, INSTANCED, MPR_LOC_SRC, NONE, EXPR3,  1.0,  1.0,  0.0,   0 },
+
+    { 13, SINGLETON, SINGLETON, INSTANCED, MPR_LOC_DST, NONE, NULL,   1.0,  1.0,  0.0,   0 },
+    { 14, SINGLETON, SINGLETON, INSTANCED, MPR_LOC_DST, NONE, EXPR1,  0.5,  0.5,  0.0,   0 },
+//    { 15, SINGLETON, SINGLETON, INSTANCED, MPR_LOC_DST, NONE, EXPR2,  1.0,  1.0,  0.0,   0 },
+//    { 16, SINGLETON, SINGLETON, INSTANCED, MPR_LOC_DST, NONE, EXPR3,  1.0,  1.0,  0.0,   0 },
 
     /* singleton ––> instanced; control all active instances */
-    {  5, SINGLETON, INSTANCED, SINGLETON, MPR_LOC_SRC, NONE, NULL,  3.0,  3.0,  0.0,   1 },
-    {  6, SINGLETON, INSTANCED, SINGLETON, MPR_LOC_DST, NONE, NULL,  3.0,  3.0,  0.0,   1 },
+    { 17, SINGLETON, INSTANCED, SINGLETON, MPR_LOC_SRC, NONE, NULL,   3.0,  3.0,  0.0,   1 },
+    { 18, SINGLETON, INSTANCED, SINGLETON, MPR_LOC_SRC, NONE, EXPR1,  1.5,  1.5,  0.0,   1 },
+
+//    { 19, SINGLETON, INSTANCED, SINGLETON, MPR_LOC_SRC, NONE, EXPR2,  3.0,  3.0,  0.0,   1 },
+//    { 20, SINGLETON, INSTANCED, SINGLETON, MPR_LOC_SRC, NONE, EXPR3,  3.0,  3.0,  0.0,   1 },
+
+    { 21, SINGLETON, INSTANCED, SINGLETON, MPR_LOC_DST, NONE, NULL,   3.0,  3.0,  0.0,   1 },
+    { 22, SINGLETON, INSTANCED, SINGLETON, MPR_LOC_DST, NONE, EXPR1,  1.5,  1.5,  0.0,   1 },
+//    { 23, SINGLETON, INSTANCED, SINGLETON, MPR_LOC_DST, NONE, EXPR2,  3.0,  3.0,  0.0,   1 },
+//    { 24, SINGLETON, INSTANCED, SINGLETON, MPR_LOC_DST, NONE, EXPR3,  3.0,  3.0,  0.0,   1 },
 
     /* singleton ==> instanced; control a single instance (default) */
     /* TODO: check that instance is released on map_free() */
-    {  7, SINGLETON, INSTANCED, INSTANCED, MPR_LOC_SRC, NONE, NULL,  1.0,  1.0,  0.0,   0 },
-    {  8, SINGLETON, INSTANCED, INSTANCED, MPR_LOC_DST, NONE, NULL,  1.0,  1.0,  0.0,   0 },
+    { 25, SINGLETON, INSTANCED, INSTANCED, MPR_LOC_SRC, NONE, NULL,   1.0,  1.0,  0.0,   0 },
+    { 26, SINGLETON, INSTANCED, INSTANCED, MPR_LOC_SRC, NONE, EXPR1,  0.5,  0.5,  0.0,   0 },
+//    { 27, SINGLETON, INSTANCED, INSTANCED, MPR_LOC_SRC, NONE, EXPR2,  1.0,  1.0,  0.0,   0 },
+//    { 28, SINGLETON, INSTANCED, INSTANCED, MPR_LOC_SRC, NONE, EXPR3,  1.0,  1.0,  0.0,   0 },
+
+    { 29, SINGLETON, INSTANCED, INSTANCED, MPR_LOC_DST, NONE, NULL,   1.0,  1.0,  0.0,   0 },
+    { 30, SINGLETON, INSTANCED, INSTANCED, MPR_LOC_DST, NONE, EXPR1,  0.5,  0.5,  0.0,   0 },
+//    { 31, SINGLETON, INSTANCED, INSTANCED, MPR_LOC_DST, NONE, EXPR2,  1.0,  1.0,  0.0,   0 },
+//    { 32, SINGLETON, INSTANCED, INSTANCED, MPR_LOC_DST, NONE, EXPR3,  1.0,  1.0,  0.0,   0 },
 
     /* instanced ––> singleton; any source instance updates destination */
-    {  9, INSTANCED, SINGLETON, SINGLETON, MPR_LOC_SRC, NONE, NULL,  5.0,  5.0,  0.0,   0 },
+    { 33, INSTANCED, SINGLETON, SINGLETON, MPR_LOC_SRC, NONE, NULL,   5.0,  5.0,  0.0,   0 },
+    { 34, INSTANCED, SINGLETON, SINGLETON, MPR_LOC_SRC, NONE, EXPR1,  5.0,  5.0,  0.0,   0 },
+//    { 35, INSTANCED, SINGLETON, SINGLETON, MPR_LOC_SRC, NONE, EXPR2,  5.0,  5.0,  0.0,   0 },
+//    { 36, INSTANCED, SINGLETON, SINGLETON, MPR_LOC_SRC, NONE, EXPR3,  5.0,  5.0,  0.0,   0 },
+
     /* ... but when processing @dst only the last instance update will trigger handler */
-    { 10, INSTANCED, SINGLETON, SINGLETON, MPR_LOC_DST, NONE, NULL,  1.0,  5.0,  0.0,   0 },
+    { 37, INSTANCED, SINGLETON, SINGLETON, MPR_LOC_DST, NONE, NULL,   1.0,  5.0,  0.0,   0 },
+    { 38, INSTANCED, SINGLETON, SINGLETON, MPR_LOC_DST, NONE, EXPR1,  1.0,  5.0,  0.0,   0 },
+//    { 39, INSTANCED, SINGLETON, SINGLETON, MPR_LOC_DST, NONE, EXPR2,  1.0,  5.0,  0.0,   0 },
+//    { 40, INSTANCED, SINGLETON, SINGLETON, MPR_LOC_DST, NONE, EXPR3,  1.0,  5.0,  0.0,   0 },
 
     /* instanced ==> singleton; one src instance updates dst (default) */
     /* CHECK: if controlling instance is released, move to next updated inst */
-    { 11, INSTANCED, SINGLETON, INSTANCED, MPR_LOC_SRC, NONE, NULL,  1.0,  1.0,  0.0,   0 },
-    { 12, INSTANCED, SINGLETON, INSTANCED, MPR_LOC_DST, NONE, NULL,  1.0,  1.0,  0.0,   0 },
+    { 41, INSTANCED, SINGLETON, INSTANCED, MPR_LOC_SRC, NONE, NULL,   1.0,  1.0,  0.0,   0 },
+    { 42, INSTANCED, SINGLETON, INSTANCED, MPR_LOC_SRC, NONE, EXPR1,  1.0,  1.0,  0.0,   0 },
+//    { 43, INSTANCED, SINGLETON, INSTANCED, MPR_LOC_SRC, NONE, EXPR2,  1.0,  1.0,  0.0,   0 },
+//    { 44, INSTANCED, SINGLETON, INSTANCED, MPR_LOC_SRC, NONE, EXPR3,  1.0,  1.0,  0.0,   0 },
+
+    { 45, INSTANCED, SINGLETON, INSTANCED, MPR_LOC_DST, NONE, NULL,   1.0,  1.0,  0.0,   0 },
+    { 46, INSTANCED, SINGLETON, INSTANCED, MPR_LOC_DST, NONE, EXPR1,  1.0,  1.0,  0.0,   0 },
+//    { 47, INSTANCED, SINGLETON, INSTANCED, MPR_LOC_DST, NONE, EXPR2,  1.0,  1.0,  0.0,   0 },
+//    { 48, INSTANCED, SINGLETON, INSTANCED, MPR_LOC_DST, NONE, EXPR3,  1.0,  1.0,  0.0,   0 },
 
     /* instanced ––> instanced; any src instance updates all dst instances */
     /* source signal does not know about active destination instances */
-    { 13, INSTANCED, INSTANCED, SINGLETON, MPR_LOC_SRC, NONE, NULL, 15.0, 15.0,  0.0,   1 },
-    { 14, INSTANCED, INSTANCED, SINGLETON, MPR_LOC_DST, NONE, NULL,  3.0, 15.0,  0.0,   1 },
+    { 49, INSTANCED, INSTANCED, SINGLETON, MPR_LOC_SRC, NONE, NULL,  15.0, 15.0,  0.0,   1 },
+    { 50, INSTANCED, INSTANCED, SINGLETON, MPR_LOC_SRC, NONE, EXPR1, 15.0, 15.0,  0.0,   1 },
+//    { 51, INSTANCED, INSTANCED, SINGLETON, MPR_LOC_SRC, NONE, EXPR2, 15.0, 15.0,  0.0,   1 },
+//    { 52, INSTANCED, INSTANCED, SINGLETON, MPR_LOC_SRC, NONE, EXPR3, 15.0, 15.0,  0.0,   1 },
+
+    { 53, INSTANCED, INSTANCED, SINGLETON, MPR_LOC_DST, NONE, NULL,  3.0, 15.0,  0.0,   1 },
+    { 54, INSTANCED, INSTANCED, SINGLETON, MPR_LOC_DST, NONE, EXPR1, 3.0, 15.0,  0.0,   1 },
+//    { 55, INSTANCED, INSTANCED, SINGLETON, MPR_LOC_DST, NONE, EXPR2, 3.0, 15.0,  0.0,   1 },
+//    { 56, INSTANCED, INSTANCED, SINGLETON, MPR_LOC_DST, NONE, EXPR3, 3.0, 15.0,  0.0,   1 },
 
     /* instanced ==> instanced; no stealing */
-    { 15, INSTANCED, INSTANCED, INSTANCED, MPR_LOC_SRC, NONE, NULL,  4.0,  4.0,  0.0,   0 },
-    { 16, INSTANCED, INSTANCED, INSTANCED, MPR_LOC_DST, NONE, NULL,  4.0,  4.0,  0.0,   0 },
+    { 57, INSTANCED, INSTANCED, INSTANCED, MPR_LOC_SRC, NONE, NULL,  4.0,  4.0,  0.0,   0 },
+    { 58, INSTANCED, INSTANCED, INSTANCED, MPR_LOC_SRC, NONE, EXPR1, 4.0,  4.0,  0.0,   0 },
+//    { 59, INSTANCED, INSTANCED, INSTANCED, MPR_LOC_SRC, NONE, EXPR2, 4.0,  4.0,  0.0,   0 },
+//    { 60, INSTANCED, INSTANCED, INSTANCED, MPR_LOC_SRC, NONE, EXPR3, 4.0,  4.0,  0.0,   0 },
 
+    { 61, INSTANCED, INSTANCED, INSTANCED, MPR_LOC_DST, NONE, NULL,  4.0,  4.0,  0.0,   0 },
+    { 62, INSTANCED, INSTANCED, INSTANCED, MPR_LOC_DST, NONE, EXPR1, 4.0,  4.0,  0.0,   0 },
+//    { 63, INSTANCED, INSTANCED, INSTANCED, MPR_LOC_DST, NONE, EXPR2, 4.0,  4.0,  0.0,   0 },
+//    { 64, INSTANCED, INSTANCED, INSTANCED, MPR_LOC_DST, NONE, EXPR3, 4.0,  4.0,  0.0,   0 },
+
+    /* EXTRA instance==>instance tests for different stealing property values */
     /* instanced ==> instanced; steal newest instance */
-    { 17, INSTANCED, INSTANCED, INSTANCED, MPR_LOC_SRC, NEW,  NULL,  4.25, 4.25, 0.04,  0 },
+    { 65, INSTANCED, INSTANCED, INSTANCED, MPR_LOC_SRC, NEW,  NULL,  4.25, 4.25, 0.04,  0 },
     /* TODO: verify that shared_graph version is behaving properly */
-    { 18, INSTANCED, INSTANCED, INSTANCED, MPR_LOC_DST, NEW,  NULL,  4.0,  4.25, 0.04,  0 },
+    { 66, INSTANCED, INSTANCED, INSTANCED, MPR_LOC_DST, NEW,  NULL,  4.0,  4.25, 0.04,  0 },
 
     /* instanced ==> instanced; steal oldest instance */
     /* TODO: document why multiplier is not 5.0 */
-    { 19, INSTANCED, INSTANCED, INSTANCED, MPR_LOC_SRC, OLD,  NULL,  4.6,  4.6,  0.0,   0 },
-    { 20, INSTANCED, INSTANCED, INSTANCED, MPR_LOC_DST, OLD,  NULL,  4.0,  4.6,  0.0,   0 },
+    { 67, INSTANCED, INSTANCED, INSTANCED, MPR_LOC_SRC, OLD,  NULL,  4.6,  4.6,  0.0,   0 },
+    { 68, INSTANCED, INSTANCED, INSTANCED, MPR_LOC_DST, OLD,  NULL,  4.0,  4.6,  0.0,   0 },
 
     /* instanced ==> instanced; add instances if needed */
-    { 21, INSTANCED, INSTANCED, INSTANCED, MPR_LOC_SRC, ADD,  NULL,  5.0,  5.0,  0.0,   0 },
-    { 22, INSTANCED, INSTANCED, INSTANCED, MPR_LOC_DST, ADD,  NULL,  5.0,  5.0,  0.0,   0 },
+    { 69, INSTANCED, INSTANCED, INSTANCED, MPR_LOC_SRC, ADD,  NULL,  5.0,  5.0,  0.0,   0 },
+    { 70, INSTANCED, INSTANCED, INSTANCED, MPR_LOC_DST, ADD,  NULL,  5.0,  5.0,  0.0,   0 },
 
     /* mixed ––> singleton */
     /* for src processing the update count is additive since the destination has only one instance */
-    { 23, MIXED_SIG, SINGLETON, SINGLETON, MPR_LOC_SRC, NONE, NULL,  5.0,  5.0,  0.0,   0 },
+    { 71, MIXED_SIG, SINGLETON, SINGLETON, MPR_LOC_SRC, NONE, NULL,  5.0,  5.0,  0.0,   0 },
+
     /* TODO: we should default to dst processing for this configuration */
-    { 24, MIXED_SIG, SINGLETON, SINGLETON, MPR_LOC_DST, NONE, NULL,  1.0,  5.0,  0.0,   0 },
+    { 72, MIXED_SIG, SINGLETON, SINGLETON, MPR_LOC_DST, NONE, NULL,  1.0,  5.0,  0.0,   0 },
 
     /* mixed ==> singleton */
     /* for src processing we expect one update per iteration */
-    { 25, MIXED_SIG, SINGLETON, INSTANCED, MPR_LOC_SRC, NONE, NULL,  1.0,  1.0,  0.0,   0 },
+    { 73, MIXED_SIG, SINGLETON, INSTANCED, MPR_LOC_SRC, NONE, NULL,  1.0,  1.0,  0.0,   0 },
     /* for dst processing we expect one update per iteration */
-    { 26, MIXED_SIG, SINGLETON, INSTANCED, MPR_LOC_DST, NONE, NULL,  1.0,  1.0,  0.0,   0 },
+    { 74, MIXED_SIG, SINGLETON, INSTANCED, MPR_LOC_DST, NONE, NULL,  1.0,  1.0,  0.0,   0 },
 
     /* mixed ––> instanced */
     /* for src processing the update count is multiplicative: 5 src x 3 dst */
-    { 27, MIXED_SIG, INSTANCED, SINGLETON, MPR_LOC_SRC, NONE, NULL, 15.0, 15.0,  0.0,   1 },
+    { 75, MIXED_SIG, INSTANCED, SINGLETON, MPR_LOC_SRC, NONE, NULL, 15.0, 15.0,  0.0,   1 },
     /* each active instance should receive 1 update per iteration */
-    { 28, MIXED_SIG, INSTANCED, SINGLETON, MPR_LOC_DST, NONE, NULL,  3.0, 15.0,  0.0,   1 },
+    { 76, MIXED_SIG, INSTANCED, SINGLETON, MPR_LOC_DST, NONE, NULL,  3.0, 15.0,  0.0,   1 },
 
     /* mixed ==> instanced */
-    { 29, MIXED_SIG, INSTANCED, INSTANCED, MPR_LOC_SRC, NONE, NULL,  4.0,  4.0,  0.0,   0 },
-    { 30, MIXED_SIG, INSTANCED, INSTANCED, MPR_LOC_DST, NONE, NULL,  4.0,  4.0,  0.0,   0 },
-
-    /* singleton ––> instanced; in-map instance management */
-    /* Should we be updating all active destination instances here? */
-    { 31, SINGLETON, INSTANCED, SINGLETON, MPR_LOC_SRC, NONE, EXPR1, 1.5,  1.5,  0.0,   1 },
-    { 32, SINGLETON, INSTANCED, SINGLETON, MPR_LOC_DST, NONE, EXPR1, 1.5,  1.5,  0.0,   1 },
-
-    /* singleton ==> instanced; in-map instance management */
-    { 33, SINGLETON, INSTANCED, INSTANCED, MPR_LOC_SRC, NONE, EXPR1, 0.5,  0.5,  0.0,   0 },
-    { 34, SINGLETON, INSTANCED, INSTANCED, MPR_LOC_DST, NONE, EXPR1, 0.5,  0.5,  0.0,   0 },
+    { 77, MIXED_SIG, INSTANCED, INSTANCED, MPR_LOC_SRC, NONE, NULL,  4.0,  4.0,  0.0,   0 },
+    { 78, MIXED_SIG, INSTANCED, INSTANCED, MPR_LOC_DST, NONE, NULL,  4.0,  4.0,  0.0,   0 },
 
     /* work in progress:
      * instanced ––> instanced; in-map instance management (late start, early release, ad hoc)
@@ -385,6 +448,7 @@ int loop(instance_type src_type, instance_type dst_type, int same_val)
             mpr_sig_set_value(monosend, 0, 1, MPR_INT32, &i);
         }
 
+        mpr_dev_update_maps(src);
         mpr_dev_poll(src, 0);
         mpr_dev_poll(dst, period);
         i++;
@@ -542,6 +606,7 @@ int run_test(test_config *config)
         mpr_obj_set_prop((mpr_obj)map, MPR_PROP_EXPR, NULL, 1, MPR_STR, config->expr, 1);
 
     use_inst = config->map_type == INSTANCED;
+    printf("SETTING USE_INST TO %d (1)\n", use_inst);
     mpr_obj_set_prop((mpr_obj)map, MPR_PROP_USE_INST, NULL, 1, MPR_BOOL, &use_inst, 1);
     mpr_obj_push((mpr_obj)map);
     while (!done && !mpr_map_get_is_ready(map)) {
@@ -613,6 +678,13 @@ int run_test(test_config *config)
 #endif
         ++result;
     }
+    else {
+        printf("src device using %d active and %d reserve id maps (should be <=1 and <=5)\n",
+               active_count, reserve_count);
+#ifdef DEBUG
+        mpr_local_dev_print_id_maps((mpr_local_dev)src);
+#endif
+    }
 
     active_count = mpr_local_dev_get_num_id_maps((mpr_local_dev)dst, 1);
     reserve_count = mpr_local_dev_get_num_id_maps((mpr_local_dev)dst, 0);
@@ -623,6 +695,13 @@ int run_test(test_config *config)
         mpr_local_dev_print_id_maps((mpr_local_dev)dst);
 #endif
         ++result;
+    }
+    else {
+        printf("dst device using %d active and %d reserve id maps (should be <=1 and <10)\n",
+               active_count, reserve_count);
+#ifdef DEBUG
+        mpr_local_dev_print_id_maps((mpr_local_dev)dst);
+#endif
     }
 
     count_epsilon = ceil((float)compare_count * config->count_epsilon);
