@@ -253,6 +253,7 @@ int mpr_value_set_element(mpr_value v, unsigned int inst_idx, int el_idx, void *
 
     RETURN_ARG_UNLESS(b->pos >= 0, 0);
 
+    /* Use modulo to support negative indices with wraparound */
     el_idx = el_idx % v->vlen;
     if (el_idx < 0)
         el_idx += v->vlen;
@@ -273,11 +274,13 @@ int mpr_value_set_element(mpr_value v, unsigned int inst_idx, int el_idx, void *
 
 void mpr_value_set_elements_known(mpr_value v, unsigned int inst_idx, int start, int num)
 {
-    // TODO: can we also assert/assume that inst_idx < v->num_inst? test speedup...
     mpr_value_buffer b = &v->inst[inst_idx % v->num_inst];
-    int i = start, j = start + num;
-    assert(j <= v->vlen);
-    for (; i < j; i++) {
+    int i = start, vlen = v->vlen;
+    if (num > vlen)
+        num = vlen;
+    for (i = start; num > 0; i++, num--) {
+        if (i >= vlen)
+            i = 0;
         mpr_bitflags_set(b->known, i);
     }
 }

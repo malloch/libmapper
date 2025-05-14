@@ -70,10 +70,10 @@ typedef struct _test_config {
     mpr_loc         process_loc;
     oflw_action     oflw_action;
     const char      *expr;
-    float           count_mult;
-    float           count_mult_shared;
-    float           count_mult_ephem;
-    float           count_mult_ephem_shared;
+    float           count_mult_persistent;
+    float           count_mult_persistent_shared;
+    float           count_mult_ephemeral;
+    float           count_mult_ephemeral_shared;
     float           count_epsilon;
     int             same_val;
 } test_config;
@@ -117,22 +117,23 @@ test_config test_configs[] = {
     { 14, INST, INST, SNGL, MPR_LOC_DST, NONE, NULL,  2.0,  2.0,  2.0,  2.0,  0.01,  1 },
 
     /* instanced ==> instanced; no stealing */
-    { 15, INST, INST, INST, MPR_LOC_SRC, NONE, NULL,  4.0,  4.0,  2.61, 2.61, 0.01,  0 },
-    { 16, INST, INST, INST, MPR_LOC_DST, NONE, NULL,  4.0,  4.0,  2.26, 2.61, 0.01,  0 },
+    /* for non-shared scenarios release will not be processed until iteration is over */
+    { 15, INST, INST, INST, MPR_LOC_SRC, NONE, NULL,  4.0,  4.0,  1.41, 1.41, 0.01,  0 },
+    { 16, INST, INST, INST, MPR_LOC_DST, NONE, NULL,  4.0,  4.0,  1.01, 1.41, 0.01,  0 },
 
     /* instanced ==> instanced; steal newest instance */
-    { 17, INST, INST, INST, MPR_LOC_SRC, NEW,  NULL,  4.0,  4.0,  2.61, 2.61, 0.01,  0 },
+    { 17, INST, INST, INST, MPR_LOC_SRC, NEW,  NULL,  4.0,  4.0,  1.41, 1.41, 0.01,  0 },
     /* TODO: verify that shared_graph version is behaving properly */
-    { 18, INST, INST, INST, MPR_LOC_DST, NEW,  NULL,  4.0,  4.0,  2.26, 2.61, 0.01,  0 },
+    { 18, INST, INST, INST, MPR_LOC_DST, NEW,  NULL,  4.0,  4.0,  1.01, 1.41, 0.01,  0 },
 
     /* instanced ==> instanced; steal oldest instance */
     /* TODO: document why multiplier is not 5.0 */
-    { 19, INST, INST, INST, MPR_LOC_SRC, OLD,  NULL,  4.0,  4.0,  2.61, 2.61, 0.01,  0 },
-    { 20, INST, INST, INST, MPR_LOC_DST, OLD,  NULL,  4.0,  4.0,  2.26, 2.61, 0.01,  0 },
+    { 19, INST, INST, INST, MPR_LOC_SRC, OLD,  NULL,  4.0,  4.0,  1.41, 1.41, 0.01,  0 },
+    { 20, INST, INST, INST, MPR_LOC_DST, OLD,  NULL,  4.0,  4.0,  1.01, 1.41, 0.01,  0 },
 
     /* instanced ==> instanced; add instances if needed */
-    { 21, INST, INST, INST, MPR_LOC_SRC, ADD,  NULL,  4.0,  4.0,  2.61, 2.61, 0.01,  0 },
-    { 22, INST, INST, INST, MPR_LOC_DST, ADD,  NULL,  4.0,  4.0,  2.26, 2.61, 0.01,  0 },
+    { 21, INST, INST, INST, MPR_LOC_SRC, ADD,  NULL,  4.0,  4.0,  1.41, 1.41, 0.01,  0 },
+    { 22, INST, INST, INST, MPR_LOC_DST, ADD,  NULL,  4.0,  4.0,  1.01, 1.41, 0.01,  0 },
 
     /* mixed ––> singleton */
     /* for src processing the update count is additive since the destination has only one instance */
@@ -152,8 +153,8 @@ test_config test_configs[] = {
     { 28, BOTH, INST, SNGL, MPR_LOC_DST, NONE, NULL,  2.0,  2.0,  2.0,  2.0,  0.01,  1 },
 
     /* mixed ==> instanced */
-    { 29, BOTH, INST, INST, MPR_LOC_SRC, NONE, NULL,  4.0,  4.0,  2.61, 2.61, 0.01,  0 },
-    { 30, BOTH, INST, INST, MPR_LOC_DST, NONE, NULL,  4.0,  4.0,  2.26, 2.61, 0.01,  0 },
+    { 29, BOTH, INST, INST, MPR_LOC_SRC, NONE, NULL,  4.0,  4.0,  1.41, 1.41, 0.01,  0 },
+    { 30, BOTH, INST, INST, MPR_LOC_DST, NONE, NULL,  4.0,  4.0,  1.01, 1.41, 0.01,  0 },
 
     /* singleton ––> instanced; in-map instance management */
     /* Should we be updating all active destination instances here? */
@@ -180,7 +181,7 @@ test_config test_configs[] = {
     /* instanced ==> instanced; instance reduce expression */
     // TODO: currently each update is a new instance, should be a stream of one map-managed instance
     { 41, INST, INST, INST, MPR_LOC_SRC, NONE, EXPR2, 1.0,  1.0,  1.0,  1.0,  0.01,  1 },
-    { 42, INST, INST, INST, MPR_LOC_DST, NONE, EXPR2, 1.0,  1.0,  0.5,  1.0,  0.01,  1 },
+    { 42, INST, INST, INST, MPR_LOC_DST, NONE, EXPR2, 1.0,  1.0,  1.0,  1.0,  0.01,  1 },
 
     /* work in progress:
      * instanced ––> instanced; in-map instance management (late start, early release, ad hoc)
@@ -609,7 +610,7 @@ int run_test(test_config *config)
     mpr_dev_poll(src, 100);
     mpr_dev_poll(dst, 100);
 
-    if (INST & config->dst_type && SNGL == config->map_type) {
+    if (INST & config->dst_type) {
         /* activate 2 destination instances */
         eprintf("activating 2 destination instances\n");
         mpr_sig_activate_inst(multirecv, 2);
@@ -620,15 +621,15 @@ int run_test(test_config *config)
 
     if (ephemeral) {
         if (shared_graph)
-            compare_count = ((float)iterations * config->count_mult_ephem_shared);
+            compare_count = ((float)iterations * config->count_mult_ephemeral_shared);
         else
-            compare_count = ((float)iterations * config->count_mult_ephem);
+            compare_count = ((float)iterations * config->count_mult_ephemeral);
     }
     else {
         if (shared_graph)
-            compare_count = ((float)iterations * config->count_mult_shared);
+            compare_count = ((float)iterations * config->count_mult_persistent_shared);
         else
-            compare_count = ((float)iterations * config->count_mult);
+            compare_count = ((float)iterations * config->count_mult_persistent);
     }
 
     release_active_instances(multisend);

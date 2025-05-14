@@ -75,4 +75,11 @@ void mpr_slot_set_map_ptr(mpr_slot slot, mpr_map map);
 
 lo_address mpr_slot_get_addr(mpr_slot slot);
 
+void mpr_slot_clear_msg(mpr_local_slot slot);
+
+void mpr_slot_build_msg(mpr_local_slot slot, mpr_value val, unsigned int val_idx,
+                        mpr_id_map id_map);
+
+lo_message mpr_slot_get_msg(mpr_local_slot slot);
+
 #endif /* __MPR_SLOT_H__ */

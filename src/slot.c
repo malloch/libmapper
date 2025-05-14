@@ -39,6 +39,9 @@ typedef struct _mpr_local_slot {
     /* TODO: use signal for holding memory of local slots for efficiency */
     mpr_value val;                  /*!< Value histories for each signal instance. */
     mpr_link link;
+    lo_message msg;
+    uint16_t num_msg;
+    uint16_t sending;
 } mpr_local_slot_t;
 
 mpr_slot mpr_slot_new(mpr_map map, mpr_sig sig, mpr_dir dir,
@@ -57,10 +60,23 @@ mpr_slot mpr_slot_new(mpr_map map, mpr_sig sig, mpr_dir dir,
     else
         slot->dir = dir;
     slot->causes_update = 1; /* default */
+    slot->id = -1;
 
     if (is_local) {
         mpr_local_slot lslot = (mpr_local_slot)slot;
         lslot->val = mpr_value_new(mpr_sig_get_len(sig), mpr_sig_get_type(sig), 1, slot->num_inst);
+
+        /* TODO: don't need to allocate for every local slot */
+        lslot->msg = lo_message_new();
+        lslot->num_msg = -1;
+        if (lslot->msg) {
+            /* increment refcount to prevent freeing by lo_bundle_free_recursive() in link.c */
+            lo_message_incref(lslot->msg);
+        }
+        else {
+            trace("Error allocating lo_message\n");
+            assert(0);
+        }
     }
 
     return slot;
@@ -83,6 +99,10 @@ void mpr_slot_free(mpr_slot slot)
         FUNC_IF(mpr_value_free, lslot->val);
         if (mpr_obj_get_is_local((mpr_obj)slot->sig))
             mpr_local_sig_remove_slot((mpr_local_sig)slot->sig, lslot, lslot->dir);
+        if (lslot->sending)
+            lo_message_decref(lslot->msg);
+        else
+            lo_message_free(lslot->msg);
     }
     free(slot);
 }
@@ -299,6 +319,10 @@ int mpr_slot_get_id(mpr_slot slot)
 void mpr_slot_set_id(mpr_slot slot, int id)
 {
     slot->id = id;
+    if (slot->is_local) {
+        ((mpr_local_slot)slot)->num_msg = -1;
+        mpr_slot_clear_msg((mpr_local_slot)slot);
+    }
 }
 
 int mpr_slot_get_is_local(mpr_slot slot)
@@ -359,7 +383,16 @@ int mpr_slot_get_status(mpr_local_slot slot)
 
 void mpr_local_slot_send_msg(mpr_local_slot slot, lo_message msg, mpr_time time, mpr_proto proto)
 {
-    mpr_link_add_msg(slot->link, mpr_sig_get_path((mpr_sig)slot->sig), msg, time, proto);
+    if (!msg) {
+        if (slot->num_msg > 0) {
+            msg = slot->msg;
+            slot->sending = 1;
+        }
+        else
+            return;
+    }
+    if (slot->link)
+        mpr_link_add_msg(slot->link, mpr_sig_get_path((mpr_sig)slot->sig), msg, time, proto);
 }
 
 int mpr_slot_compare_names(mpr_slot l, mpr_slot r)
@@ -379,4 +412,48 @@ lo_address mpr_slot_get_addr(mpr_slot slot)
     if (!mpr_obj_get_is_local((mpr_obj)slot->sig) && ((mpr_local_slot)slot)->link)
         addr = mpr_link_get_admin_addr(((mpr_local_slot)slot)->link);
     return addr;
+}
+
+/* TODO: don't bother clearing if there are no messages */
+void mpr_slot_clear_msg(mpr_local_slot slot)
+{
+    /* run if slot has msg or is uninitialized (num_msg == -1) */
+    RETURN_UNLESS(slot->num_msg);
+
+    lo_message_clear(slot->msg);
+    /* destination slots have id: -1 */
+    if (MPR_DIR_OUT == slot->dir && slot->id >= 0) {
+        /* add slot id to msg */
+        lo_message_add_string(slot->msg, "@sl");
+        lo_message_add_int32(slot->msg, slot->id);
+    }
+    slot->num_msg = slot->sending = 0;
+}
+
+void mpr_slot_build_msg(mpr_local_slot slot, mpr_value val, unsigned int idx, mpr_id_map id_map)
+{
+    int i;
+    lo_message msg = slot->msg;
+
+    if (id_map) {
+        /* add instance GID */
+        lo_message_add_string(msg, "@in");
+        lo_message_add_int64(msg, id_map->GID);
+    }
+
+    if (val) {
+        mpr_value_add_to_msg(val, idx, msg);
+    }
+    else {
+        /* retrieve length from slot */
+        int len = mpr_sig_get_len(slot->sig);
+        for (i = 0; i < len; i++)
+            lo_message_add_nil(msg);
+    }
+    ++slot->num_msg;
+}
+
+lo_message mpr_slot_get_msg(mpr_local_slot slot)
+{
+    return (slot->num_msg > 0) ? slot->msg : NULL;
 }

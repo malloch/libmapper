@@ -70,10 +70,10 @@ typedef struct _test_config {
     mpr_loc         process_loc;
     oflw_action     oflw_action;
     const char      *expr;
-    float           count_mult;
-    float           count_mult_shared;
-    float           count_mult_ephem;
-    float           count_mult_ephem_shared;
+    float           count_mult_persistent;
+    float           count_mult_persistent_shared;
+    float           count_mult_ephemeral;
+    float           count_mult_ephemeral_shared;
     float           count_epsilon;
     int             same_val;
 } test_config;
@@ -633,15 +633,15 @@ int run_test(test_config *config)
 
     if (ephemeral) {
         if (shared_graph)
-            compare_count = ((float)iterations * config->count_mult_ephem_shared);
+            compare_count = ((float)iterations * config->count_mult_ephemeral_shared);
         else
-            compare_count = ((float)iterations * config->count_mult_ephem);
+            compare_count = ((float)iterations * config->count_mult_ephemeral);
     }
     else {
         if (shared_graph)
-            compare_count = ((float)iterations * config->count_mult_shared);
+            compare_count = ((float)iterations * config->count_mult_persistent_shared);
         else
-            compare_count = ((float)iterations * config->count_mult);
+            compare_count = ((float)iterations * config->count_mult_persistent);
     }
 
     release_active_instances(multisend);

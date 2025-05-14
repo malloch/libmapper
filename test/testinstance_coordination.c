@@ -12,6 +12,8 @@
 #include <signal.h>
 #include <string.h>
 
+/* This test checks coordination of instances between maps. */
+
 int verbose = 1;
 int terminate = 0;
 int shared_graph = 0;
