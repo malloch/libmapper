@@ -55,16 +55,17 @@ void simple_handler(Signal&& sig, int length, Type type, const void *value, Time
 {
     ++received;
     if (verbose) {
-        std::cout << "signal update:" << sig[Property::NAME];
+        std::cout << "\t\t\t\t     | --> simple handler: " << sig[Property::NAME] << " got";
     }
 
     if (!value) {
         if (verbose)
-            std::cout << " ––––––––" << std::endl;
+            std::cout << " NULL" << std::endl;
         return;
     }
-    else if (!verbose)
+    else if (!verbose) {
         return;
+    }
 
     switch (type) {
         case Type::INT32: {
@@ -99,18 +100,19 @@ void standard_handler(Signal&& sig, Signal::Event event, Id instance, int length
 {
     ++received;
     if (verbose) {
-        std::cout << "\t\t\t\t\t   | --> signal update:"
-                  << sig[Property::NAME] << "." << instance;
+        std::cout << "\t\t\t\t     | --> standard handler: " << sig[Property::NAME] << "." << instance
+                  << " got";
     }
 
     if (!value) {
         if (verbose)
-            std::cout << " ––––––––" << std::endl;
+            std::cout << " release" << std::endl;
         sig.instance(instance).release();
         return;
     }
-    else if (!verbose)
+    else if (!verbose) {
         return;
+    }
 
     switch (type) {
         case Type::INT32: {
@@ -143,7 +145,7 @@ void standard_handler(Signal&& sig, Signal::Event event, Id instance, int length
     void *data = sig[Property::DATA];
     if (data) {
         const Custom *custom = reinterpret_cast<const Custom*>(data);
-        std::cout <<  "\t\t\t\t\t   |     recovered user_data: " << custom->extra << std::endl;
+        std::cout <<  "\t\t\t\t     |     recovered user_data: " << custom->extra << std::endl;
     }
 }
 
@@ -152,17 +154,19 @@ void instance_handler(Signal::Instance&& si, Signal::Event event, int length,
 {
     ++received;
     if (verbose) {
-        std::cout << "\t\t\t\t\t   | --> signal update:" << si.signal()[Property::NAME] << "." << si.id();
+        std::cout << "\t\t\t\t     | --> instance handler: " << si.signal()[Property::NAME] << "."
+                  << si.id() << " got " << event;
     }
 
-    if (!value) {
+    if (event == Signal::Event::REL_UPSTRM) {
         if (verbose)
-            std::cout << " ––––––––" << std::endl;
+            std::cout << " release" << std::endl;
         si.release();
         return;
     }
-    else if (!verbose)
+    else if (!verbose || !value) {
         return;
+    }
 
     switch (type) {
         case Type::INT32: {
@@ -392,9 +396,12 @@ int main(int argc, char ** argv)
     while (i++ < 100 && !done) {
         v[i%3] = i;
         if (i == 50) {
-            Signal s = *dev.signals().filter(Property::NAME, "in4", Operator::EQUAL);
+            Signal s = *dev.signals().filter(Property::NAME, "in4");
             s.set_callback(standard_handler);
         }
+        if (verbose)
+            std::cout << "    Updating " << sig[Property::NAME]
+                      << " to " << i <<  " \t-->  |" << std::endl;
         sig.set_value(v);
         graph.poll(period);
     }
@@ -432,7 +439,7 @@ int main(int argc, char ** argv)
     }
 
     // test API for signal instances
-    out << "testing instances API" << std::endl;
+    out << "testing Signal::Instance API" << std::endl;
 
     int num_inst = 10;
     mapper::Signal multisend = dev.add_signal(Direction::OUTGOING, "multisend", 1, Type::FLOAT,
@@ -440,14 +447,13 @@ int main(int argc, char ** argv)
     mapper::Signal multirecv = dev.add_signal(Direction::INCOMING, "multirecv", 1, Type::FLOAT,
                                               0, 0, 0, &num_inst)
                                   .reserve_instance()
-                                  .set_callback(instance_handler, Signal::Event::UPDATE);
-    multisend.set_property(Property::STEAL_MODE, Signal::Stealing::OLDEST);
-    multirecv.set_property(Property::STEAL_MODE, Signal::Stealing::OLDEST);
+                                  .set_callback(instance_handler, Signal::Event::ALL);
     mapper::Map map2(multisend, multirecv);
     map2.push();
     while (!map2.ready() && !done) {
         dev.poll(10);
     }
+
     unsigned long id;
     for (int i = 0; i < 200 && !done; i++) {
         id = (rand() % 10) + 5;
@@ -455,20 +461,63 @@ int main(int argc, char ** argv)
             case 0:
                 // try to destroy an instance
                 if (verbose)
-                    printf("\t\t  Retiring instance %2lu --> |\n",
-                           (unsigned long)id);
+                    std::cout << "    Retiring " << multisend[Property::NAME] << "." << id
+                              << " \t-->  |" << std::endl;
                 multisend.instance(id).release();
                 break;
             default:
                 // try to update an instance
                 float v = (rand() % 10) * 1.0f;
-                multisend.instance(id).set_value(v);
                 if (verbose)
-                    printf("Sender instance %2lu updated to %2f --> |\n",
-                           (unsigned long)id, v);
+                    std::cout << "    Updating " << multisend[Property::NAME] << "." << id
+                              << " to " << v << " \t-->  |" << std::endl;
+                multisend.instance(id).set_value(v);
                 break;
         }
         dev.poll(period);
+    }
+
+    out << "testing List<Signal::Instance> API" << std::endl;
+    multirecv.remove_callback();
+
+    for (int i = 0; i < 200 && !done; i++) {
+        id = (rand() % 10) + 5;
+        switch (rand() % 5) {
+            case 0:
+                // try to destroy an instance
+                if (verbose)
+                    std::cout << "    Retiring " << multisend[Property::NAME] << "." << id
+                              << " \t-->  |" << std::endl;
+                multisend.instance(id).release();
+                break;
+            default:
+                // try to update an instance
+                float v = (rand() % 10) * 1.0f;
+                if (verbose)
+                    std::cout << "    Updating " << multisend[Property::NAME] << "." << id
+                              << " to " << v << " \t-->  |" << std::endl;
+                multisend.instance(id).set_value(v);
+                break;
+        }
+
+        dev.poll(period);
+
+        List<Signal::Instance> instances = multirecv.instances(Object::Status::UPDATE_REM);
+        for (; instances != instances.end(); ++instances) {
+            Signal::Instance i = *instances;
+            if (verbose)
+                std::cout << "\t\t\t\t     | --> " << multirecv[Property::NAME] << "." << i.id()
+                          << " got " << *(float*)(i.value()) << std::endl;
+            ++received;
+        }
+        instances = multirecv.instances(Object::Status::REL_UPSTRM);
+        for (; instances != instances.end(); ++instances) {
+            Signal::Instance i = *instances;
+            if (verbose)
+                std::cout << "\t\t\t\t     | --> " << multirecv[Property::NAME] << "." << i.id()
+                          << " got release" << std::endl;
+            i.release();
+        }
     }
 
     // test some time manipulation

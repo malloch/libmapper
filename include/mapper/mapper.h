@@ -454,9 +454,11 @@ mpr_id mpr_sig_get_newest_inst_id(mpr_sig signal);
  *  \param status       The statuses of the instances to search. Instances matching _any_ of the
  *                      status bitflags will be counted. For example, only active instances can be
  *                      included by setting status to `MPR_STATUS_ACTIVE`.
- *  \return             The instance identifier associated with the given index, or zero
- *                      if unsuccessful. */
-mpr_id mpr_sig_get_inst_id(mpr_sig signal, int index, mpr_status status);
+ *  \param instance     A location to receive the instance identifier associated with the given
+ *                      index.
+ *  \return             The status associated with the indexed instance, or `MPR_STATUS_UNDEFINED`
+ *                      if not found. */
+mpr_status mpr_sig_get_inst_id(mpr_sig signal, int index, mpr_status status, mpr_id *instance);
 
 /*! Associate a signal instance with an arbitrary pointer.
  *  \param signal       The signal to operate on.

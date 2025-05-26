@@ -214,7 +214,7 @@ void loop(void)
         for (j = 0; j < num_inst; j++) {
             mpr_id id;
             int status;
-            id = mpr_sig_get_inst_id(recvsig1, j, MPR_STATUS_ANY);
+            mpr_sig_get_inst_id(recvsig1, j, MPR_STATUS_ANY, &id);
             status = mpr_sig_get_inst_status(recvsig1, id);
             if (status & MPR_STATUS_UPDATE_REM) {
                 float *value = (float*)mpr_sig_get_value(recvsig1, id, NULL);
@@ -247,7 +247,7 @@ void loop(void)
                         mpr_obj_get_prop_as_str((mpr_obj)recvsig1, MPR_PROP_NAME, NULL), id);
                 mpr_sig_release_inst(recvsig1, id);
             }
-            id = mpr_sig_get_inst_id(recvsig2, j, MPR_STATUS_ANY);
+            mpr_sig_get_inst_id(recvsig2, j, MPR_STATUS_ANY, &id);
             status = mpr_sig_get_inst_status(recvsig2, id);
             if (status & MPR_STATUS_UPDATE_REM) {
                 float *value = (float*)mpr_sig_get_value(recvsig2, id, NULL);

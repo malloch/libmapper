@@ -113,12 +113,6 @@ size_t mpr_sig_get_struct_size(int is_local)
     return is_local ? sizeof(mpr_local_sig_t) : sizeof(mpr_sig_t);
 }
 
-/*! Helper to find the size in bytes of a signal's full vector. */
-size_t get_value_size(mpr_local_sig sig)
-{
-    return mpr_type_get_size(sig->type) * sig->len;
-}
-
 static int _compare_inst_ids(const void *l, const void *r)
 {
     return (*(mpr_sig_inst*)l)->id - (*(mpr_sig_inst*)r)->id;
@@ -803,7 +797,7 @@ void mpr_sig_free_internal(mpr_sig sig)
     FUNC_IF(free, sig->unit);
 }
 
-void mpr_sig_update_timing_stats(mpr_local_sig lsig, float diff)
+static void mpr_sig_update_timing_stats(mpr_local_sig lsig, float diff)
 {
     /* make sure time is monotonic */
     if (diff < 0)
@@ -981,6 +975,9 @@ static int get_inst_by_ids(mpr_local_sig lsig, mpr_id *LID, mpr_id *GID)
 done:
     if (LID) {
         si->id = *LID;
+        /* TODO: we don't really need to use qsort here since the list is already sorted
+         * just need to insert new inst at correct position */
+        /* also we're calling qsort in return */
         qsort(lsig->inst, lsig->num_inst, sizeof(mpr_sig_inst), _compare_inst_ids);
     }
     if (!id_map) {
@@ -998,7 +995,7 @@ done:
 }
 
 // TODO: in the case of non-ephemeral instances we could still steal oldest proxy id_map
-int _oldest_inst(mpr_local_sig lsig)
+static int _oldest_inst(mpr_local_sig lsig)
 {
     int i, oldest;
     mpr_sig_inst si;
@@ -1273,6 +1270,7 @@ static int _reserve_inst(mpr_local_sig lsig, mpr_id *id, void *data)
     si->data = data;
 
     ++lsig->num_inst;
+    /* TODO: move this qsort out to call with multiple ids */
     qsort(lsig->inst, lsig->num_inst, sizeof(mpr_sig_inst), _compare_inst_ids);
     return lsig->num_inst - 1;
 }
@@ -1583,7 +1581,9 @@ const void *mpr_sig_get_value(mpr_sig sig, mpr_id id, mpr_time *time)
     RETURN_ARG_UNLESS(si, 0);
     if (time)
         mpr_time_set(time, *mpr_value_get_time(lsig->value, si->idx, 0));
-    RETURN_ARG_UNLESS(si->status & MPR_STATUS_HAS_VALUE, 0)
+    RETURN_ARG_UNLESS(si->status & MPR_STATUS_HAS_VALUE, 0);
+    /* clear all flags except for HAS_VALUE, STAGED/ACTIVE, and REL_UPSTRM */
+    si->status &= (MPR_STATUS_HAS_VALUE | MPR_STATUS_ACTIVE | MPR_STATUS_STAGED | MPR_STATUS_REL_UPSTRM);
     mpr_time_set(&now, MPR_NOW);
     if (lsig->dir == MPR_DIR_IN && !lsig->handler)
         mpr_sig_update_timing_stats(lsig, mpr_time_get_diff(now, *mpr_value_get_time(lsig->value, si->idx, 0)));
@@ -1609,21 +1609,35 @@ int mpr_sig_get_num_inst(mpr_sig sig, mpr_status status)
     return j;
 }
 
-mpr_id mpr_sig_get_inst_id(mpr_sig sig, int idx, mpr_status status)
+// problem here since 0 is a valid instance id
+// instead we need to either pass a success/error result, or a ptr to some instance object
+
+// do we also allow filtering here by HAS_VALUE, NEW_VALUE, etc? Could be useful!
+
+mpr_status mpr_sig_get_inst_id(mpr_sig sig, int idx, mpr_status status, mpr_id *instance)
 {
     int i, j;
     mpr_local_sig lsig = (mpr_local_sig)sig;
-    RETURN_ARG_UNLESS(sig && sig->obj.is_local && sig->use_inst, 0);
-    RETURN_ARG_UNLESS(idx >= 0 && idx < sig->num_inst, 0);
-    if (status == MPR_STATUS_ANY)
-        return lsig->inst[idx]->id;
-    for (i = 0, j = -1; i < lsig->num_inst; i++) {
-        if (!(lsig->inst[i]->status & status))
-            continue;
-        if (++j == idx)
-            return lsig->inst[i]->id;
+    RETURN_ARG_UNLESS(sig && sig->obj.is_local && sig->use_inst && idx >= 0 && idx < sig->num_inst,
+                      MPR_STATUS_UNDEFINED);
+    if (status != MPR_STATUS_ANY) {
+        for (i = 0, j = -1; i < lsig->num_inst; i++) {
+            if (!(lsig->inst[i]->status & status))
+                continue;
+            if (++j == idx) {
+                idx = i;
+                break;
+            }
+        }
+        if (i == lsig->num_inst)
+            return MPR_STATUS_UNDEFINED;
     }
-    return 0;
+    if (lsig->inst[idx]->status & status) {
+        if (instance)
+            *instance = lsig->inst[idx]->id;
+        return lsig->inst[idx]->status;
+    }
+    return MPR_STATUS_UNDEFINED;
 }
 
 int mpr_sig_activate_inst(mpr_sig sig, mpr_id id)
@@ -1747,6 +1761,12 @@ static int _init_and_add_id_map(mpr_local_sig lsig, mpr_sig_inst si,
     lsig->id_maps[i].id_map = id_map;
     lsig->id_maps[i].inst = si;
     lsig->id_maps[i].status = 0;
+
+    si->id = id_map->LID;
+    /* same comment wrt qsort here */
+    qsort(lsig->inst, lsig->num_inst, sizeof(mpr_sig_inst), _compare_inst_ids);
+
+    /* return id_map index */
     return i;
 }
 

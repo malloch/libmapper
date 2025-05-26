@@ -122,18 +122,18 @@ test_config test_configs[] = {
     { 16, INST, INST, INST, MPR_LOC_DST, NONE, NULL,  4.0,  4.0,  1.01, 1.41, 0.01,  0 },
 
     /* instanced ==> instanced; steal newest instance */
-    { 17, INST, INST, INST, MPR_LOC_SRC, NEW,  NULL,  4.0,  4.0,  1.41, 1.41, 0.01,  0 },
+    { 17, INST, INST, INST, MPR_LOC_SRC, NEW,  NULL,  4.0,  4.0,  1.79, 1.79, 0.01,  0 },
     /* TODO: verify that shared_graph version is behaving properly */
-    { 18, INST, INST, INST, MPR_LOC_DST, NEW,  NULL,  4.0,  4.0,  1.01, 1.41, 0.01,  0 },
+    { 18, INST, INST, INST, MPR_LOC_DST, NEW,  NULL,  4.0,  4.0,  1.50, 1.79, 0.01,  0 },
 
     /* instanced ==> instanced; steal oldest instance */
     /* TODO: document why multiplier is not 5.0 */
-    { 19, INST, INST, INST, MPR_LOC_SRC, OLD,  NULL,  4.0,  4.0,  1.41, 1.41, 0.01,  0 },
-    { 20, INST, INST, INST, MPR_LOC_DST, OLD,  NULL,  4.0,  4.0,  1.01, 1.41, 0.01,  0 },
+    { 19, INST, INST, INST, MPR_LOC_SRC, OLD,  NULL,  4.0,  4.0,  3.85, 3.85, 0.01,  0 },
+    { 20, INST, INST, INST, MPR_LOC_DST, OLD,  NULL,  4.0,  4.0,  2.00, 3.85, 0.01,  0 },
 
     /* instanced ==> instanced; add instances if needed */
-    { 21, INST, INST, INST, MPR_LOC_SRC, ADD,  NULL,  4.0,  4.0,  1.41, 1.41, 0.01,  0 },
-    { 22, INST, INST, INST, MPR_LOC_DST, ADD,  NULL,  4.0,  4.0,  1.01, 1.41, 0.01,  0 },
+    { 21, INST, INST, INST, MPR_LOC_SRC, ADD,  NULL,  5.0,  5.0,  4.76, 4.76, 0.01,  0 },
+    { 22, INST, INST, INST, MPR_LOC_DST, ADD,  NULL,  5.0,  5.0,  2.00, 4.76, 0.01,  0 },
 
     /* mixed ––> singleton */
     /* for src processing the update count is additive since the destination has only one instance */
@@ -163,7 +163,7 @@ test_config test_configs[] = {
 
     /* singleton ==> instanced; in-map instance management */
     { 33, SNGL, INST, INST, MPR_LOC_SRC, NONE, EXPR1, 0.5,  0.5,  0.5,  0.5,  0.01,  0 },
-    { 34, SNGL, INST, INST, MPR_LOC_DST, NONE, EXPR1, 0.5,  0.5,  0.5,  0.5,  0.01,  0 },
+    { 34, SNGL, INST, INST, MPR_LOC_DST, NONE, EXPR1, 0.5,  0.5,  0.48, 0.5,  0.01,  0 },
 
     /* instanced ––> singleton; instance reduce expression */
     { 35, INST, SNGL, SNGL, MPR_LOC_SRC, NONE, EXPR2, 1.0,  1.0,  1.0,  1.0,  0.01,  0 },
@@ -306,7 +306,9 @@ void print_instance_ids(mpr_sig sig)
     const char *name = mpr_obj_get_prop_as_str((mpr_obj)sig, MPR_PROP_NAME, NULL);
     eprintf("%s: [ ", name);
     for (i=0; i<n; i++) {
-        eprintf("%4i, ", (int)mpr_sig_get_inst_id(sig, i, MPR_STATUS_ANY));
+        mpr_id id;
+        mpr_sig_get_inst_id(sig, i, MPR_STATUS_ANY, &id);
+        eprintf("%4i, ", (int)id);
     }
     if (i)
         eprintf("\b\b ");
@@ -333,7 +335,8 @@ void print_instance_vals(mpr_sig sig)
     const char *name = mpr_obj_get_prop_as_str((mpr_obj)sig, MPR_PROP_NAME, NULL);
     eprintf("%s: [ ", name);
     for (i = 0; i < n; i++) {
-        mpr_id id = mpr_sig_get_inst_id(sig, i, MPR_STATUS_ANY);
+        mpr_id id;
+        mpr_sig_get_inst_id(sig, i, MPR_STATUS_ANY, &id);
         float *val = (float*)mpr_sig_get_value(sig, id, 0);
         if (val)
             printf("%4.0f, ", *val);
@@ -351,7 +354,8 @@ void print_instance_status(mpr_sig sig)
     const char *name = mpr_obj_get_prop_as_str((mpr_obj)sig, MPR_PROP_NAME, NULL);
     eprintf("%s: [ ", name);
     for (i = 0; i < n; i++) {
-        mpr_id id = mpr_sig_get_inst_id(sig, i, MPR_STATUS_ANY);
+        mpr_id id;
+        mpr_sig_get_inst_id(sig, i, MPR_STATUS_ANY, &id);
         eprintf("x%03x, ", mpr_sig_get_inst_status(sig, id));
     }
     if (i)
@@ -366,8 +370,11 @@ void release_active_instances(mpr_sig sig)
     mpr_obj_set_prop((mpr_obj)sig, MPR_PROP_EPHEM, NULL, 1, MPR_INT32, &i, 1);
     eprintf("--> Releasing %d active instances for signal %s\n", n,
             mpr_obj_get_prop_as_str((mpr_obj)sig, MPR_PROP_NAME, NULL));
-    for (i = 0; i < n; i++)
-        mpr_sig_release_inst(sig, mpr_sig_get_inst_id(sig, 0, MPR_STATUS_ACTIVE));
+    for (i = 0; i < n; i++) {
+        mpr_id id;
+        if (mpr_sig_get_inst_id(sig, 0, MPR_STATUS_ACTIVE, &id))
+            mpr_sig_release_inst(sig, id);
+    }
     mpr_obj_set_prop((mpr_obj)sig, MPR_PROP_EPHEM, NULL, 1, MPR_INT32, &ephem, 1);
 }
 
@@ -418,50 +425,54 @@ int loop(test_config *config)
         }
         if (config->dst_type & INST) {
             /* check status */
-            int num_inst = mpr_sig_get_num_inst(multirecv, MPR_STATUS_ACTIVE);
             float *last_val = 0;
-            for (j = 0; j < num_inst; j++) {
-                mpr_id id = mpr_sig_get_inst_id(multirecv, j, MPR_STATUS_ACTIVE);
-                int status = mpr_sig_get_inst_status(multirecv, id);
-                if (status & MPR_STATUS_OVERFLOW) {
-                    switch (config->oflw_action) {
-                        case ADD:
-                            eprintf("OVERFLOW!! ALLOCATING ANOTHER INSTANCE.\n");
-                            mpr_sig_reserve_inst(multirecv, 1, 0, 0);
-                            break;
-                        case OLD:
-                            mpr_sig_release_inst(multirecv, mpr_sig_get_oldest_inst_id(multirecv));
-                            break;
-                        case NEW:
-                            mpr_sig_release_inst(multirecv, mpr_sig_get_newest_inst_id(multirecv));
-                            break;
-                        default:
-                            break;
-                    }
-                }
-                if (status & MPR_SIG_REL_UPSTRM) {
-                    eprintf("--> destination multirecv instance %i got upstream release\n", (int)id);
-                    mpr_sig_release_inst(multirecv, id);
-                }
-                if (status & MPR_STATUS_UPDATE_REM) {
-                    float *val = (float*)mpr_sig_get_value(multirecv, id, 0);
-                    if (!val)
-                        continue;
-                    eprintf("--> destination multirecv instance %i got %f\n", (int)id, *val);
-                    ++received;
-                    if (last_val) {
-                        if (config->same_val) {
-                            if (*val != *last_val) {
-                                eprintf("Error: instance values should match but do not\n");
-                                ret = 1;
-                            }
-                        }
-                        else if (*val == *last_val) {
-                            eprintf("Error: instance values match but should not\n");
+            mpr_id id;
+            /* iterate through the instances from last to first since calls to `mpr_sig_get_value`
+             * will reset the MPR_STATUS_UPDATE_REM status flag */
+            int num_inst = mpr_sig_get_num_inst(multirecv, MPR_STATUS_UPDATE_REM);
+            for (j = num_inst - 1; j >= 0; j--) {
+                mpr_sig_get_inst_id(multirecv, j, MPR_STATUS_UPDATE_REM, &id);
+                float *val = (float*)mpr_sig_get_value(multirecv, id, 0);
+                if (!val)
+                    continue;
+                eprintf("--> destination multirecv instance %i got %f\n", (int)id, *val);
+                ++received;
+                if (last_val) {
+                    if (config->same_val) {
+                        if (*val != *last_val) {
+                            eprintf("Error: instance values should match but do not\n");
                             ret = 1;
                         }
                     }
-                    last_val = val;
+                    else if (*val == *last_val) {
+                        eprintf("Error: instance values match but should not\n");
+                        ret = 1;
+                    }
+                }
+                last_val = val;
+            }
+            num_inst = mpr_sig_get_num_inst(multirecv, MPR_SIG_REL_UPSTRM);
+            for (j = num_inst - 1; j >= 0; j--) {
+                mpr_sig_get_inst_id(multirecv, j, MPR_SIG_REL_UPSTRM, &id);
+                eprintf("--> destination multirecv instance %i got upstream release\n", (int)id);
+                mpr_sig_release_inst(multirecv, id);
+            }
+            if (!num_inst && mpr_obj_get_status((mpr_obj)multirecv) & MPR_STATUS_OVERFLOW) {
+                switch (config->oflw_action) {
+                    case ADD:
+                        eprintf("OVERFLOW!! ALLOCATING ANOTHER INSTANCE.\n");
+                        mpr_sig_reserve_inst(multirecv, 1, 0, 0);
+                        break;
+                    case OLD:
+                        eprintf("OVERFLOW!! RELEASING OLDEST INSTANCE.\n");
+                        mpr_sig_release_inst(multirecv, mpr_sig_get_oldest_inst_id(multirecv));
+                        break;
+                    case NEW:
+                        eprintf("OVERFLOW!! RELEASING NEWEST INSTANCE.\n");
+                        mpr_sig_release_inst(multirecv, mpr_sig_get_newest_inst_id(multirecv));
+                        break;
+                    default:
+                        break;
                 }
             }
         }
@@ -603,8 +614,10 @@ int run_test(test_config *config)
 
     /* remove any extra destination instances allocated by previous tests */
     while (5 <= mpr_sig_get_num_inst(multirecv, MPR_STATUS_ANY)) {
+        mpr_id id;
         eprintf("removing extra destination instance\n");
-        mpr_sig_remove_inst(multirecv, mpr_sig_get_inst_id(multirecv, 4, MPR_STATUS_ANY));
+        if (mpr_sig_get_inst_id(multirecv, 4, MPR_STATUS_ANY, &id))
+            mpr_sig_remove_inst(multirecv, id);
     }
 
     mpr_dev_poll(src, 100);
