@@ -546,17 +546,20 @@ mpr_list mpr_map_get_sigs(mpr_map m, mpr_loc l)
     return mpr_graph_new_query(m->obj.graph, 1, MPR_SIG, (void*)cmp_qry_sigs, "vix", &m, l, 0);
 }
 
-int mpr_map_get_sig_idx(mpr_map map, mpr_sig sig)
+int mpr_map_get_sig_idx(mpr_map map, mpr_sig sig, mpr_loc endpoint)
 {
-    int i;
     mpr_id id = mpr_obj_get_id((mpr_obj)sig);
-    mpr_sig dst = mpr_slot_get_sig(map->dst);
-    if (mpr_obj_get_id((mpr_obj)dst) == id)
-        return 0;
-    for (i = 0; i < map->num_src; i++) {
-        mpr_sig src = mpr_slot_get_sig(map->src[i]);
-        if (mpr_obj_get_id((mpr_obj)src) == id)
-            return i;
+    if (MPR_LOC_DST == endpoint) {
+        mpr_sig dst = mpr_slot_get_sig(map->dst);
+        return (mpr_obj_get_id((mpr_obj)dst) == id) ? 0 : -1;
+    }
+    if (MPR_LOC_SRC == endpoint) {
+        int i;
+        for (i = 0; i < map->num_src; i++) {
+            mpr_sig src = mpr_slot_get_sig(map->src[i]);
+            if (mpr_obj_get_id((mpr_obj)src) == id)
+                return i;
+        }
     }
     return -1;
 }
@@ -2051,7 +2054,7 @@ mpr_map mpr_map_new_from_str(const char *expr, ...)
             /* replace "%x" with "x$i" where i is the signal index */
             new_expr[j++] = 'x';
             new_expr[j++] = '$';
-            new_expr[j++] = "0123456789"[mpr_map_get_sig_idx(map, sig) % 10];
+            new_expr[j++] = "0123456789"[mpr_map_get_sig_idx(map, sig, MPR_LOC_SRC) % 10];
         }
         i += 2;
     }
