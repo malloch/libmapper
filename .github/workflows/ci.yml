@@ -20,7 +20,7 @@ jobs:
       # load liblo latest commit since we require lo_message_clear()
       run:
         curl -L -O https://github.com/radarsat1/liblo/archive/refs/heads/master.zip
-        && unzip liblo-master.zip -d liblo-0.32
+        && unzip master.zip -d liblo-0.32
         && cd liblo-0.32
         && (./configure --host=$HOST --prefix=$PWD/inst --enable-static --disable-tests --disable-tools --disable-examples || (cat config.log; false))
         && make install
@@ -69,7 +69,7 @@ jobs:
       # load liblo latest commit since we require lo_message_clear()
       run:
         curl -L -O https://github.com/radarsat1/liblo/archive/refs/heads/master.zip
-        && unzip liblo-master.zip -d liblo-0.32.tar.gz
+        && unzip master.zip -d liblo-0.32
       # TODO: revert to using released version
       # run: curl -L -O https://downloads.sourceforge.net/project/liblo/liblo/0.32/liblo-0.32.tar.gz && tar -xzf liblo-0.32.tar.gz
     - name: liblo make arm64
