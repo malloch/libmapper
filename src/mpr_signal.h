@@ -28,7 +28,7 @@ void mpr_sig_init(mpr_sig sig, mpr_dev dev, int is_local, mpr_dir dir, const cha
 
 void mpr_local_sig_add_to_net(mpr_local_sig sig, mpr_net net);
 
-void mpr_sig_call_handler(mpr_local_sig sig, int evt, mpr_id inst, unsigned int inst_idx, float diff);
+void mpr_sig_call_handler(mpr_local_sig sig, int evt, mpr_id inst, unsigned int inst_idx);
 
 int mpr_sig_set_from_msg(mpr_sig sig, mpr_msg msg);
 

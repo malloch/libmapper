@@ -741,22 +741,24 @@ const char *mpr_get_version(void)
 
 void mpr_net_send(mpr_net net)
 {
-    RETURN_UNLESS(net->bundle);
+    lo_bundle bundle = net->bundle;
+    RETURN_UNLESS(bundle);
+    net->bundle = 0;
 
     switch (net->addr.dst) {
         case BUNDLE_DST_SUBSCRIBERS:
-            mpr_local_dev_send_to_subscribers(net->addr.dev, net->bundle, net->msg_type,
+            mpr_local_dev_send_to_subscribers(net->addr.dev, bundle, net->msg_type,
                                               net->servers[SERVER_MESH]);
             break;
         case BUNDLE_DST_MESH:
             if (net->addr.mesh) {
-                lo_send_bundle_from(net->addr.mesh, net->servers[SERVER_MESH], net->bundle);
+                lo_send_bundle_from(net->addr.mesh, net->servers[SERVER_MESH], bundle);
                 break;
             }
             /* otherwise fall back to local */
         case BUNDLE_DST_LOCAL: {
             size_t data_len;
-            char *data = (char*) lo_bundle_serialise(net->bundle, NULL, &data_len);
+            char *data = (char*) lo_bundle_serialise(bundle, NULL, &data_len);
             if (data) {
                 lo_server_dispatch_data(net->servers[SERVER_MESH], data, data_len);
                 free(data);
@@ -765,12 +767,11 @@ void mpr_net_send(mpr_net net)
             /* otherwise fall back to bus */
         }
         case BUNDLE_DST_BUS:
-            lo_send_bundle_from(net->addr.bus, net->servers[SERVER_MESH], net->bundle);
+            lo_send_bundle_from(net->addr.bus, net->servers[SERVER_MESH], bundle);
             break;
     }
 
-    lo_bundle_free_recursive(net->bundle);
-    net->bundle = 0;
+    lo_bundle_free_recursive(bundle);
 }
 
 static int init_bundle(mpr_net net)

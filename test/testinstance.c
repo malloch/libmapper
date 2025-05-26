@@ -332,7 +332,9 @@ void print_instance_ids(mpr_sig sig)
     const char *name = mpr_obj_get_prop_as_str((mpr_obj)sig, MPR_PROP_NAME, NULL);
     eprintf("%s: [ ", name);
     for (i=0; i<n; i++) {
-        eprintf("%4i, ", (int)mpr_sig_get_inst_id(sig, i, MPR_STATUS_ANY));
+        mpr_id id;
+        mpr_sig_get_inst_id(sig, i, MPR_STATUS_ANY, &id);
+        eprintf("%4i, ", (int)id);
     }
     if (i)
         eprintf("\b\b ");
@@ -345,7 +347,8 @@ void print_instance_vals(mpr_sig sig)
     const char *name = mpr_obj_get_prop_as_str((mpr_obj)sig, MPR_PROP_NAME, NULL);
     eprintf("%s: [ ", name);
     for (i = 0; i < n; i++) {
-        mpr_id id = mpr_sig_get_inst_id(sig, i, MPR_STATUS_ANY);
+        mpr_id id;
+        mpr_sig_get_inst_id(sig, i, MPR_STATUS_ANY, &id);
         float *val = (float*)mpr_sig_get_value(sig, id, 0);
         if (val)
             printf("%4.0f, ", *val);
@@ -363,8 +366,9 @@ void print_instance_status(mpr_sig sig)
     const char *name = mpr_obj_get_prop_as_str((mpr_obj)sig, MPR_PROP_NAME, NULL);
     eprintf("%s: [ ", name);
     for (i = 0; i < n; i++) {
-        mpr_id id = mpr_sig_get_inst_id(sig, i, MPR_STATUS_ANY);
-        eprintf("x%03x, ", mpr_sig_get_inst_status(sig, id));
+        mpr_id id;
+        mpr_sig_get_inst_id(sig, i, MPR_STATUS_ANY, &id);
+        eprintf("x%03x, ", mpr_sig_get_inst_status(sig, id, 0));
     }
     if (i)
         eprintf("\b\b ");
@@ -378,8 +382,11 @@ void release_active_instances(mpr_sig sig)
     mpr_obj_set_prop((mpr_obj)sig, MPR_PROP_EPHEM, NULL, 1, MPR_INT32, &i, 1);
     eprintf("--> Releasing %d active instances for signal %s\n", n,
             mpr_obj_get_prop_as_str((mpr_obj)sig, MPR_PROP_NAME, NULL));
-    for (i = 0; i < n; i++)
-        mpr_sig_release_inst(sig, mpr_sig_get_inst_id(sig, 0, MPR_STATUS_ACTIVE));
+    for (i = 0; i < n; i++) {
+        mpr_id id;
+        if (mpr_sig_get_inst_id(sig, 0, MPR_STATUS_ACTIVE, &id))
+            mpr_sig_release_inst(sig, id);
+    }
     mpr_obj_set_prop((mpr_obj)sig, MPR_PROP_EPHEM, NULL, 1, MPR_INT32, &ephem, 1);
 }
 
@@ -425,12 +432,13 @@ int loop(test_config *config)
             int num_inst = mpr_sig_get_num_inst(multirecv, MPR_STATUS_ACTIVE);
             /* if dst signal is not ephemeral there may be values from a previous configuration */
             if (num_inst > 1 && (ephemeral || received > i)) {
-                mpr_id id = mpr_sig_get_inst_id(multirecv, 0, MPR_STATUS_ACTIVE);
+                mpr_id id;
+                mpr_sig_get_inst_id(multirecv, 0, MPR_STATUS_ACTIVE, &id);
                 float *val0 = (float*)mpr_sig_get_value(multirecv, id, 0);
                 if (val0) {
                     for (j = 1; j < num_inst; j++) {
                         float *valj;
-                        id = mpr_sig_get_inst_id(multirecv, j, MPR_STATUS_ACTIVE);
+                        mpr_sig_get_inst_id(multirecv, j, MPR_STATUS_ACTIVE, &id);
                         valj = (float*)mpr_sig_get_value(multirecv, id, 0);
                         if (!valj)
                             continue;
@@ -590,8 +598,10 @@ int run_test(test_config *config)
 
     /* remove any extra destination instances allocated by previous tests */
     while (5 <= mpr_sig_get_num_inst(multirecv, MPR_STATUS_ANY)) {
+        mpr_id id;
         eprintf("removing extra destination instance\n");
-        mpr_sig_remove_inst(multirecv, mpr_sig_get_inst_id(multirecv, 4, MPR_STATUS_ANY));
+        if (mpr_sig_get_inst_id(multirecv, 4, MPR_STATUS_ANY, &id))
+            mpr_sig_remove_inst(multirecv, id);
     }
 
     mpr_dev_poll(src, 100);

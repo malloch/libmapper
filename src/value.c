@@ -233,6 +233,14 @@ static void update_timing_stats(mpr_value v, mpr_time t)
     }
 }
 
+void mpr_value_get_timing_stats(mpr_value v, float *period, float *jitter)
+{
+    if (period)
+        *period = v->period;
+    if (jitter)
+        *jitter = v->jitter;
+}
+
 void* mpr_value_get_value(mpr_value v, unsigned int inst_idx, int hist_idx)
 {
     mpr_value_buffer b = GET_BUFFER();

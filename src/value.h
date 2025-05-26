@@ -51,6 +51,8 @@ void mpr_value_set_time(mpr_value v, mpr_time t, unsigned int inst_idx, int hist
 
 mpr_time mpr_value_get_start(mpr_value v, unsigned int inst_idx);
 
+void mpr_value_get_timing_stats(mpr_value v, float *period, float *jitter);
+
 void mpr_value_incr_idx(mpr_value v, unsigned int inst_idx, mpr_time t);
 
 void mpr_value_decr_idx(mpr_value v, unsigned int inst_idx);

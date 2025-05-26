@@ -340,8 +340,6 @@ namespace mapper {
         using pointer = int*;
         using reference = int&;
 
-        List(mpr_list list)
-            { _list = list; }
         /* Copy constructor */
         List(const List& orig)
             { _list = mpr_list_get_cpy(orig._list); }
@@ -373,7 +371,7 @@ namespace mapper {
         List end()
             { return List(0); }
 
-        /*! Return the number ot items in a List
+        /*! Return the number of items in a List
          *  \return             The number of items in this list. */
         int size()
             { return mpr_list_get_size(_list); }
@@ -397,7 +395,7 @@ namespace mapper {
          *  \param op           The comparison operator.
          *  \return             Self. */
         template <typename P, typename V>
-        List& filter(P&& prop, V&& value, Operator op);
+        List& filter(P&& prop, V&& value, Operator op=Operator::EQUAL);
 
         /*! Remove items found in List rhs from this List
          *  \param rhs          A second list.
@@ -478,6 +476,15 @@ namespace mapper {
         }
 
     protected:
+        friend class Graph;
+        friend class Device;
+        friend class Signal;
+        friend class Map;
+        friend class PropVal;
+
+        List(mpr_list list)
+            { _list = list; }
+    private:
         mpr_list _list;
     };
 
@@ -869,22 +876,6 @@ namespace mapper {
         };
 
         /*! The set of possible voice-stealing modes for instances. */
-        enum class InstanceStatus
-        {
-            NEW         = MPR_STATUS_NEW,           /*!< Instance is new since last check. */
-            STAGED      = MPR_STATUS_STAGED,        /*!< Instance is reserved but not active. */
-            ACTIVE      = MPR_STATUS_ACTIVE,        /*!< Instance is active. */
-            HAS_VALUE   = MPR_STATUS_HAS_VALUE,     /*!< Instance has a value. */
-            NEW_VALUE   = MPR_STATUS_NEW_VALUE,     /*!< Value has changed since last check. */
-            UPDATE_LOC  = MPR_STATUS_UPDATE_LOC,    /*!< Value was set locally since last check. */
-            UPDATE_REM  = MPR_STATUS_UPDATE_REM,    /*!< Value was set remotely since last check. */
-            REL_UPSTRM  = MPR_STATUS_REL_UPSTRM,    /*!< Released upstream since last check. */
-            REL_DNSTRM  = MPR_STATUS_REL_DNSTRM,    /*!< Released downstream since last check. */
-            INST_OFLW   = MPR_STATUS_OVERFLOW,      /*!< No local instances left. */
-            ANY         = MPR_STATUS_ANY
-        };
-
-        /*! The set of possible voice-stealing modes for instances. */
         enum class Stealing
         {
             NONE    = MPR_STEAL_NONE,       /*!< No stealing will take place. */
@@ -963,12 +954,13 @@ namespace mapper {
                 { return _id; }
 
             /*! Return the current status for this Instance.
+             *  \param clear    Set to false to read status without clearing dynamic bits.
              *  \return         The status of the signal instance returned as bitflags. Test the
              *                  return value against the constants defined in the `Signal::Status`
              *                  enum class. Each time this function is called it will reset the
              *                  bitflags for `NEW`, `SET_*`, and `REL_*`. */
-            int status() const
-                { return mpr_sig_get_inst_status(_sig, _id); }
+            int status(bool clear=true) const
+                { return mpr_sig_get_inst_status(_sig, _id, (int)clear); }
 
         private:
             Instance& _set_value(const int *val, unsigned int len)
@@ -994,11 +986,6 @@ namespace mapper {
             Instance& _set_value(std::vector<T> val)
                 { return set_value(&val[0], val.size()); }
         public:
-            /*! Get the status bitflags for this Instance.
-             *  \return         Status bitflags. */
-            int get_status()
-                { return mpr_sig_get_inst_status(_sig, _id); }
-
             /*! Set the current value for this Instance.
              *  \param vals     The value to set. Can be scalar, array, `std::array`, or
              *                  `std::vector` of `int`, `float`, or `double`.
@@ -1333,12 +1320,10 @@ namespace mapper {
         Signal& reserve_instance(mpr_id id, void* data)
             { mpr_sig_reserve_inst(_obj, 1, &id, &data); RETURN_SELF }
 
-        /*! Retrieve an Instance from the pool using an index and status.
-         *  \param idx      The index of the Instance to retrieve.
+        /*! Retrieve a List of Instances from the pool matching the provided Status.
          *  \param status   The status pool to query: `ACTIVE`, `RESERVED`, or `ANY`.
-         *  \return         An Instance. */
-        Instance instance(int idx, InstanceStatus status) const
-            { return Instance(_obj, mpr_sig_get_inst_id(_obj, idx, static_cast<mpr_status>(status))); }
+         *  \return         A List of Instances. */
+        List<Signal::Instance> instances(Status status = Status::ANY) const;
 
         /*! Remove an Instance and free its resources.
          *  \param instance The Instance to remove.
@@ -1365,6 +1350,193 @@ namespace mapper {
             { return mpr_sig_get_num_inst(_obj, static_cast<mpr_status>(status)); }
 
         OBJ_METHODS(Signal);
+    };
+
+    /*! List class specialization for Signal Instances. */
+    template <>
+    class List<Signal::Instance>
+    {
+    public:
+        using iterator_category = std::forward_iterator_tag;
+        using value_type = int;
+        using difference_type = int;
+        using pointer = int*;
+        using reference = int&;
+
+        /* Copy constructor */
+        List(const List& orig): _sig(orig._sig), _status(orig._status), _idx(orig._idx) {}
+
+        /* Move constructor */
+        List(List&& orig) noexcept
+            { _sig = orig._sig; _status = orig._status; _idx = orig._idx; }
+        /* Copy assignment operator */
+        List& operator=(const List& orig) noexcept
+            { _sig = orig._sig; _status = orig._status; _idx = orig._idx; return *this; }
+        /* Move assignment operator */
+        List& operator=(List&& orig) noexcept
+            { _sig = orig._sig; _status = orig._status; _idx = orig._idx; return *this; }
+
+        ~List() {}
+
+        operator mpr_list() { return NULL; }
+
+        bool operator==(const List& rhs)
+            { return (_sig == rhs._sig && _status == rhs._status); }
+        bool operator!=(const List& rhs)
+            { return (_sig != rhs._sig); }
+
+        /* The increment operator will actually decrement from num_inst toward 0 to support
+         * instance release within iterators. */
+        List& operator++()
+            {
+                if (--_idx < 0)
+                    _sig = NULL;
+                else if (_sig && !mpr_sig_get_inst_id(_sig, _idx, _status, NULL))
+                    _sig = NULL;
+                RETURN_SELF;
+            }
+        List operator++(int)
+            { List tmp(*this); operator++(); return tmp; }
+        List& begin()
+            { RETURN_SELF; }
+        List end()
+            { return List(0, MPR_STATUS_UNDEFINED); }
+
+        /*! Return the number of items in a List
+         *  \return             The number of items in this list. */
+        int size()
+            { return mpr_sig_get_num_inst(_sig, _status); }
+
+        /*! Filtering instance items is not curently supported
+         *  TODO: consider adding support, but only STATUS and DATA make sense here since all other
+         *  properties are shared by all instances of this signal
+         */
+//        template <typename P, typename V>
+//        List& filter(P&& property, V&& value, Operator op)
+//            { ... }
+
+        /* Combination functions are not currently supported for lists of signal instances */
+//        /*! Add items found in List rhs to this List (without duplication).
+//         *  \param rhs          A second List.
+//         *  \return             Self. */
+//        List& join(const List& rhs)
+//            { RETURN_SELF; }
+//
+//        /*! Remove items NOT found in List rhs from this List
+//         *  \param rhs          A second List.
+//         *  \return             Self. */
+//        List& intersect(const List& rhs)
+//            { RETURN_SELF; }
+//
+//        /*! Remove items found in List rhs from this List
+//         *  \param rhs          A second list.
+//         *  \return             Self. */
+//        List& subtract(const List& rhs)
+//            { RETURN_SELF; }
+//
+//        /*! Add items found in List rhs to this List (without duplication).
+//         *  \param rhs          A second List.
+//         *  \return             A new List containing the results. */
+//        List operator+(const List& rhs) const
+//        {
+//            return List(*this);
+//        }
+//
+//        /*! Remove items NOT found in List rhs from this List
+//         *  \param rhs          A second List.
+//         *  \return             A new List containing the results. */
+//        List operator*(const List& rhs) const
+//        { return List(*this);
+//        }
+//
+//        /*! Remove items found in List rhs from this List
+//         *  \param rhs          A second List.
+//         *  \return             A new List containing the results. */
+//        List operator-(const List& rhs) const
+//        {
+//            return List(*this);
+//        }
+//
+//        /*! Add items found in List rhs to this List (without duplication).
+//         *  \param rhs          A second List.
+//         *  \return             Self. */
+//        List& operator+=(const List& rhs)
+//            { RETURN_SELF; }
+//
+//        /*! Remove items NOT found in List rhs from this List
+//         *  \param rhs          A second List.
+//         *  \return             Self. */
+//        List& operator*=(const List& rhs)
+//            { RETURN_SELF; }
+//
+//        /*! Remove items found in List rhs from this List
+//         *  \param rhs          A second List.
+//         *  \return             Self. */
+//        List& operator-=(const List& rhs)
+//            { RETURN_SELF; }
+
+        /*! Set properties for each Object in the List.
+//         *  \param vals     The Properties to add of modify.
+//         *  \return         Self. */
+//        template <typename... Values>
+//        List& set_property(const Values... vals);
+
+        Signal::Instance operator*()
+        {
+            mpr_id id;
+            if (_sig && _idx >= 0 && mpr_sig_get_inst_id(_sig, _idx, _status, &id))
+                return Signal::Instance(_sig, id);
+            else
+                return Signal::Instance(NULL, 0);
+        }
+        operator Signal::Instance()
+        {
+            mpr_id id;
+            if (_sig && mpr_sig_get_inst_id(_sig, _idx, _status, &id))
+                return Signal::Instance(_sig, id);
+            else
+                return Signal::Instance(NULL, 0);
+        }
+
+        /*! Retrieve an indexed item in the List.
+         *  \param idx           The index of the element to retrieve.
+         *  \return              The retrieved Object. */
+        Signal::Instance operator [] (int idx)
+        {
+            mpr_id id;
+            if (_sig && mpr_sig_get_inst_id(_sig, idx, _status, &id))
+                return Signal::Instance(_sig, id);
+            else
+                return Signal::Instance(NULL, 0);
+        }
+
+        /*! Convert this List to a std::vector of CLASS_NAME.
+         *  \return              The converted List results. */
+        virtual operator std::vector<Signal::Instance>() const
+        {
+            std::vector<Signal::Instance> vec;
+            mpr_id id;
+            int i = 0;
+            while (_sig && mpr_sig_get_inst_id(_sig, i, _status, &id))
+                vec.push_back(Signal::Instance(_sig, id));
+            return vec;
+        }
+
+    protected:
+        friend class Signal;
+
+        List(mpr_sig sig, mpr_status status): _sig(sig), _status(status), _idx(-1)
+        {
+            if (_sig && _status)
+                _idx = mpr_sig_get_num_inst(_sig, _status) - 1;
+            if (_idx < 0)
+                _sig = NULL;
+        }
+
+    private:
+        mpr_sig _sig;
+        mpr_status _status;
+        int _idx;
     };
 
     /*! A Device is an entity on the network which has input and/or output Signals.  The Device is
@@ -2470,6 +2642,9 @@ namespace mapper {
     inline Device Signal::device() const
         { return Device(mpr_sig_get_dev(_obj)); }
 
+    List<Signal::Instance> Signal::instances(Status status) const
+        { return List<Signal::Instance>(_obj, static_cast<mpr_status>(status)); }
+
     inline std::string version()
         { return std::string(mpr_get_version()); }
 
@@ -2531,6 +2706,20 @@ namespace mapper {
             case Object::Status::REL_DNSTRM:    os << "REL_DNSTRM"; break;
             case Object::Status::INST_OFLW:     os << "INST_OFLW";  break;
             case Object::Status::ANY:           os << "ANY";        break;
+        }
+        return os;
+    }
+
+    inline std::ostream& operator<<(std::ostream &os, const Signal::Event& e)
+    {
+        switch (e) {
+            case Signal::Event::NONE:       os << "NONE";       break;
+            case Signal::Event::INST_NEW:   os << "INST_NEW";   break;
+            case Signal::Event::UPDATE:     os << "UPDATE";     break;
+            case Signal::Event::REL_UPSTRM: os << "REL_UPSTRM"; break;
+            case Signal::Event::REL_DNSTRM: os << "REL_DNSTRM"; break;
+            case Signal::Event::INST_OFLW:  os << "INST_OFLW";  break;
+            default:                        os << "unknown";    break;
         }
         return os;
     }

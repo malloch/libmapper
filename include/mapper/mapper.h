@@ -422,11 +422,12 @@ void mpr_sig_remove_inst(mpr_sig signal, mpr_id instance);
 /*! Get the status of a signal instance as a set of bitflags.
  *  \param signal       The signal to check.
  *  \param instance     The identifier of the instance to check.
+ *  \param clear        Non-zero value causes the dynamic status bits to be cleared.
  *  \return             The status of the signal instance returned as bitflags. Test the return
  *                      value against the constants defined in the enum `mpr_status`.
  *                      Each time this function is called it will reset the bitflags for `NEW`,
  *                      `SET_*`, and `REL_DNSTRM`. The bitflag for `REL_UPSTRM` will remain */
-int mpr_sig_get_inst_status(mpr_sig signal, mpr_id instance);
+int mpr_sig_get_inst_status(mpr_sig signal, mpr_id instance, int clear);
 
 /*! Activate a specific signal instance without setting its value. In general it is not necessary
  *  to use this function, since signal instances will be automatically activated as necessary when
@@ -454,9 +455,11 @@ mpr_id mpr_sig_get_newest_inst_id(mpr_sig signal);
  *  \param status       The statuses of the instances to search. Instances matching _any_ of the
  *                      status bitflags will be counted. For example, only active instances can be
  *                      included by setting status to `MPR_STATUS_ACTIVE`.
- *  \return             The instance identifier associated with the given index, or zero
- *                      if unsuccessful. */
-mpr_id mpr_sig_get_inst_id(mpr_sig signal, int index, mpr_status status);
+ *  \param instance     A location to receive the instance identifier associated with the given
+ *                      index.
+ *  \return             The status associated with the indexed instance, or `MPR_STATUS_UNDEFINED`
+ *                      if not found. */
+mpr_status mpr_sig_get_inst_id(mpr_sig signal, int index, mpr_status status, mpr_id *instance);
 
 /*! Associate a signal instance with an arbitrary pointer.
  *  \param signal       The signal to operate on.

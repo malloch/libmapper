@@ -942,17 +942,11 @@ void mpr_map_receive(mpr_local_map m, mpr_time time)
             /* apply update to all active destination instances */
             mpr_local_sig_set_inst_value(dst_sig, value, -1, &m->id_map, status, map_manages_inst, time);
         }
-        else if (status & EXPR_EVAL_DONE) {
-            /* expression reduces across instances, no need to recompute result */
-            for (; i < m->num_inst; i++) {
-                if (!mpr_bitflags_get(m->updated_inst, i))
-                    continue;
-                mpr_local_sig_set_inst_value(dst_sig, value, i, &m->id_map, status, map_manages_inst, time);
-            }
-            break;
-        }
         else {
             mpr_local_sig_set_inst_value(dst_sig, value, i, &m->id_map, status, map_manages_inst, time);
+        }
+        if (status & EXPR_EVAL_DONE) {
+            break;
         }
     }
     mpr_bitflags_clear(m->updated_inst);
@@ -1508,6 +1502,9 @@ static int set_expr(mpr_local_map m, const char *expr_str)
         for (i = 0; i < m->num_inst; i++)
             mpr_expr_eval(m->expr, mpr_graph_get_expr_eval_buffer(m->obj.graph), 0,
                           m->vars, mpr_slot_get_value(m->dst), &now, i);
+
+        /* reset map id_map */
+        m->id_map.LID = m->id_map.GID = 0;
     }
     else {
         if (!m->expr) {
@@ -1524,7 +1521,7 @@ static int set_expr(mpr_local_map m, const char *expr_str)
     /* TODO: should call handler for all instances updated through this map. */
     if (mpr_expr_get_num_src(m->expr) <= 0 && !m->use_inst && mpr_obj_get_is_local((mpr_obj)dst_sig)) {
         /* call handler if it exists */
-        mpr_sig_call_handler((mpr_local_sig)dst_sig, MPR_STATUS_UPDATE_REM, 0, 0, 0);
+        mpr_sig_call_handler((mpr_local_sig)dst_sig, MPR_STATUS_UPDATE_REM, 0, 0);
     }
 
     /* check whether each source slot causes computation */
@@ -1944,8 +1941,11 @@ int mpr_map_send_state(mpr_map m, int slot_idx, net_msg_t cmd, int version)
         for (j = 0; j < lm->num_vars; j++) {
             /* TODO: handle multiple instances */
             k = 0;
-            if (mpr_value_get_num_samps(lm->vars[j], k) >= 0) {
+            if (mpr_value_get_has_value(lm->vars[j], k)) {
                 snprintf(varname, 32, "@var@%s", mpr_expr_get_var_name(lm->expr, j));
+                /* hide variables for instance and muting control */
+                if (0 == strncmp(varname + 5, "alive", 5) || 0 == strncmp(varname + 5, "muted", 5))
+                    continue;
                 lo_message_add_string(msg, varname);
                 mpr_value_add_to_msg(lm->vars[j], k, msg);
             }

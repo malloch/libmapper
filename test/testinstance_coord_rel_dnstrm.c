@@ -215,8 +215,8 @@ void loop(void)
         for (j = 0; j < num_inst; j++) {
             mpr_id id;
             int status;
-            id = mpr_sig_get_inst_id(recvsig1, j, MPR_STATUS_ANY);
-            status = mpr_sig_get_inst_status(recvsig1, id);
+            mpr_sig_get_inst_id(recvsig1, j, MPR_STATUS_ANY, &id);
+            status = mpr_sig_get_inst_status(recvsig1, id, 1);
             if (status & MPR_STATUS_UPDATE_REM) {
                 float *value = (float*)mpr_sig_get_value(recvsig1, id, NULL);
                 if (value) {
@@ -243,14 +243,14 @@ void loop(void)
                     }
                 }
             }
-            status = mpr_sig_get_inst_status(sendsig1, id);
+            status = mpr_sig_get_inst_status(sendsig1, id, 1);
             if (status & MPR_STATUS_REL_DNSTRM) {
                 eprintf("%s.%"PR_MPR_ID" got downstream release\n",
                         mpr_obj_get_prop_as_str((mpr_obj)sendsig1, MPR_PROP_NAME, NULL), id);
                 mpr_sig_release_inst(sendsig1, id);
             }
-            id = mpr_sig_get_inst_id(recvsig2, j, MPR_STATUS_ANY);
-            status = mpr_sig_get_inst_status(recvsig2, id);
+            mpr_sig_get_inst_id(recvsig2, j, MPR_STATUS_ANY, &id);
+            status = mpr_sig_get_inst_status(recvsig2, id, 1);
             if (status & MPR_STATUS_UPDATE_REM) {
                 float *value = (float*)mpr_sig_get_value(recvsig2, id, NULL);
                 if (value) {
@@ -277,7 +277,7 @@ void loop(void)
                     }
                 }
             }
-            status = mpr_sig_get_inst_status(sendsig2, id);
+            status = mpr_sig_get_inst_status(sendsig2, id, 1);
             if (status & MPR_STATUS_REL_DNSTRM) {
                 eprintf("%s.%"PR_MPR_ID" got downstream release\n",
                         mpr_obj_get_prop_as_str((mpr_obj)sendsig2, MPR_PROP_NAME, NULL), id);
