@@ -530,8 +530,9 @@ mpr_list mpr_map_get_sigs(mpr_map map, mpr_loc endpoint);
 /*! Retrieve the index for a specific map signal.
  *  \param map          The map to check.
  *  \param signal       The signal to find.
+ *  \param endpoint     The map endpoint value, must be `MPR_LOC_SRC` or 'MPR_LOC_DST`
  *  \return             The signal index, or `-1` if not found. */
-int mpr_map_get_sig_idx(mpr_map map, mpr_sig signal);
+int mpr_map_get_sig_idx(mpr_map map, mpr_sig signal, mpr_loc endpoint);
 
 /*! Detect whether a map is completely initialized.
  *  \param map          The device to query.

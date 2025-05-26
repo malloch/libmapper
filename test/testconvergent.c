@@ -194,13 +194,13 @@ int setup_maps(void)
                 if (i == 0) {
                     /* set the first source to trigger evaluation */
                     snprintf(expr + offset, len - offset, "-x$%d",
-                             mpr_map_get_sig_idx(map, sendsigs[i]));
+                             mpr_map_get_sig_idx(map, sendsigs[i], MPR_LOC_SRC));
                     offset += 4;
                 }
                 else {
                     /* mute the remaining sources so they don't trigger evaluation */
                     snprintf(expr + offset, len - offset, "-_x$%d",
-                             mpr_map_get_sig_idx(map, sendsigs[i]));
+                             mpr_map_get_sig_idx(map, sendsigs[i], MPR_LOC_SRC));
                     offset += 5;
                 }
             }

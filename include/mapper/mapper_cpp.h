@@ -822,8 +822,8 @@ namespace mapper {
         /*! Get the index of the Map endpoint matching a specific Signal.
          *  \param sig      The Signal to look for.
          *  \return         Index of the signal in this map, or -1 if not found. */
-        int signal_idx(signal_type sig) const
-            { return mpr_map_get_sig_idx(_obj, (mpr_sig)sig); }
+        int signal_idx(signal_type sig, Location loc) const
+            { return mpr_map_get_sig_idx(_obj, (mpr_sig)sig, static_cast<mpr_loc>(loc)); }
 
         /*! Retrieve a list of connected Signals for this Map.
          *  \param loc      `MPR_LOC_SRC` for source signals for this Map,
