@@ -140,7 +140,7 @@ static void mpr_local_map_init(mpr_local_map map)
         mpr_id id;
         do {
             id = mpr_dev_generate_unique_id(dst_dev);
-        } while (mpr_graph_get_obj(map->obj.graph, id, MPR_MAP));
+        } while (mpr_graph_get_obj_by_id(map->obj.graph, id, MPR_MAP));
         mpr_obj_set_id((mpr_obj)map, id);
     }
 
@@ -235,7 +235,7 @@ void mpr_map_init(mpr_map m, int num_src, mpr_sig *src, mpr_sig dst, int is_loca
         if (mpr_obj_get_graph((mpr_obj)src[i]) == g) {
             sig = src[i];
         }
-        else if (  !(sig = (mpr_sig)mpr_graph_get_obj(g, mpr_obj_get_id((mpr_obj)src[i]), MPR_SIG))
+        else if (  !(sig = (mpr_sig)mpr_graph_get_obj_by_id(g, mpr_obj_get_id((mpr_obj)src[i]), MPR_SIG))
                  || (mpr_sig_get_dev(sig) != mpr_sig_get_dev(src[i]))) {
             sig = mpr_graph_add_sig(g, mpr_sig_get_name(src[i]),
                                     mpr_dev_get_name(mpr_sig_get_dev(src[i])), 0);
@@ -344,7 +344,7 @@ mpr_map mpr_map_new(int num_src, mpr_sig *src, int num_dst, mpr_sig *dst)
     maps = mpr_sig_get_maps(*dst, MPR_DIR_IN);
     if (maps) {
         for (i = 0; i < num_src; i++) {
-            o = mpr_graph_get_obj(g, mpr_obj_get_id((mpr_obj)src[i]), MPR_SIG);
+            o = mpr_graph_get_obj_by_id(g, mpr_obj_get_id((mpr_obj)src[i]), MPR_SIG);
             if (o) {
                 mpr_list temp = mpr_sig_get_maps((mpr_sig)o, MPR_DIR_OUT);
                 maps = mpr_list_get_isect(maps, temp);

@@ -196,7 +196,7 @@ int loop()
         ++i;
 
         if (i % 50 == 0) {
-            mpr_map map = (mpr_map)mpr_graph_get_obj(mpr_obj_get_graph((mpr_obj)dst), map_id, MPR_MAP);
+            mpr_map map = (mpr_map)mpr_graph_get_obj_by_id(mpr_obj_get_graph((mpr_obj)dst), map_id, MPR_MAP);
             if (map) {
                 eprintf("Removing map.\n");
                 mpr_map_release(map);
@@ -300,7 +300,7 @@ int main(int argc, char **argv)
         goto done;
 
     /* remove the map */
-    map = (mpr_map)mpr_graph_get_obj(mpr_obj_get_graph((mpr_obj)dst), map_id, MPR_MAP);
+    map = (mpr_map)mpr_graph_get_obj_by_id(mpr_obj_get_graph((mpr_obj)dst), map_id, MPR_MAP);
     if (map) {
         eprintf("Removing map.\n");
         mpr_map_release(map);

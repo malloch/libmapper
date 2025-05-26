@@ -145,9 +145,9 @@ int main(int argc, char **argv)
     do {
         mpr_dev_poll(dev, 100);
         mpr_graph_poll(graph, 100);
-        remote_dev = mpr_graph_get_obj(graph,
-                                       mpr_obj_get_prop_as_int64((mpr_obj)dev, MPR_PROP_ID, NULL),
-                                       MPR_DEV);
+        remote_dev = mpr_graph_get_obj_by_id(graph,
+                                             mpr_obj_get_prop_as_int64((mpr_obj)dev, MPR_PROP_ID, NULL),
+                                             MPR_DEV);
     } while (!remote_dev);
 
     /* Test that default parameters are all listed. */

@@ -763,7 +763,7 @@ mpr_list mpr_graph_get_list(mpr_graph graph, int types);
  *  \param type         The type of object to search for. Use `MPR_OBJ` if the type is not known.
  *  \param id           Unique id identifying the object to find in the graph.
  *  \return             The object matching the query, or zero if not found. */
-mpr_obj mpr_graph_get_obj(mpr_graph graph, mpr_id id, mpr_type type);
+mpr_obj mpr_graph_get_obj_by_id(mpr_graph graph, mpr_id id, mpr_type type);
 
 /** @} */ /* end of group Graphs */
 

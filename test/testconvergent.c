@@ -252,14 +252,14 @@ int setup_maps(void)
 
                 /* Check if all signals are known to the graph */
                 sig_id = mpr_obj_get_prop_as_int64(recvsig, MPR_PROP_ID, NULL);
-                recvsig2 = mpr_graph_get_obj(g2, sig_id, MPR_SIG);
+                recvsig2 = mpr_graph_get_obj_by_id(g2, sig_id, MPR_SIG);
                 if (!recvsig2) {
                     synced = 0;
                 }
                 else {
                     for (i = 0; i < num_sources; i++) {
                         sig_id = mpr_obj_get_prop_as_int64(sendsigs[i], MPR_PROP_ID, NULL);
-                        sendsigs2[i] = mpr_graph_get_obj(g2, sig_id, MPR_SIG);
+                        sendsigs2[i] = mpr_graph_get_obj_by_id(g2, sig_id, MPR_SIG);
                         if (!sendsigs2[i]) {
                             synced = 0;
                             break;

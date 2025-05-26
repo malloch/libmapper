@@ -267,7 +267,7 @@ int main(int argc, char **argv)
     eprintf("Destination has %d active instances before map release.\n", num_inst);
 
     /* remove the map */
-    map = (mpr_map)mpr_graph_get_obj(dstgraph, map_id, MPR_MAP);
+    map = (mpr_map)mpr_graph_get_obj_by_id(dstgraph, map_id, MPR_MAP);
     if (map) {
         eprintf("Removing map.\n");
         mpr_map_release(map);

@@ -361,7 +361,7 @@ static mpr_obj get_obj_by_id(mpr_graph g, void *obj_list, mpr_id id)
     return NULL;
 }
 
-mpr_obj mpr_graph_get_obj(mpr_graph g, mpr_id id, mpr_type type)
+mpr_obj mpr_graph_get_obj_by_id(mpr_graph g, mpr_id id, mpr_type type)
 {
     mpr_obj o;
     if ((type & MPR_DEV) && (o = get_obj_by_id(g, g->devs, id)))
