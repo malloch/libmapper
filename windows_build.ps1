@@ -34,7 +34,7 @@ if (!(Test-Path "$($scriptDir)\dist\")) {
 }
 # Copy dlls to /dist
 cp -v ./build/Release/libmapper.dll ./dist/libmapper.dll
-cp -v ./build/liblo/liblo-0.32/cmake/build/Release/liblo.dll ./dist/liblo.dll
+cp -v ./build/liblo/liblo-master/cmake/build/Release/liblo.dll ./dist/liblo.dll
 cp -v ./build/zlib/msvc2017_64/lib/zlib/zlib.dll ./dist/zlib.dll
 # Copy test files
 cp -v ./build/test/Release/* ./dist/tests
