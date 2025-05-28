@@ -479,26 +479,33 @@ class Object:
 
 class List:
     """
-    Lists provide a data structure for retrieving multiple Objects (Devices, Signals, or Maps) as a
-    result of a query.
+    Lists provide a data structure for retrieving multiple Objects (Devices, Signals,
+    Signal Instances, or Maps) as a result of a query.
     """
 
-    def __init__(self, ref):
-        mpr.mpr_list_get_cpy.argtypes = [c_void_p]
-        mpr.mpr_list_get_cpy.restype = c_void_p
-        self._list = mpr.mpr_list_get_cpy(ref)
+    def __init__(self, ref, status):
+        if status is not None:
+            mpr.mpr_sig_get_num_inst.argtypes = [c_void_p, c_int]
+            mpr.mpr_sig_get_num_inst.restype = c_int
+            self._idx = mpr.mpr_sig_get_num_inst(ref, status) - 1
+            self._ref = ref
+        else:
+            mpr.mpr_list_get_cpy.argtypes = [c_void_p]
+            mpr.mpr_list_get_cpy.restype = c_void_p
+            self._ref = mpr.mpr_list_get_cpy(ref)
+        self._status = status
 
     def __del__(self):
-        if self._list:
+        if self._status is None:
             mpr.mpr_list_free.argtypes = [c_void_p]
             mpr.mpr_list_free.restype = None
-            mpr.mpr_list_free(self._list)
-            self._list = None
+            mpr.mpr_list_free(self._ref)
+            self._ref = None
 
     def __contains__(self, obj):
-        if self._list and obj and isinstance(obj, Object):
+        if self._status is None and self._ref and obj and isinstance(obj, Object):
             # use a copy
-            cpy = List(mpr.mpr_list_get_cpy(self._list))
+            cpy = List(mpr.mpr_list_get_cpy(self._ref), None)
             for _obj in cpy:
                 if _obj == obj:
                     return True
@@ -523,7 +530,7 @@ class List:
         elif _type == Type.MAP:
             return Map(ptr)
         else:
-            print("libmapper.List error: object is not a Device, Signal, or Map")
+            print("libmapper.List error: object is not a Device, Signal, Signal Instance, or Map")
             return None
 
     def next(self):
@@ -534,12 +541,22 @@ class List:
             StopIteration: if no more items in list
         """
 
-        if self._list:
-            # self._list is the address of result, need to dereference
-            result = cast(self._list, POINTER(c_void_p)).contents.value
+        if self._status:
+            id = c_int()
+            self._idx -= 1
+            if self._idx >= 0:
+                mpr.mpr_sig_get_inst_id.argtypes = [c_void_p, c_int, c_int, c_void_p]
+                mpr.mpr_sig_get_inst_id.restype = c_longlong
+                inst_status = mpr.mpr_sig_get_inst_id(self._ref, self._idx, self._status, byref(id))
+                if inst_status != 0:
+                    return Signal(self._ref).Instance(id.value)
+            raise StopIteration
+        elif self._ref:
+            # self._ref is the address of result, need to dereference
+            result = cast(self._ref, POINTER(c_void_p)).contents.value
             mpr.mpr_list_get_next.argtypes = [c_void_p]
             mpr.mpr_list_get_next.restype = c_void_p
-            self._list = mpr.mpr_list_get_next(self._list)
+            self._ref = mpr.mpr_list_get_next(self._ref)
             return List._objectify(result)
         else:
             raise StopIteration
@@ -557,6 +574,10 @@ class List:
         Returns:
             self
         """
+
+        if self._status:
+            # filtering instance lists is not currently supported
+            return self
 
         key, idx = c_char_p(), c_int()
         _type = type(key_or_idx)
@@ -586,17 +607,17 @@ class List:
         if _type is int:
             if key_or_idx == Property.ID or key_or_idx == 'id':
                 # use int64
-                self._list = mpr.mpr_list_filter(self._list, idx, key, 1, Type.INT64, byref(c_longlong(val)), op)
+                self._ref = mpr.mpr_list_filter(self._ref, idx, key, 1, Type.INT64, byref(c_longlong(val)), op)
             else:
-                self._list = mpr.mpr_list_filter(self._list, idx, key, 1, Type.INT32, byref(c_int(val)), op)
+                self._ref = mpr.mpr_list_filter(self._ref, idx, key, 1, Type.INT32, byref(c_int(val)), op)
         elif _type is bool:
             # convert value to int
             val = val * 1
-            self._list = mpr.mpr_list_filter(self._list, idx, key, 1, Type.INT32, byref(c_int(val)), op)
+            self._ref = mpr.mpr_list_filter(self._ref, idx, key, 1, Type.INT32, byref(c_int(val)), op)
         elif _type is float:
-            self._list = mpr.mpr_list_filter(self._list, idx, key, 1, Type.FLOAT, byref(c_float(val)), op)
+            self._ref = mpr.mpr_list_filter(self._ref, idx, key, 1, Type.FLOAT, byref(c_float(val)), op)
         elif _type is str:
-            self._list = mpr.mpr_list_filter(self._list, idx, key, 1, Type.STRING, c_char_p(val.encode('utf-8')), op)
+            self._ref = mpr.mpr_list_filter(self._ref, idx, key, 1, Type.STRING, c_char_p(val.encode('utf-8')), op)
         else:
             print("libmapper.List.filter() : unhandled filter value type", _type)
         return self
@@ -612,15 +633,18 @@ class List:
             self
         """
 
+        if self._status:
+            # joining instance lists is not currently supported
+            return self
         if not isinstance(rhs, List):
             return self
-        if rhs._list is None:
+        if rhs._ref is None:
             return self
         # need to use a copy of rhs list
-        cpy = mpr.mpr_list_get_cpy(rhs._list)
+        cpy = mpr.mpr_list_get_cpy(rhs._ref)
         mpr.mpr_list_get_union.argtypes = [c_void_p, c_void_p]
         mpr.mpr_list_get_union.restype = c_void_p
-        self._list = mpr.mpr_list_get_union(self._list, cpy)
+        self._ref = mpr.mpr_list_get_union(self._ref, cpy)
         return self
 
     def intersect(self, rhs):
@@ -634,15 +658,18 @@ class List:
             self
         """
 
+        if self._status:
+            # intersecting instance lists is not currently supported
+            return self
         if not isinstance(rhs, List):
             return self
-        if rhs._list is None:
+        if rhs._ref is None:
             return self
         # need to use a copy of list
-        cpy = mpr.mpr_list_get_cpy(rhs._list)
+        cpy = mpr.mpr_list_get_cpy(rhs._ref)
         mpr.mpr_list_get_isect.argtypes = [c_void_p, c_void_p]
         mpr.mpr_list_get_isect.restype = c_void_p
-        self._list = mpr.mpr_list_get_isect(self._list, cpy)
+        self._ref = mpr.mpr_list_get_isect(self._ref, cpy)
         return self
 
     def subtract(self, rhs):
@@ -656,15 +683,18 @@ class List:
             self
         """
 
+        if self._status:
+            # subtracting instance lists is not currently supported
+            return self
         if not isinstance(rhs, List):
             return self
-        if rhs._list is None:
+        if rhs._ref is None:
             return self
         # need to use a copy of list
-        cpy = mpr.mpr_list_get_cpy(rhs._list)
+        cpy = mpr.mpr_list_get_cpy(rhs._ref)
         mpr.mpr_list_get_diff.argtypes = [c_void_p, c_void_p]
         mpr.mpr_list_get_diff.restype = c_void_p
-        self._list = mpr.mpr_list_get_diff(self._list, cpy)
+        self._ref = mpr.mpr_list_get_diff(self._ref, cpy)
         return self
 
     def __getitem__(self, index):
@@ -682,16 +712,29 @@ class List:
         """
 
         # python lists allow a negative index
-        if index < 0:
-            mpr.mpr_list_get_size.argtypes = [c_void_p]
-            mpr.mpr_list_get_size.restype = c_int
-            index += mpr.mpr_list_get_size(self._list)
-        if index >= 0:
-            mpr.mpr_list_get_idx.argtypes = [c_void_p, c_uint]
-            mpr.mpr_list_get_idx.restype = c_void_p
-            ret = mpr.mpr_list_get_idx(self._list, index)
-            if ret:
-                return List._objectify(ret)
+        if self._status:
+            if index < 0:
+                mpr.mpr_sig_get_num_inst.argtypes = [c_void_p, c_int]
+                mpr.mpr_sig_get_num_inst.restype = c_int
+                index += mpr.mpr_sig_get_num_inst(self._ref, self._status)
+            if index >= 0:
+                id = c_int()
+                mpr.mpr_sig_get_inst_id.argtypes = [c_void_p, c_int, c_int, c_void_p]
+                mpr.mpr_sig_get_inst_id.restype = c_int
+                inst_status = mpr.mpr_sig_get_inst_id(self._ref, index, self._status, byref(id))
+                if inst_status != 0:
+                    return Signal(self._ref).Instance(id.value)
+        elif self._ref:
+            if index < 0:
+                mpr.mpr_list_get_size.argtypes = [c_void_p]
+                mpr.mpr_list_get_size.restype = c_int
+                index += mpr.mpr_list_get_size(self._ref)
+            if index >= 0:
+                mpr.mpr_list_get_idx.argtypes = [c_void_p, c_uint]
+                mpr.mpr_list_get_idx.restype = c_void_p
+                ret = mpr.mpr_list_get_idx(self._ref, index)
+                if ret:
+                    return List._objectify(ret)
         raise IndexError
         return None
 
@@ -703,9 +746,14 @@ class List:
     def __len__(self):
         """Retrieve the number of objects in the list."""
 
-        mpr.mpr_list_get_size.argtypes = [c_void_p]
-        mpr.mpr_list_get_size.restype = c_int
-        return mpr.mpr_list_get_size(self._list)
+        if self._status:
+            mpr.mpr_sig_get_num_inst.argtypes = [c_void_p, c_int]
+            mpr.mpr.sig_get_num_inst.restype = c_int
+            return mpr.mpr_sig_get_num_inst(self._ref, self._status)
+        else:
+            mpr.mpr_list_get_size.argtypes = [c_void_p]
+            mpr.mpr_list_get_size.restype = c_int
+            return mpr.mpr_list_get_size(self._ref)
 
     def print(self):
         """
@@ -715,9 +763,10 @@ class List:
             self
         """
 
-        mpr.mpr_list_print.argtypes = [c_void_p]
-        mpr.mpr_list_print.restype = None
-        mpr.mpr_list_print(self._list)
+        if self._status is None:
+            mpr.mpr_list_print.argtypes = [c_void_p]
+            mpr.mpr_list_print.restype = None
+            mpr.mpr_list_print(self._ref)
         return self
 
 class Object:
@@ -995,7 +1044,7 @@ class Object:
             elif _val.value == None:
                 val = None
             else:
-                val = List(_val.value);
+                val = List(_val.value, None)
         elif _type == b'c':
             if prop != Property.TYPE:
                 print("libmapper.Object.get_property({}:{}) : unhandled char type".format(prop, key_or_idx), val)
@@ -1461,24 +1510,25 @@ class Signal(Object):
             status = Signal.Status(status)
         return mpr.mpr_sig_get_num_inst(self._obj, status.value)
 
-    def instance_id(self, idx, status=Status.ANY):
+    def instances(self, status=Status.ANY):
         """
-        Get a Signal Instance's identifier by its index.
+        Get a list of Signal Instances matching a given status.
 
         Args:
-            idx (int): The numerical index of the instance to retrieve.  Should be between zero
-                and the number of instances.
             status (libmapper.Signal.Status): The statuses of the instances to search for.
 
         Returns:
-            The instance identifier associated with the given index, or `0` if unsuccessful.
+            mpr.List
         """
 
-        mpr.mpr_sig_get_inst_id.argtypes = [c_void_p, c_int, c_int]
-        mpr.mpr_sig_get_inst_id.restype = c_longlong
         if not isinstance(status, Signal.Status):
             status = Signal.Status(status)
-        return mpr.mpr_sig_get_inst_id(self._obj, idx, status.value)
+
+        if type(status) is Status:
+            status = status.value
+        if status == 0:
+            return None
+        return List(self._obj, status)
 
     def device(self):
         """
@@ -1507,7 +1557,7 @@ class Signal(Object):
 
         mpr.mpr_sig_get_maps.argtypes = [c_void_p, c_int]
         mpr.mpr_sig_get_maps.restype = c_void_p
-        return List(mpr.mpr_sig_get_maps(self._obj, direction))
+        return List(mpr.mpr_sig_get_maps(self._obj, direction), None)
 
 py_sig_cb_type = CFUNCTYPE(None, py_object, py_object, c_longlong, py_object, py_object)
 
@@ -1635,14 +1685,16 @@ class Map(Object):
 
         mpr.mpr_map_get_sigs.argtypes = [c_void_p, c_int]
         mpr.mpr_map_get_sigs.restype = c_void_p
-        return List(mpr.mpr_map_get_sigs(self._obj, location))
+        return List(mpr.mpr_map_get_sigs(self._obj, location), None)
 
-    def index(self, signal):
+    def index(self, signal, location):
         """
         Retrieve the index for a specific map signal.
 
         Args:
             signal (libmapper.Signal): The signal to find.
+            location (libmapper.Map.Location): The relative location of the map endpoint, must be
+                `SOURCE` or `DESTINATION`
 
         Returns:
              The signal index, or `-1` if not found.
@@ -1651,9 +1703,9 @@ class Map(Object):
         if not isinstance(signal, Signal):
             print("libmapper.Map.index() : bad argument type", type(signal))
             return None
-        mpr.mpr_map_get_sig_idx.argtypes = [c_void_p, c_void_p]
+        mpr.mpr_map_get_sig_idx.argtypes = [c_void_p, c_void_p, c_int]
         mpr.mpr_map_get_sig_idx.restype = c_int
-        idx = mpr.mpr_map_get_sig_idx(self._obj, signal._obj)
+        idx = mpr.mpr_map_get_sig_idx(self._obj, signal._obj, location)
         return idx
 
     def get_is_ready(self):
@@ -1963,18 +2015,17 @@ class Graph(Object):
     def devices(self):
         """Retrieve a list of Devices from the Graph."""
 
-        list = mpr.mpr_graph_get_list(self._obj, Type.DEVICE)
-        return List(list)
+        return List(mpr.mpr_graph_get_list(self._obj, Type.DEVICE), None)
 
     def signals(self):
         """Retrieve a list of Signals from the Graph."""
 
-        return List(mpr.mpr_graph_get_list(self._obj, Type.SIGNAL))
+        return List(mpr.mpr_graph_get_list(self._obj, Type.SIGNAL), None)
 
     def maps(self):
         """Retrieve a list of Maps from the Graph."""
 
-        return List(mpr.mpr_graph_get_list(self._obj, Type.MAP))
+        return List(mpr.mpr_graph_get_list(self._obj, Type.MAP), None)
 
     def object(self, id, type=Type.OBJECT):
         """
@@ -2141,7 +2192,7 @@ class Device(Object):
 
         mpr.mpr_dev_get_sigs.argtypes = [c_void_p, c_int]
         mpr.mpr_dev_get_sigs.restype = c_void_p
-        return List(mpr.mpr_dev_get_sigs(self._obj, direction))
+        return List(mpr.mpr_dev_get_sigs(self._obj, direction), None)
 
     def maps(self, direction=Signal.Direction.ANY):
         """
@@ -2157,7 +2208,7 @@ class Device(Object):
 
         mpr.mpr_dev_get_maps.argtypes = [c_void_p, c_int]
         mpr.mpr_dev_get_maps.restype = c_void_p
-        return List(mpr.mpr_dev_get_maps(self._obj, direction))
+        return List(mpr.mpr_dev_get_maps(self._obj, direction), None)
 
     def get_is_ready(self):
         """
