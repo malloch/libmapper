@@ -10,7 +10,7 @@ namespace Mapper;
 ///     Signals can be dynamically connected together in a dataflow graph by creating Maps using the libmapper API or an
 ///     external session manager.
 /// </summary>
-public class Signal : MapperObject
+public class Signal : Mapper.Object
 {
     public enum Direction
     {
@@ -73,65 +73,6 @@ public class Signal : MapperObject
         All = 0x1FFF
     }
 
-    [Flags]
-    public enum Status
-    {
-        /// <summary>
-        ///     Instance was newly created since last check
-        /// </summary>
-        New = 0x0001,
-
-        /// <summary>
-        ///     Instance is reserved but not active
-        /// </summary>
-        Staged = 0x0010,
-
-        /// <summary>
-        ///     Instance is active
-        /// </summary>
-        Active = 0x0020,
-
-        /// <summary>
-        ///     Instance has a value
-        /// </summary>
-        HasValue = 0x0040,
-
-        /// <summary>
-        ///     Instance value has changed since last check
-        /// </summary>
-        NewValue = 0x0080,
-
-        /// <summary>
-        ///     Instance was updated locally since last check
-        /// </summary>
-        LocalUpdate = 0x0100,
-
-        /// <summary>
-        ///     Instance was updated remotely since last check
-        /// </summary>
-        RemoteUpdate = 0x0200,
-
-        /// <summary>
-        ///     Instance was released upstream since last check
-        /// </summary>
-        UpstreamRelease = 0x0400,
-
-        /// <summary>
-        ///     Instance was released downstream since last check
-        /// </summary>
-        DownstreamRelease = 0x0800,
-
-        /// <summary>
-        ///     No local instances left
-        /// </summary>
-        Overflow = 0x1000,
-
-        /// <summary>
-        ///     All events
-        /// </summary>
-        Any = 0x1FFF
-    }
-
     public enum Stealing
     {
         /// <summary>
@@ -153,7 +94,7 @@ public class Signal : MapperObject
     /// <summary>
     ///     Handler for signal events.
     /// </summary>
-    public event EventHandler<(Event eventType, ulong instanceId, object? value, MapperType objectType, Time changed)>? ValueChanged;
+    public event EventHandler<(Event eventType, ulong instanceId, object? value, Mapper.Type objectType, Time changed)>? ValueChanged;
 
     public Signal()
     {
@@ -173,7 +114,7 @@ public class Signal : MapperObject
                 // Create a GCHandle to keep the delegate alive
                 var handlePtr = GCHandle.Alloc(handler, GCHandleType.Normal);
                 var val = GCHandle.ToIntPtr(handlePtr).ToInt64();
-                mpr_obj_set_prop(sig, 0, "cb_ptr", 1, (int) MapperType.Int64, &val, 0);
+                mpr_obj_set_prop(sig, 0, "cb_ptr", 1, (int) Mapper.Type.Int64, &val, 0);
             }
         }
     }
@@ -218,17 +159,17 @@ public class Signal : MapperObject
 
     private unsafe void _SetValue(int value, ulong instanceId)
     {
-        mpr_sig_set_value(NativePtr, instanceId, 1, (int)MapperType.Int32, &value);
+        mpr_sig_set_value(NativePtr, instanceId, 1, (int)Mapper.Type.Int32, &value);
     }
 
     private unsafe void _SetValue(float value, ulong instanceId)
     {
-        mpr_sig_set_value(NativePtr, instanceId, 1, (int)MapperType.Float, &value);
+        mpr_sig_set_value(NativePtr, instanceId, 1, (int)Mapper.Type.Float, &value);
     }
 
     private unsafe void _SetValue(double value, ulong instanceId)
     {
-        mpr_sig_set_value(NativePtr, instanceId, 1, (int)MapperType.Double, &value);
+        mpr_sig_set_value(NativePtr, instanceId, 1, (int)Mapper.Type.Double, &value);
     }
 
     private unsafe void _SetValue(int[] value, ulong instanceId)
@@ -236,7 +177,7 @@ public class Signal : MapperObject
         fixed (int* temp = &value[0])
         {
             var intPtr = new IntPtr(temp);
-            mpr_sig_set_value(NativePtr, instanceId, value.Length, (int)MapperType.Int32, (void*)intPtr);
+            mpr_sig_set_value(NativePtr, instanceId, value.Length, (int)Mapper.Type.Int32, (void*)intPtr);
         }
     }
 
@@ -245,7 +186,7 @@ public class Signal : MapperObject
         fixed (float* temp = &value[0])
         {
             var intPtr = new IntPtr(temp);
-            mpr_sig_set_value(NativePtr, instanceId, value.Length, (int)MapperType.Float, (void*)intPtr);
+            mpr_sig_set_value(NativePtr, instanceId, value.Length, (int)Mapper.Type.Float, (void*)intPtr);
         }
     }
 
@@ -254,7 +195,7 @@ public class Signal : MapperObject
         fixed (double* temp = &value[0])
         {
             var intPtr = new IntPtr(temp);
-            mpr_sig_set_value(NativePtr, instanceId, value.Length, (int)MapperType.Double, (void*)intPtr);
+            mpr_sig_set_value(NativePtr, instanceId, value.Length, (int)Mapper.Type.Double, (void*)intPtr);
         }
     }
 
@@ -391,7 +332,7 @@ public class Signal : MapperObject
     }
 
     [DllImport("mapper", CharSet = CharSet.Ansi, CallingConvention = CallingConvention.StdCall)]
-    private static extern ulong mpr_sig_get_inst_id(IntPtr sig, int index, int status);
+    private static extern unsafe ulong mpr_sig_get_inst_id(IntPtr sig, int index, int status, ulong *id);
 
     /// <summary>
     ///     Get a reference to an instance of this signal by index.
@@ -400,7 +341,19 @@ public class Signal : MapperObject
     /// <param name="status">Status flags to match</param>
     public Instance GetInstance(int index, Status status = Status.Any)
     {
-        return new Instance(NativePtr, mpr_sig_get_inst_id(NativePtr, index, (int)status));
+        unsafe {
+            ulong id;
+            if (0 == mpr_sig_get_inst_id(NativePtr, index, (int)status, &id)) {
+                // no matching instance found
+                return new Instance(IntPtr.Zero, 0);
+            }
+            return new Instance(NativePtr, id);
+        }
+    }
+
+    public Mapper.List<Instance> GetInstances(Status status = Status.Any)
+    {
+        return new Mapper.List<Instance>(NativePtr, (int)status, mpr_sig_get_num_inst(NativePtr, (int)status));
     }
 
     // TODO: add handler with Signal Instance object instead of Signal + InstanceId
@@ -411,7 +364,7 @@ public class Signal : MapperObject
         var e = (Event)evt;
         var t = new Time(time);
         object? val = BuildValue(length, type, value.ToPointer(), 0);
-        ValueChanged?.Invoke(this, (e, inst, val, (MapperType)type, t));
+        ValueChanged?.Invoke(this, (e, inst, val, (Mapper.Type)type, t));
     }
 
     public new Signal SetProperty<TProperty, TValue>(TProperty property, TValue value, bool publish)
@@ -439,9 +392,9 @@ public class Signal : MapperObject
     [DllImport("mapper", CharSet = CharSet.Ansi, CallingConvention = CallingConvention.StdCall)]
     private static extern IntPtr mpr_sig_get_maps(IntPtr sig, int dir);
 
-    public MapperList<Map> GetMaps(Direction direction = Direction.Any)
+    public Mapper.List<Map> GetMaps(Direction direction = Direction.Any)
     {
-        return new MapperList<Map>(mpr_sig_get_maps(NativePtr, (int)direction), MapperType.Map);
+        return new Mapper.List<Map>(mpr_sig_get_maps(NativePtr, (int)direction), Mapper.Type.Map);
     }
 
     private delegate void HandlerDelegate(IntPtr sig, int evt, ulong instanceId, int length,
@@ -453,6 +406,10 @@ public class Signal : MapperObject
     public class Instance : Signal
     {
         public readonly ulong id;
+
+        public Instance()
+        {
+        }
 
         internal Instance(IntPtr sig, ulong instanceId) : base(sig)
         {

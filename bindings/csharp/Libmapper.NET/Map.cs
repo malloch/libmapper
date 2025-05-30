@@ -7,7 +7,7 @@ namespace Mapper;
 ///     A map consists of one or more sources, one destination, and properties which determine how the source data is
 ///     processed.
 /// </summary>
-public class Map : MapperObject
+public class Map : Mapper.Object
 {
     public enum Location
     {
@@ -179,21 +179,21 @@ public class Map : MapperObject
     /// </summary>
     /// <param name="location">Filter the returned list by signal location</param>
     /// <returns>A possibly filtered list of signals connected by this map</returns>
-    public MapperList<Signal> GetSignals(Location location = Location.Any)
+    public Mapper.List<Signal> GetSignals(Location location = Location.Any)
     {
-        return new MapperList<Signal>(mpr_map_get_sigs(NativePtr, (int)location), MapperType.Signal);
+        return new Mapper.List<Signal>(mpr_map_get_sigs(NativePtr, (int)location), Mapper.Type.Signal);
     }
 
     [DllImport("mapper", CharSet = CharSet.Ansi, CallingConvention = CallingConvention.StdCall)]
-    private static extern int mpr_map_get_sig_idx(IntPtr map, IntPtr sig);
+    private static extern int mpr_map_get_sig_idx(IntPtr map, IntPtr sig, int loc);
 
     /// <summary>
     ///     Retrieve the index for a specific map signal.
     /// </summary>
     /// <param name="signal">The signal to get the numerical index of</param>
     /// <returns>Numerical signal index</returns>
-    public int GetSignalIndex(Signal signal)
+    public int GetSignalIndex(Signal signal, Location location)
     {
-        return mpr_map_get_sig_idx(NativePtr, signal.NativePtr);
+        return mpr_map_get_sig_idx(NativePtr, signal.NativePtr, (int)location);
     }
 }

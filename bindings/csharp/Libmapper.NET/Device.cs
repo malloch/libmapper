@@ -2,7 +2,7 @@ using System.Runtime.InteropServices;
 
 namespace Mapper;
 
-public class Device : MapperObject
+public class Device : Mapper.Object
 {
     public Device()
     {
@@ -33,7 +33,7 @@ public class Device : MapperObject
     /// <summary>
     ///     Return the list of all maps for this device. Use <see cref="GetMaps" /> if you want to filter by direction.
     /// </summary>
-    public MapperList<Map> Maps => GetMaps(Signal.Direction.Any);
+    public Mapper.List<Map> Maps => GetMaps(Signal.Direction.Any);
 
     /// <summary>
     ///     The current time according to the backing device.
@@ -111,7 +111,7 @@ public class Device : MapperObject
         IntPtr min, IntPtr max, IntPtr num_inst,
         IntPtr handler, int events);
 
-    public Signal AddSignal(Signal.Direction direction, string name, int length, MapperType mapperType,
+    public Signal AddSignal(Signal.Direction direction, string name, int length, Mapper.Type type,
         string? unit = null, int numInstances = -1)
     {
         var instPtr = IntPtr.Zero;
@@ -121,7 +121,7 @@ public class Device : MapperObject
                 instPtr = new IntPtr(&numInstances);
             }
 
-        var sigptr = mpr_sig_new(NativePtr, (int)direction, name, length, (int)mapperType, unit,
+        var sigptr = mpr_sig_new(NativePtr, (int)direction, name, length, (int)type, unit,
             IntPtr.Zero, IntPtr.Zero, instPtr, IntPtr.Zero, 0);
         return new Signal(sigptr);
     }
@@ -161,9 +161,9 @@ public class Device : MapperObject
     [DllImport("mapper", CharSet = CharSet.Ansi, CallingConvention = CallingConvention.StdCall)]
     private static extern IntPtr mpr_dev_get_sigs(IntPtr dev, int dir);
 
-    public MapperList<Signal> GetSignals(Signal.Direction direction = Signal.Direction.Any)
+    public Mapper.List<Signal> GetSignals(Signal.Direction direction = Signal.Direction.Any)
     {
-        return new MapperList<Signal>(mpr_dev_get_sigs(NativePtr, (int)direction), MapperType.Signal);
+        return new Mapper.List<Signal>(mpr_dev_get_sigs(NativePtr, (int)direction), Mapper.Type.Signal);
     }
 
     [DllImport("mapper", CharSet = CharSet.Ansi, CallingConvention = CallingConvention.StdCall)]
@@ -174,9 +174,9 @@ public class Device : MapperObject
     /// </summary>
     /// <param name="direction">Only return maps matching this direction</param>
     /// <returns></returns>
-    public MapperList<Map> GetMaps(Signal.Direction direction)
+    public Mapper.List<Map> GetMaps(Signal.Direction direction)
     {
-        return new MapperList<Map>(mpr_dev_get_maps(NativePtr, (int)direction), MapperType.Map);
+        return new Mapper.List<Map>(mpr_dev_get_maps(NativePtr, (int)direction), Mapper.Type.Map);
     }
 
     [DllImport("mapper", CharSet = CharSet.Ansi, CallingConvention = CallingConvention.StdCall)]
