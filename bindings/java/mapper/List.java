@@ -6,70 +6,74 @@ import java.util.Collection;
 
 public class List<T extends AbstractObject> implements Iterable<T> {
 
-    private native T _newObject(long ptr);
-    private native long _deref(long list);
-    private native long _copy(long list);
-    private native void _free(long list);
-    private native long _next(long list);
-    private native long _get(long list, int index);
-    private native int _size(long list);
-
-    private native long _diff(long lhs, long rhs);
-    private native long _isect(long lhs, long rhs);
-    private native long _union(long lhs, long rhs);
-
-    private native void _filter(long list, int id, String key,
-                                java.lang.Object value, int op);
-
     /* constructor */
     public List(long listptr) {
-        _list = listptr;
+        _ptr = listptr;
+        _status = 0;
     }
 
+    public List(java.lang.Object sigobj, long sigptr, int status, int num) {
+        _sigobj = sigobj;
+        _ptr = sigptr;
+        _status = status;
+        _idx = num - 1;
+    }
+
+    private native T _get(long ptr, java.lang.Object sigobj, int status, int index);
     public T get(int index) {
-        return _newObject(_get(_list, index));
+        return _get(_ptr, _sigobj, _status, index);
     }
 
+    private native int _size(long ptr, int status);
     public int size() {
-        return _size(_list);
+        return _size(_ptr, _status);
     }
 
     public boolean isEmpty() {
-        return _list == 0;
+        return _ptr == 0;
     }
 
-    private native boolean _contains(long listptr, T t);
+    private native boolean _contains(long ptr, T t);
     public boolean contains(T t) {
-        return _contains(_list, t);
+        return _contains(_ptr, t);
     }
 
-    private native boolean _containsAll(long listptr_1, long listptr_2);
+    private native boolean _containsAll(long ptr_1, long ptr_2);
     public boolean containsAll(List<T> l) {
-        return _containsAll(_list, l._list);
+        return _containsAll(_ptr, l._ptr);
     }
 
+    private native long _union(long lhs, long rhs);
     public List join(List<T> l) {
-        _list = _union(_list, l._list);
+        if (0 == _status)
+            _ptr = _union(_ptr, l._ptr);
         return this;
     }
 
+    private native long _diff(long lhs, long rhs);
     public List difference(List<T> l) {
-        _list = _diff(_list, l._list);
+        if (0 == _status)
+            _ptr = _diff(_ptr, l._ptr);
         return this;
     }
 
+    private native long _isect(long lhs, long rhs);
     public List intersect(List<T> l) {
-        _list = _isect(_list, l._list);
+        if (0 == _status)
+            _ptr = _isect(_ptr, l._ptr);
         return this;
     }
 
-    private native T[] _toArray(long listptr);
+    private native T[] _toArray(long ptr, int status);
     public T[] toArray()
-        { return _toArray(_list); }
+        { return _toArray(_ptr, _status); }
 
+    private native long _copy(long ptr);
+    private native long _deref(long ptr);
+    private native long _next(long ptr);
     public Iterator<T> iterator() {
         Iterator<T> it = new Iterator<T>() {
-            private long _listcopy = _copy(_list);
+            private long _listcopy = (0 == _status) ? _copy(_ptr) : _ptr;
 
 //            protected void finalize() {
 //                if (_listcopy != 0)
@@ -77,16 +81,31 @@ public class List<T extends AbstractObject> implements Iterable<T> {
 //            }
 
             @Override
-            public boolean hasNext() { return _listcopy != 0; }
+            public boolean hasNext() {
+                if (0 == _status)
+                    return _listcopy != 0;
+                else
+                    return _idx > 0;
+            }
 
             @Override
             public T next() {
                 if (0 == _listcopy)
                     return null;
 
-                long temp = _deref(_listcopy);
-                _listcopy = _next(_listcopy);
-                return _newObject(temp);
+                if (0 == _status) {
+                    long temp = _deref(_listcopy);
+                    _listcopy = _next(_listcopy);
+                    return _get(temp, 0, 0, 0);
+                }
+                else {
+                    --_idx;
+                    if (_idx < 0) {
+                        _listcopy = 0;
+                        return null;
+                    }
+                    return _get(_ptr, _sigobj, _status, _idx);
+                }
             }
 
             @Override
@@ -97,20 +116,27 @@ public class List<T extends AbstractObject> implements Iterable<T> {
         return it;
     }
 
+    private native void _filter(long list, int id, String key, java.lang.Object value, int op);
     public List filter(String key, java.lang.Object value, Operator operator) {
-        _filter(_list, 0, key, value, operator.value());
+        if (0 == _status)
+            _filter(_ptr, 0, key, value, operator.value());
         return this;
     }
     public List filter(Property id, java.lang.Object value, Operator operator) {
-        _filter(_list, id.value(), null, value, operator.value());
+        if (0 == _status)
+            _filter(_ptr, id.value(), null, value, operator.value());
         return this;
     }
     //TODO: add version passing filter function
 
+//    private native void _free(long list);
 //    protected void finalize() {
-//        if (_list != 0)
-//            mapperListFree(_list);
+//        if (_ptr != 0)
+//            _free(_ptr);
 //    }
 
-    private long _list;
+    private long _ptr;
+    private int _status;
+    private int _idx;
+    private java.lang.Object _sigobj;
 }

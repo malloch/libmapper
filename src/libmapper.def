@@ -6,7 +6,7 @@ EXPORTS
     mpr_graph_get_address                       @4
     mpr_graph_get_interface                     @5
     mpr_graph_get_list                          @6
-    mpr_graph_get_obj                           @7
+    mpr_graph_get_obj_by_id                     @7
     mpr_graph_new                               @8
     mpr_graph_poll                              @9
     mpr_graph_remove_cb                         @10

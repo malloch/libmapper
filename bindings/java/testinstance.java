@@ -119,5 +119,29 @@ class testinstance {
                            + inp1.oldestActiveInstance());
         System.out.println(inp1.properties().get("name") + " newest instance is "
                            + inp1.newestActiveInstance());
+
+        System.out.println("Repeating update loop without callbacks");
+        inp1.removeListener();
+
+        i = 0;
+        while (i++ <= 100) {
+            if ((i % 3) > 0) {
+                instance1.setValue(i);
+                System.out.println("Updated instance1 value to: " + instance1.getValue());
+            }
+            else {
+                instance2.setValue(i);
+                System.out.println("Updated instance2 value to: " + instance2.getValue());
+            }
+
+            dev1.poll(50);
+            dev2.poll(50);
+
+            List<Signal.Instance> updated = inp1.instances(Status.UPDATE_REM);
+            for (Signal.Instance inst : updated) {
+                System.out.println(inst.properties().get("name")
+                                 + " instance " + inst.id() + " got value " + inst.getValue());
+            }
+        }
     }
 }

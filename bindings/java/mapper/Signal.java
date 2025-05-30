@@ -63,6 +63,12 @@ public class Signal extends AbstractObject
         return this;
     }
 
+    private native void _removeListener(long sig);
+    public Signal removeListener() {
+        _removeListener(_obj);
+        return this;
+    }
+
     private native void mapperSignalReserveInstances(long sig, int num, long[] ids);
     public Signal reserveInstances(int num) {
         mapperSignalReserveInstances(_obj, num, null);
@@ -88,14 +94,14 @@ public class Signal extends AbstractObject
     public native Instance newestActiveInstance();
 
     private native int _num_instances(long sig, int status);
-    public int numInstances(InstanceStatus status)
+    public int numInstances(Status status)
     {
         return _num_instances(_obj, status.value());
     }
-    public int numInstances(EnumSet<InstanceStatus> statuses)
+    public int numInstances(EnumSet<Status> statuses)
     {
         int flags = 0;
-        for (InstanceStatus is : InstanceStatus.values()) {
+        for (Status is : Status.values()) {
             if (statuses.contains(is))
                 flags |= is.value();
         }
@@ -172,6 +178,13 @@ public class Signal extends AbstractObject
         public native int getStatus();
 
         private long _id;
+    }
+
+    /* retrieve a list of instances matching the given status */
+    public mapper.List<mapper.Signal.Instance> instances(Status status)
+    {
+        int num_inst = _num_instances(_obj, status.value());
+        return new mapper.List<mapper.Signal.Instance>(this, _obj, status.value(), num_inst);
     }
 
     /* retrieve associated maps */

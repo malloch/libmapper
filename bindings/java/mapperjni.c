@@ -1341,7 +1341,7 @@ static jobject get_jobject_from_mpr_obj(mpr_obj mobj)
 static void java_graph_cb(mpr_graph g, mpr_obj mobj, mpr_graph_evt evt,
                           const void *user_data)
 {
-    if (bailing || !user_data)
+    if (bailing || !user_data || !mobj)
         return;
 
     jobject jobj = get_jobject_from_mpr_obj(mobj);
@@ -1454,8 +1454,8 @@ JNIEXPORT void JNICALL Java_mapper_Device_mapperDeviceFree
         // check if we have active instances
         int i, n = mpr_sig_get_num_inst(temp, MPR_STATUS_ACTIVE | MPR_STATUS_STAGED);
         for (i = 0; i < n; i++) {
-            mpr_id id = mpr_sig_get_inst_id(temp, i, MPR_STATUS_ACTIVE | MPR_STATUS_STAGED);
-            if (!id)
+            mpr_id id;
+            if (!mpr_sig_get_inst_id(temp, i, MPR_STATUS_ACTIVE | MPR_STATUS_STAGED, &id))
                 continue;
             inst_jni_context ictx = mpr_sig_get_inst_data(temp, id);
             if (!ictx)
@@ -1558,8 +1558,8 @@ JNIEXPORT void JNICALL Java_mapper_Device_remove_1signal
     // check if we have active instances
     int i, n = mpr_sig_get_num_inst(sig, MPR_STATUS_ACTIVE | MPR_STATUS_STAGED);
     for (i = 0; i < n; i++) {
-        mpr_id id = mpr_sig_get_inst_id(sig, i, MPR_STATUS_ACTIVE | MPR_STATUS_STAGED);
-        if (!id)
+        mpr_id id;
+        if (!mpr_sig_get_inst_id(sig, i, MPR_STATUS_ACTIVE | MPR_STATUS_STAGED, &id))
             continue;
         inst_jni_context ictx;
         ictx = mpr_sig_get_inst_data(sig, id);
@@ -1579,6 +1579,8 @@ JNIEXPORT void JNICALL Java_mapper_Device_remove_1signal
         if (ctx->listener)
             (*env)->DeleteGlobalRef(env, ctx->listener);
         free(ctx);
+        // also set sig PROP_DATA to NULL in case parent device is freed before final cleanup
+        mpr_obj_remove_prop((mpr_obj)sig, MPR_PROP_DATA, NULL);
     }
 
     mpr_sig_free(sig);
@@ -1632,13 +1634,34 @@ JNIEXPORT jlong JNICALL Java_mapper_Device_signals
 
 /**** mapper_List.h ****/
 
-JNIEXPORT jobject JNICALL Java_mapper_List__1newObject
-  (JNIEnv *env, jobject jobj, jlong listptr)
+JNIEXPORT jobject JNICALL Java_mapper_List__1get
+  (JNIEnv *env, jobject jobj, jlong ptr, jobject sigobj, jint status, jint index)
 {
-    mpr_obj mobj = (mpr_obj)ptr_jlong(listptr);
-    if (!mobj)
+    if (status) {
+        mpr_sig sig = (mpr_sig) ptr_jlong(ptr);
+        if (!sig)
+            return NULL;
+        mpr_id id;
+        if (mpr_sig_get_inst_id(sig, index, status, &id)) {
+            // construct a Signal Instance
+            jclass cls = (*env)->GetObjectClass(env, sigobj);
+            if (!cls)
+                return NULL;
+
+            jmethodID mid = (*env)->GetMethodID(env, cls, "instance", "(J)Lmapper/Signal$Instance;");
+            if (mid)
+                return (*env)->CallObjectMethod(env, sigobj, mid, id);
+        }
         return NULL;
-    return get_jobject_from_mpr_obj(mobj);
+    }
+    else {
+        mpr_obj mobj = (mpr_obj) ptr_jlong(ptr);
+        if (!mobj)
+            return NULL;
+
+        // Construct an Object
+        return get_jobject_from_mpr_obj(mobj);
+    }
 }
 
 JNIEXPORT jlong JNICALL Java_mapper_List__1copy
@@ -1700,10 +1723,16 @@ JNIEXPORT jlong JNICALL Java_mapper_List__1union
 }
 
 JNIEXPORT jint JNICALL Java_mapper_List__1size
-  (JNIEnv *env, jobject obj, jlong jlist)
+  (JNIEnv *env, jobject obj, jlong ptr, jint status)
 {
-    mpr_list list = (mpr_list) ptr_jlong(jlist);
-    return list ? mpr_list_get_size(list) : 0;
+    if (status) {
+        mpr_sig sig = (mpr_sig) ptr_jlong(ptr);
+        return mpr_sig_get_num_inst(sig, status);
+    }
+    else {
+        mpr_list list = (mpr_list) ptr_jlong(ptr);
+        return list ? mpr_list_get_size(list) : 0;
+    }
 }
 
 JNIEXPORT jlong JNICALL Java_mapper_List__1next
@@ -1834,7 +1863,7 @@ JNIEXPORT jlong JNICALL Java_mapper_Signal_00024Instance_mapperInstance
         id = jid;
     else if (mpr_sig_get_num_inst(sig, MPR_STATUS_STAGED)) {
         // retrieve id from a reserved signal instance
-        id = mpr_sig_get_inst_id(sig, 0, MPR_STATUS_STAGED);
+        mpr_sig_get_inst_id(sig, 0, MPR_STATUS_STAGED, &id);
         mpr_sig_activate_inst(sig, id);
     }
     else {
@@ -1947,6 +1976,13 @@ JNIEXPORT void JNICALL Java_mapper_Signal_mapperSignalSetCB
         mpr_sig_set_cb(sig, NULL, 0);
     }
     return;
+}
+
+JNIEXPORT void JNICALL Java_mapper_Signal__1removeListener
+  (JNIEnv *env, jobject obj, jlong jsig)
+{
+    mpr_sig sig = (mpr_sig) ptr_jlong(jsig);
+    mpr_sig_set_cb(sig, NULL, 0);
 }
 
 JNIEXPORT void JNICALL Java_mapper_Signal_mapperSignalReserveInstances
