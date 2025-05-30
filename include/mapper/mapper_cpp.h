@@ -828,6 +828,8 @@ namespace mapper {
 
         /*! Get the index of the Map endpoint matching a specific Signal.
          *  \param sig      The Signal to look for.
+         *  \param loc      `MPR_LOC_SRC` for source signals for this Map, or
+         *                  `MPR_LOC_DST` for destinations
          *  \return         Index of the signal in this map, or -1 if not found. */
         int signal_idx(signal_type sig, Location loc) const
             { return mpr_map_get_sig_idx(_obj, (mpr_sig)sig, static_cast<mpr_loc>(loc)); }
@@ -1409,79 +1411,12 @@ namespace mapper {
         int size()
             { return mpr_sig_get_num_inst(_sig, _status); }
 
-        /*! Filtering instance items is not curently supported
+        /* Filtering instance items is not curently supported
          *  TODO: consider adding support, but only STATUS and DATA make sense here since all other
          *  properties are shared by all instances of this signal
          */
-//        template <typename P, typename V>
-//        List& filter(P&& property, V&& value, Operator op)
-//            { ... }
 
         /* Combination functions are not currently supported for lists of signal instances */
-//        /*! Add items found in List rhs to this List (without duplication).
-//         *  \param rhs          A second List.
-//         *  \return             Self. */
-//        List& join(const List& rhs)
-//            { RETURN_SELF; }
-//
-//        /*! Remove items NOT found in List rhs from this List
-//         *  \param rhs          A second List.
-//         *  \return             Self. */
-//        List& intersect(const List& rhs)
-//            { RETURN_SELF; }
-//
-//        /*! Remove items found in List rhs from this List
-//         *  \param rhs          A second list.
-//         *  \return             Self. */
-//        List& subtract(const List& rhs)
-//            { RETURN_SELF; }
-//
-//        /*! Add items found in List rhs to this List (without duplication).
-//         *  \param rhs          A second List.
-//         *  \return             A new List containing the results. */
-//        List operator+(const List& rhs) const
-//        {
-//            return List(*this);
-//        }
-//
-//        /*! Remove items NOT found in List rhs from this List
-//         *  \param rhs          A second List.
-//         *  \return             A new List containing the results. */
-//        List operator*(const List& rhs) const
-//        { return List(*this);
-//        }
-//
-//        /*! Remove items found in List rhs from this List
-//         *  \param rhs          A second List.
-//         *  \return             A new List containing the results. */
-//        List operator-(const List& rhs) const
-//        {
-//            return List(*this);
-//        }
-//
-//        /*! Add items found in List rhs to this List (without duplication).
-//         *  \param rhs          A second List.
-//         *  \return             Self. */
-//        List& operator+=(const List& rhs)
-//            { RETURN_SELF; }
-//
-//        /*! Remove items NOT found in List rhs from this List
-//         *  \param rhs          A second List.
-//         *  \return             Self. */
-//        List& operator*=(const List& rhs)
-//            { RETURN_SELF; }
-//
-//        /*! Remove items found in List rhs from this List
-//         *  \param rhs          A second List.
-//         *  \return             Self. */
-//        List& operator-=(const List& rhs)
-//            { RETURN_SELF; }
-
-        /*! Set properties for each Object in the List.
-//         *  \param vals     The Properties to add of modify.
-//         *  \return         Self. */
-//        template <typename... Values>
-//        List& set_property(const Values... vals);
 
         Signal::Instance operator*()
         {
