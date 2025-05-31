@@ -405,7 +405,7 @@ public class Signal : Mapper.Object
     /// </summary>
     public class Instance : Signal
     {
-        public readonly ulong id;
+        private ulong id;
 
         public Instance()
         {
@@ -427,10 +427,11 @@ public class Signal : Mapper.Object
             return this;
         }
 
+        public ulong GetId() => id;
+
         /// <summary>
         /// Gets and then clears status flags attached to this signal instance.
         /// The returned value can be used to see if the signal has been updated remotely.
-        /// <param name="instanceId">Instance id to get status for, default 0</param>
         /// </summary>
         /// <returns>Status flags</returns>
         public Status GetStatus() => (Status)mpr_sig_get_inst_status(NativePtr, id);
@@ -442,6 +443,17 @@ public class Signal : Mapper.Object
         {
             mpr_sig_release_inst(NativePtr, id);
         }
-    }
 
+        internal override object SetInstId(int status, int index)
+        {
+            unsafe {
+                ulong temp;
+                if (0 == mpr_sig_get_inst_id(NativePtr, index, status, &temp))
+                    NativePtr = IntPtr.Zero;
+                else
+                    id = temp;
+            }
+            return this;
+        }
+    }
 }

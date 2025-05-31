@@ -47,12 +47,15 @@ internal static class Program
                 sigA.Release(instanceId);
                 Console.WriteLine($"Released: {instanceId}");
             }
+
             var numInstances = sigA.GetNumInstances(Mapper.Object.Status.Any);
-            Console.WriteLine($"{(int)sigA.GetNumInstances(Mapper.Object.Status.Active)}/{numInstances}Active Instances:");
-            for (int i = 0; i < numInstances; i++) {
-                var instance = sigA.GetInstance(i);
-                Console.WriteLine($"  {i}) ID: {instance.id}, STATUS: {instance.GetStatus()}");
+            Console.WriteLine($"{(int)sigA.GetNumInstances(Mapper.Object.Status.Active)}/{numInstances} Active Instances:");
+
+            var i = 0;
+            foreach (Signal.Instance instance in sigA.GetInstances(Mapper.Object.Status.Any)) {
+                Console.WriteLine($"  {i++}) ID: {instance.GetId()}, STATUS: {instance.GetStatus()}");
             }
+
             dev.Poll(100);
         }
 
@@ -80,10 +83,11 @@ internal static class Program
             ((Signal)sender).SetProperty("rcvd", rcvd);
         }
         var numInstances = ((Signal)sender).GetNumInstances(Mapper.Object.Status.Any);
-        Console.WriteLine($"{(int)((Signal)sender).GetNumInstances(Mapper.Object.Status.Active)}/{numInstances}Active Instances:");
-        for (int i = 0; i < numInstances; i++) {
-            var instance = ((Signal)sender).GetInstance(i);
-            Console.WriteLine($"  {i}) ID: {instance.id}, STATUS: {instance.GetStatus()}");
+        Console.WriteLine($"{(int)((Signal)sender).GetNumInstances(Mapper.Object.Status.Active)}/{numInstances} Active Instances:");
+
+        var i = 0;
+        foreach(Signal.Instance instance in ((Signal)sender).GetInstances(Mapper.Object.Status.Any)) {
+            Console.WriteLine($"  {i++}) ID: {instance.GetId()}, STATUS: {instance.GetStatus()}");
         }
     }
 }
