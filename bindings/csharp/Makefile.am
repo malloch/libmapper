@@ -23,5 +23,5 @@ MOSTLYCLEANFILES = *.dll *.exe *.dylib
 
 EXTRA_DIST = varargs_wrapper.s Libmapper.NET.sln README.md Demo/Demo.csproj Demo/Program.cs \
              Libmapper.NET/Assets/libmapper_logo_black_512px.png Libmapper.NET/Libmapper.NET.csproj \
-             Libmapper.NET/Device.cs Libmapper.NET/Graph.cs Libmapper.NET/Map.cs Libmapper.NET/MapperList.cs \
-             Libmapper.NET/MapperObject.cs Libmapper.NET/Signal.cs Libmapper.NET/Time.cs Libmapper.NET/Types.cs
+             Libmapper.NET/Device.cs Libmapper.NET/Graph.cs Libmapper.NET/Map.cs Libmapper.NET/List.cs \
+             Libmapper.NET/Object.cs Libmapper.NET/Signal.cs Libmapper.NET/Time.cs Libmapper.NET/Types.cs
