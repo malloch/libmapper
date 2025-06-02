@@ -27,7 +27,6 @@ extern const char* net_msg_strings[NUM_MSG_STRINGS];
 #define MPR_DEV_STRUCT_ITEMS                                            \
     mpr_obj_t obj;      /* always first for type punning */             \
     mpr_dev *linked;                                                    \
-    char *name;         /*!< The full name for this device, or zero. */ \
     mpr_time synced;    /*!< Timestamp of last sync. */                 \
     int prefix_len;     /*!< Length of the prefix string. */            \
     int ordinal;                                                        \
@@ -121,8 +120,8 @@ void mpr_dev_init(mpr_dev dev, int is_local, const char *name, mpr_id id)
     dev->obj.is_local = is_local;
     dev->obj.status = 0;
     if (name) {
-        assert(!dev->name);
-        dev->name = strdup(name);
+        assert(!dev->obj.name);
+        dev->obj.name = strdup(name);
     }
     if (id) {
         assert(!dev->obj.id);
@@ -141,7 +140,7 @@ void mpr_dev_init(mpr_dev dev, int is_local, const char *name, mpr_id id)
     link(ID,           MPR_INT64, &dev->obj.id,       MOD_NONE);
     qry = mpr_graph_new_query(dev->obj.graph, 0, MPR_DEV, (void*)cmp_qry_linked, "v", &dev);
     link(LINKED,       MPR_LIST,  qry,                MOD_NONE | PROP_OWNED);
-    link(NAME,         MPR_STR,   &dev->name,         MOD_NONE | INDIRECT | LOCAL_ACCESS);
+    link(NAME,         MPR_STR,   &dev->obj.name,     MOD_NONE | INDIRECT | LOCAL_ACCESS);
     link(NUM_MAPS_IN,  MPR_INT32, &dev->num_maps_in,  MOD_NONE);
     link(NUM_MAPS_OUT, MPR_INT32, &dev->num_maps_out, MOD_NONE);
     link(NUM_SIGS_IN,  MPR_INT32, &dev->num_inputs,   MOD_NONE);
@@ -186,8 +185,8 @@ mpr_dev mpr_dev_new(const char *name_prefix, mpr_graph graph)
 
     dev->own_graph = graph ? 0 : 1;
     dev->prefix_len = strlen(name_prefix);
-    dev->name = (char*)malloc(dev->prefix_len + 6);
-    sprintf(dev->name, "%s.0", name_prefix);
+    dev->obj.name = (char*)malloc(dev->prefix_len + 6);
+    sprintf(dev->obj.name, "%s.0", name_prefix);
 
     dev->ordinal_allocator.val = 1;
     dev->ordinal_allocator.count_time = mpr_get_current_time();
@@ -288,7 +287,7 @@ void mpr_dev_free(mpr_dev dev)
 void mpr_dev_free_mem(mpr_dev dev)
 {
     FUNC_IF(free, dev->linked);
-    FUNC_IF(free, dev->name);
+    FUNC_IF(free, dev->obj.name);
 }
 
 static void on_registered(mpr_local_dev dev)
@@ -312,10 +311,10 @@ static void on_registered(mpr_local_dev dev)
     dev->registered = 1;
     dev->ordinal = dev->ordinal_allocator.val;
 
-    snprintf(dev->name + dev->prefix_len + 1, dev->prefix_len + 6, "%d", dev->ordinal);
-    name = strdup(dev->name);
-    free(dev->name);
-    dev->name = name;
+    snprintf(dev->obj.name + dev->prefix_len + 1, dev->prefix_len + 6, "%d", dev->ordinal);
+    name = strdup(dev->obj.name);
+    free(dev->obj.name);
+    dev->obj.name = name;
 
     dev->obj.status &= ~MPR_STATUS_STAGED;
     dev->obj.status |= MPR_STATUS_ACTIVE;
@@ -596,7 +595,7 @@ int mpr_local_dev_get_num_id_maps(mpr_local_dev dev, int active)
 #ifdef DEBUG
 void mpr_local_dev_print_id_maps(mpr_local_dev dev)
 {
-    printf("ID MAPS for %s:\n", dev->name);
+    printf("ID MAPS for %s:\n", dev->obj.name);
     mpr_id_map *id_maps = &dev->id_maps.active[0];
     while (*id_maps) {
         mpr_id_map id_map = *id_maps;
@@ -615,8 +614,8 @@ mpr_id_map mpr_dev_add_id_map(mpr_local_dev dev, int group, mpr_id LID, mpr_id G
     id_map = dev->id_maps.reserve;
     id_map->LID = LID;
     id_map->GID = GID ? GID : mpr_dev_generate_unique_id((mpr_dev)dev);
-    trace_dev(dev, "mpr_dev_add_id_map(%s) %"PR_MPR_ID" -> %"PR_MPR_ID"\n", dev->name, LID,
-              id_map->GID);
+    trace_dev(dev, "mpr_dev_add_id_map(%s) %"PR_MPR_ID" -> %"PR_MPR_ID"\n",
+              dev->obj.name, LID, id_map->GID);
     id_map->LID_refcount = 1;
     id_map->GID_refcount = 0;
     id_map->indirect = indirect;
@@ -633,7 +632,7 @@ void mpr_dev_remove_id_map(mpr_local_dev dev, int group, mpr_id_map rem)
 {
     mpr_id_map *map = &dev->id_maps.active[group];
     trace_dev(dev, "mpr_dev_remove_id_map(%s) %"PR_MPR_ID" -> %"PR_MPR_ID"\n",
-              dev->name, rem->LID, rem->GID);
+              dev->obj.name, rem->LID, rem->GID);
     while (*map) {
         if ((*map) == rem) {
             *map = (*map)->next;
@@ -651,7 +650,7 @@ void mpr_dev_remove_id_map(mpr_local_dev dev, int group, mpr_id_map rem)
 int mpr_dev_LID_decref(mpr_local_dev dev, int group, mpr_id_map id_map)
 {
     trace_dev(dev, "mpr_dev_LID_decref(%s) %"PR_MPR_ID" -> %"PR_MPR_ID"\n",
-              dev->name, id_map->LID, id_map->GID);
+              dev->obj.name, id_map->LID, id_map->GID);
     --id_map->LID_refcount;
     trace_dev(dev, "  refcounts: {LID:%d, GID:%d}\n", id_map->LID_refcount, id_map->GID_refcount);
     if (id_map->LID_refcount <= 0) {
@@ -667,7 +666,7 @@ int mpr_dev_LID_decref(mpr_local_dev dev, int group, mpr_id_map id_map)
 int mpr_dev_GID_decref(mpr_local_dev dev, int group, mpr_id_map id_map)
 {
     trace_dev(dev, "mpr_dev_GID_decref(%s) %"PR_MPR_ID" -> %"PR_MPR_ID"\n",
-              dev->name, id_map->LID, id_map->GID);
+              dev->obj.name, id_map->LID, id_map->GID);
     --id_map->GID_refcount;
     trace_dev(dev, "  refcounts: {LID:%d, GID:%d}\n", id_map->LID_refcount, id_map->GID_refcount);
     if (id_map->GID_refcount <= 0) {
@@ -735,13 +734,14 @@ void mpr_local_dev_probe_name(mpr_local_dev dev, int start_ordinal, mpr_net net)
     for (i = 0; i < 8; i++)
         dev->ordinal_allocator.hints[i] = 0;
 
-    snprintf(dev->name + dev->prefix_len + 1, dev->prefix_len + 6, "%d", dev->ordinal_allocator.val);
-    trace_dev(dev, "probing name '%s'\n", dev->name);
+    snprintf(dev->obj.name + dev->prefix_len + 1, dev->prefix_len + 6, "%d",
+             dev->ordinal_allocator.val);
+    trace_dev(dev, "probing name '%s'\n", dev->obj.name);
 
     /* Calculate an id from the name and store it in id.val */
-    dev->obj.id = mpr_id_from_str(dev->name);
+    dev->obj.id = mpr_id_from_str(dev->obj.name);
 
-    mpr_net_send_name_probe(net, dev->name);
+    mpr_net_send_name_probe(net, dev->obj.name);
 }
 
 /* Extract the ordinal from a device name in the format: <name>.<ordinal> */
@@ -773,7 +773,7 @@ void mpr_local_dev_handler_name(mpr_local_dev dev, const char *name,
         RETURN_UNLESS(ordinal >= 0);
 
         /* If device name matches */
-        if (strlen(name) == dev->prefix_len && 0 == strncmp(name, dev->name, dev->prefix_len)) {
+        if (strlen(name) == dev->prefix_len && 0 == strncmp(name, dev->obj.name, dev->prefix_len)) {
             /* if id is locked and registered id is within my block, store it */
             diff = ordinal - dev->ordinal_allocator.val - 1;
             if (diff >= 0 && diff < 8)
@@ -846,7 +846,7 @@ void mpr_local_dev_handler_name_probe(mpr_local_dev dev, char *name, int temp_id
 
 const char *mpr_dev_get_name(mpr_dev dev)
 {
-    return dev ? dev->name : NULL;
+    return dev ? dev->obj.name : NULL;
 }
 
 int mpr_dev_get_is_ready(mpr_dev dev)
@@ -877,7 +877,7 @@ void mpr_dev_send_state(mpr_dev dev, net_msg_t cmd)
 
     if (cmd == MSG_DEV_MOD) {
         char str[1024];
-        snprintf(str, 1024, "/%s/modify", dev->name);
+        snprintf(str, 1024, "/%s/modify", dev->obj.name);
         mpr_net_add_msg(net, str, 0, msg);
         mpr_net_send(net);
     }
@@ -958,7 +958,7 @@ static int mpr_dev_update_linked(mpr_dev dev, mpr_msg_atom a)
             for (j = 0; j < num; j++) {
                 name = &link_list[j]->s;
                 name = name[0] == '/' ? name + 1 : name;
-                if (0 == strcmp(name, dev->linked[i]->name)) {
+                if (0 == strcmp(name, dev->linked[i]->obj.name)) {
                     found = 1;
                     break;
                 }
@@ -1251,7 +1251,7 @@ static int check_registration(mpr_local_dev dev)
         on_registered(dev);
 
         /* Send registered msg. */
-        send_name_registered(net, dev->name, -1, 0);
+        send_name_registered(net, dev->obj.name, -1, 0);
 
         mpr_net_add_dev_methods(net, dev);
         trace_dev(dev, "registered.\n");
@@ -1277,7 +1277,7 @@ void mpr_local_dev_handler_logout(mpr_local_dev dev, mpr_dev remote, const char 
         trace_dev(dev, "removing link to removed device '%s'.\n", mpr_dev_get_name(remote));
         mpr_graph_remove_link(dev->obj.graph, link, MPR_STATUS_REMOVED);
     }
-    if (0 == strncmp(prefix_str, dev->name, dev->prefix_len)) {
+    if (0 == strncmp(prefix_str, dev->obj.name, dev->prefix_len)) {
         /* If device name matches and ordinal is within my block, free it */
         int diff = ordinal - dev->ordinal_allocator.val - 1;
         if (diff >= 0 && diff < 8)

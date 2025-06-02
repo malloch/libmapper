@@ -41,7 +41,6 @@ static int get_inst_by_ids(mpr_local_sig lsig, mpr_id *LID, mpr_id *GID);
 #define MPR_SIG_STRUCT_ITEMS                                                            \
     mpr_obj_t obj;              /* always first */                                      \
     char *path;                 /*! OSC path.  Must start with '/'. */                  \
-    char *name;                 /*! The name of this signal (path+1). */                \
     char *unit;                 /*!< The unit of this signal, or NULL for N/A. */       \
     float period;               /*!< Estimate of the update rate of this signal. */     \
     float jitter;               /*!< Estimate of the timing jitter of this signal. */   \
@@ -164,7 +163,7 @@ static void process_maps(mpr_local_sig sig, int id_map_idx)
 
     /* abort if signal is already being processed - might be a local loop */
     if (*locked) {
-        trace("Mapping loop detected on signal %s! (1)\n", sig->name);
+        trace("Mapping loop detected on signal %s! (1)\n", sig->obj.name);
         return;
     }
 
@@ -353,11 +352,11 @@ int mpr_sig_osc_handler(const char *path, const char *types, lo_arg **argv, int 
     dev = sig->dev;
 
 #ifdef DEBUG
-    printf("'%s:%s' received update: ", mpr_dev_get_name((mpr_dev)dev), sig->name);
+    printf("'%s:%s' received update: ", mpr_dev_get_name((mpr_dev)dev), sig->obj.name);
     lo_message_pp(msg);
 #endif
 
-    TRACE_RETURN_UNLESS(sig->num_inst, 0, "signal '%s' has no instances.\n", sig->name);
+    TRACE_RETURN_UNLESS(sig->num_inst, 0, "signal '%s' has no instances.\n", sig->obj.name);
     RETURN_ARG_UNLESS(argc, 0);
 
     time = mpr_net_get_bundle_time(net);
@@ -668,7 +667,7 @@ void mpr_sig_init(mpr_sig sig, mpr_dev dev, int is_local, mpr_dir dir, const cha
     str_len = strlen(name)+2;
     sig->path = malloc(str_len);
     snprintf(sig->path, str_len, "/%s", name);
-    sig->name = (char*)sig->path+1;
+    sig->obj.name = (char*)sig->path+1;
     sig->obj.is_local = is_local;
     sig->len = len;
     sig->type = type;
@@ -717,7 +716,7 @@ void mpr_sig_init(mpr_sig sig, mpr_dev dev, int is_local, mpr_dir dir, const cha
     link(ID,           MPR_INT64, &sig->obj.id,       MOD_NONE);
     link(JITTER,       MPR_FLT,   &sig->jitter,       MOD_NONE);
     link(LEN,          MPR_INT32, &sig->len,          MOD_NONE);
-    link(NAME,         MPR_STR,   &sig->name, 	      MOD_NONE | INDIRECT);
+    link(NAME,         MPR_STR,   &sig->obj.name, 	  MOD_NONE | INDIRECT);
     link(NUM_INST,     MPR_INT32, &sig->num_inst,     MOD_NONE);
     link(NUM_MAPS_IN,  MPR_INT32, &sig->num_maps_in,  MOD_NONE);
     link(NUM_MAPS_OUT, MPR_INT32, &sig->num_maps_out, MOD_NONE);
@@ -830,7 +829,7 @@ void mpr_sig_call_handler(mpr_local_sig lsig, int evt, mpr_id id, unsigned int i
 
     /* abort if signal is already being processed - might be a local loop */
     if (lsig->locked) {
-        trace_dev(lsig->dev, "Mapping loop detected on signal %s! (2)\n", lsig->name);
+        trace_dev(lsig->dev, "Mapping loop detected on signal %s! (2)\n", lsig->obj.name);
         return;
     }
 
@@ -1409,7 +1408,7 @@ void mpr_sig_set_value(mpr_sig sig, mpr_id id, int len, mpr_type type, const voi
     }
     if (!mpr_type_get_is_num(type)) {
 #ifdef DEBUG
-        trace("called update on signal '%s' with non-number type '%c'\n", lsig->name, type);
+        trace("called update on signal '%s' with non-number type '%c'\n", lsig->obj.name, type);
 #endif
         return;
     }
@@ -1706,7 +1705,7 @@ static int mpr_sig_full_name(mpr_sig sig, char *name, int len)
     dev_name_len = strlen(dev_name);
     if (dev_name_len >= len)
         return 0;
-    if ((dev_name_len + strlen(sig->name) + 1) > len)
+    if ((dev_name_len + strlen(sig->obj.name) + 1) > len)
         return 0;
 
     snprintf(name, len, "%s%s", dev_name, sig->path);
@@ -1751,7 +1750,7 @@ static int _init_and_add_id_map(mpr_local_sig lsig, mpr_sig_inst si,
         if (lsig->num_id_maps >= MAX_INST) {
             /* Arbitrary limit to number of tracked id_maps */
             /* TODO: add checks for this return value */
-            trace("warning: reached maximum number of instances for signal %s.\n", lsig->name);
+            trace("warning: reached maximum number of instances for signal %s.\n", lsig->obj.name);
             return -1;
         }
         lsig->num_id_maps = lsig->num_id_maps ? lsig->num_id_maps * 2 : 1;
@@ -1781,7 +1780,7 @@ void mpr_sig_send_state(mpr_sig sig, net_msg_t cmd)
     net = mpr_graph_get_net(sig->obj.graph);
 
     if (cmd == MSG_SIG_MOD) {
-        lo_message_add_string(msg, sig->name);
+        lo_message_add_string(msg, sig->obj.name);
 
         /* properties */
         mpr_obj_add_props_to_msg((mpr_obj)sig, msg);
@@ -1889,7 +1888,7 @@ int mpr_sig_get_len(mpr_sig sig)
 
 const char *mpr_sig_get_name(mpr_sig sig)
 {
-    return sig->name;
+    return sig->obj.name;
 }
 
 const char *mpr_sig_get_path(mpr_sig sig)
@@ -1899,7 +1898,7 @@ const char *mpr_sig_get_path(mpr_sig sig)
 
 int mpr_sig_get_full_name(mpr_sig sig, char *name, int len)
 {
-    return snprintf(name, len, "%s/%s", mpr_dev_get_name(sig->dev), sig->name);
+    return snprintf(name, len, "%s/%s", mpr_dev_get_name(sig->dev), sig->obj.name);
 }
 
 mpr_type mpr_sig_get_type(mpr_sig sig)
@@ -1916,7 +1915,7 @@ int mpr_sig_compare_names(mpr_sig l, mpr_sig r)
 {
     int res = strcmp(mpr_dev_get_name(l->dev), mpr_dev_get_name(r->dev));
     if (0 == res)
-        res = strcmp(l->name, r->name);
+        res = strcmp(l->obj.name, r->obj.name);
     return res;
 }
 

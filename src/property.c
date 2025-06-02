@@ -322,8 +322,11 @@ void mpr_prop_print(int len, mpr_type type, const void *val)
             /* just print signal names */
             mpr_map m = (mpr_map)val;
             int num_src = mpr_map_get_num_src(m);
+            const char *name;
             if (1 != len)
                 break;
+            if ((name = mpr_obj_get_prop_as_str((mpr_obj)m, MPR_PROP_NAME, NULL)))
+                printf("'%s': ", name);
             if (num_src > 1)
                 printf("[");
             for (i = 0; i < num_src; i++) {

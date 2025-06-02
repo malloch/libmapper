@@ -381,6 +381,7 @@ int main(int argc, char ** argv)
     out << "Created Graph with interface " << graph.iface() << std::endl;
     Map map(dev.signals(Direction::OUTGOING)[0], dev.signals(Direction::INCOMING)[1]);
     map[Property::EXPRESSION] = "y=x[0:1]+123";
+    map[Property::NAME] = "testcpp.map";
 
     map.push();
 

@@ -338,6 +338,7 @@ static int update_elements(mpr_tbl_record rec, unsigned int len, mpr_type type, 
                         goto done;
                 }
                 new_val = val ? (void*)strdup((char*)val) : 0;
+                updated = 1;
             }
             else {
                 const char **from = (const char**)val;

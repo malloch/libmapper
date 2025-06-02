@@ -209,6 +209,7 @@ static void relink_props(mpr_map m)
     link(EXPR,        MPR_STR,   &m->expr_str,    MOD_ANY | INDIRECT | PROP_SET);
     link(ID,          MPR_INT64, &m->obj.id,      MOD_NONE | LOCAL_ACCESS | PROP_SET);
     link(MUTED,       MPR_BOOL,  &m->muted,       MOD_ANY | PROP_SET);
+    link(NAME,        MPR_STR,   &m->obj.name,    MOD_ANY | INDIRECT);
     link(NUM_SIGS_IN, MPR_INT32, &m->num_src,     MOD_NONE | PROP_SET);
     link(PROCESS_LOC, MPR_INT32, &m->process_loc, MOD_ANY | PROP_SET);
     /* do not mark value as set to enable initialization */
@@ -1819,6 +1820,7 @@ int mpr_map_set_from_msg(mpr_map m, mpr_msg msg)
             }
             case MPR_PROP_ID:
             case MPR_PROP_MUTED:
+            case MPR_PROP_NAME:
             case MPR_PROP_VERSION:
                 updated += mpr_tbl_add_record_from_msg_atom(tbl, a, MOD_REMOTE);
                 break;

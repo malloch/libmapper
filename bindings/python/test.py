@@ -130,6 +130,7 @@ for i in range(100):
     if i==0:
         map = mpr.Map(outsig, insig)
         map['expr'] = 'y=y{-1}+x'
+        map[mpr.Property.NAME] = 'test.py.map'
         map.push()
 
         # test list.__contains__()

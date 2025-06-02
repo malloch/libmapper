@@ -17,8 +17,9 @@ typedef struct _mpr_obj
 {
     struct _mpr_graph *graph;       /*!< Pointer back to the graph. */
     mpr_id id;                      /*!< Unique id for this object. */
+    char *name;                     /*!< The name of this object. */
     void *data;                     /*!< User context pointer. */
-    struct _mpr_dict props;         /*!< Properties associated with this signal. */
+    struct _mpr_dict props;         /*!< Properties associated with this object. */
     int is_local;
     int version;                    /*!< Version number. */
     uint16_t status;
