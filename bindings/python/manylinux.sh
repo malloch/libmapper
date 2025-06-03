@@ -26,9 +26,11 @@ INST=$TMP/inst
 #    fi
 #    cd $TMP
 #    tar -xzf $TAR
-    curl -L -O https://github.com/radarsat1/liblo/archive/refs/heads/master.zip
-    unzip master.zip -d liblo-tmp
-    mv liblo-tmp/liblo-master liblo-0.32
+    if ! [ -d "./liblo-0.32" ]; then
+        curl -L -O https://github.com/radarsat1/liblo/archive/refs/heads/master.zip
+        unzip master.zip -d liblo-tmp
+        mv liblo-tmp/liblo-master liblo-0.32
+    fi
     cd liblo-0.32
     ./configure --host=$HOST --prefix=$INST --disable-tests --disable-tools --disable-examples \
         || (cat config.log; echo "Error."; false)
