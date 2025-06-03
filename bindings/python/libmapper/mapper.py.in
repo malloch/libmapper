@@ -487,7 +487,7 @@ class List:
         if status is not None:
             mpr.mpr_sig_get_num_inst.argtypes = [c_void_p, c_int]
             mpr.mpr_sig_get_num_inst.restype = c_int
-            self._idx = mpr.mpr_sig_get_num_inst(ref, status) - 1
+            self._idx = mpr.mpr_sig_get_num_inst(ref, status)
             self._ref = ref
         else:
             mpr.mpr_list_get_cpy.argtypes = [c_void_p]
