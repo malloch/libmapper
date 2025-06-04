@@ -1608,16 +1608,11 @@ int mpr_sig_get_num_inst(mpr_sig sig, mpr_status status)
     return j;
 }
 
-// problem here since 0 is a valid instance id
-// instead we need to either pass a success/error result, or a ptr to some instance object
-
-// do we also allow filtering here by HAS_VALUE, NEW_VALUE, etc? Could be useful!
-
 mpr_status mpr_sig_get_inst_id(mpr_sig sig, int idx, mpr_status status, mpr_id *instance)
 {
     int i, j;
     mpr_local_sig lsig = (mpr_local_sig)sig;
-    RETURN_ARG_UNLESS(sig && sig->obj.is_local && sig->use_inst && idx >= 0 && idx < sig->num_inst,
+    RETURN_ARG_UNLESS(sig && sig->obj.is_local && idx >= 0 && idx < sig->num_inst,
                       MPR_STATUS_UNDEFINED);
     if (status != MPR_STATUS_ANY) {
         for (i = 0, j = -1; i < lsig->num_inst; i++) {
