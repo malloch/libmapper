@@ -1327,7 +1327,9 @@ namespace mapper {
             { mpr_sig_reserve_inst(_obj, 1, &id, &data); RETURN_SELF }
 
         /*! Retrieve a List of Instances from the pool matching the provided Status.
-         *  \param status   The status pool to query: `ACTIVE`, `RESERVED`, or `ANY`.
+         *  \param status   The status(es) to match. Instances matching _any_ of the status bitflags
+         *                  will be counted. For example, only active instances can be included by
+         *                  setting status to `Status.ACTIVE`.
          *  \return         A List of Instances. */
         List<Signal::Instance> instances(Status status = Status::ANY) const;
 
@@ -1347,8 +1349,10 @@ namespace mapper {
         Instance newest_instance()
             { return Instance(_obj, mpr_sig_get_newest_inst_id(_obj)); }
 
-        /*! Retrieve the number of Instances belonging to this Signal.
-         *  \param status   The status of the Instance to count: `ACTIVE`, `RESERVED`, or `ALL`.
+        /*! Retrieve the number of Instances in the pool matching the provided Status.
+         *  \param status   The status(es) to match. Instances matching _any_ of the status bitflags
+         *                  will be counted. For example, only active instances can be included by
+         *                  setting status to `Status.ACTIVE`.
          *  \return         The number of Instances with the given status. */
         int num_instances(Status status = Status::ACTIVE) const
             { return mpr_sig_get_num_inst(_obj, static_cast<mpr_status>(status)); }
