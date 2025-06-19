@@ -38,7 +38,7 @@ static void eprintf(const char *format, ...)
     va_end(args);
 }
 
-void handler(mpr_sig sig, mpr_sig_evt event, mpr_id instance, int length,
+void handler(mpr_sig sig, mpr_status event, mpr_id instance, int length,
              mpr_type type, const void *value, mpr_time t)
 {
     int i;
@@ -76,7 +76,7 @@ int setup_devs(mpr_graph g, const char *iface)
         sendsigs[i] = mpr_sig_new(dev, MPR_DIR_OUT, "outsig", 1, MPR_FLT, NULL,
                                   &mn, &mx, &num_inst, NULL, 0);
         recvsigs[i] = mpr_sig_new(dev, MPR_DIR_IN, "insig", 1, MPR_FLT, NULL,
-                                  &mn, &mx, &num_inst, handler, MPR_SIG_UPDATE);
+                                  &mn, &mx, &num_inst, handler, MPR_STATUS_UPDATE_REM);
     }
     return 0;
 

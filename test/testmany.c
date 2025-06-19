@@ -36,7 +36,7 @@ static void eprintf(const char *format, ...)
     va_end(args);
 }
 
-void handler(mpr_sig sig, mpr_sig_evt event, mpr_id instance, int length,
+void handler(mpr_sig sig, mpr_status event, mpr_id instance, int length,
              mpr_type type, const void *value, mpr_time t)
 {
     if (value) {

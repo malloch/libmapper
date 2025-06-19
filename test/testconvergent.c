@@ -95,7 +95,7 @@ void cleanup_src(void)
     free(sendsigs);
 }
 
-void handler(mpr_sig sig, mpr_sig_evt evt, mpr_id instance, int length,
+void handler(mpr_sig sig, mpr_status evt, mpr_id instance, int length,
              mpr_type type, const void *value, mpr_time t)
 {
     if (value) {
@@ -132,7 +132,7 @@ int setup_dst(mpr_graph g, const char *iface)
             mpr_graph_get_interface(mpr_obj_get_graph(dst)));
 
     recvsig = mpr_sig_new(dst, MPR_DIR_IN, "recvsig", 3, MPR_FLT, NULL,
-                          NULL, NULL, NULL, handler, MPR_SIG_UPDATE);
+                          NULL, NULL, NULL, handler, MPR_STATUS_UPDATE_REM);
     mpr_obj_set_prop((mpr_obj)recvsig, MPR_PROP_MIN, NULL, 1, MPR_FLT, &mn, 1);
     mpr_obj_set_prop((mpr_obj)recvsig, MPR_PROP_MAX, NULL, 1, MPR_FLT, &mx, 1);
 

@@ -247,16 +247,16 @@ void cleanup_src(void)
     }
 }
 
-void handler(mpr_sig sig, mpr_sig_evt e, mpr_id inst, int len, mpr_type type,
+void handler(mpr_sig sig, mpr_status e, mpr_id inst, int len, mpr_type type,
              const void *val, mpr_time t)
 {
     const char *name = mpr_obj_get_prop_as_str((mpr_obj)sig, MPR_PROP_NAME, NULL);
 
-    if (e & MPR_SIG_INST_OFLW) {
+    if (e & MPR_STATUS_OVERFLOW) {
         eprintf("OVERFLOW!! ALLOCATING ANOTHER INSTANCE.\n");
         mpr_sig_reserve_inst(sig, 1, 0, 0);
     }
-    else if (e & MPR_SIG_REL_UPSTRM) {
+    else if (e & MPR_STATUS_REL_UPSTRM) {
         eprintf("--> destination %s instance %i got upstream release\n", name, (int)inst);
         mpr_sig_release_inst(sig, inst);
     }
@@ -287,10 +287,10 @@ int setup_dst(mpr_graph g, const char *iface)
     /* Specify 0 instances since we wish to use specific ids */
     num_inst = 0;
     multirecv = mpr_sig_new(dst, MPR_DIR_IN, "multirecv", 1, MPR_FLT, NULL,
-                            &mn, NULL, &num_inst, handler, MPR_SIG_ALL);
+                            &mn, NULL, &num_inst, handler, MPR_STATUS_ANY);
     mpr_obj_set_prop((mpr_obj)multirecv, MPR_PROP_EPHEM, NULL, 1, MPR_INT32, &ephemeral, 1);
     monorecv = mpr_sig_new(dst, MPR_DIR_IN, "monorecv", 1, MPR_FLT, NULL,
-                           &mn, NULL, 0, handler, MPR_SIG_UPDATE);
+                           &mn, NULL, 0, handler, MPR_STATUS_UPDATE_REM);
     if (!multirecv || !monorecv)
         goto error;
 
@@ -523,7 +523,7 @@ int run_test(test_config *config)
 {
     mpr_sig *src_ptr, *dst_ptr;
     mpr_sig both_src[2];
-    int num_src = 1, stl, evt = MPR_SIG_UPDATE | MPR_SIG_REL_UPSTRM, use_inst, compare_count;
+    int num_src = 1, stl, evt = MPR_STATUS_UPDATE_REM | MPR_STATUS_REL_UPSTRM, use_inst, compare_count;
     int result = 0, active_count = 0, reserve_count = 0, count_epsilon;
     mpr_map map;
 
@@ -574,7 +574,7 @@ int run_test(test_config *config)
             stl = MPR_STEAL_OLDEST;
             break;
         case ADD:
-            evt = MPR_SIG_UPDATE | MPR_SIG_INST_OFLW | MPR_SIG_REL_UPSTRM;
+            evt = MPR_STATUS_UPDATE_REM | MPR_STATUS_OVERFLOW | MPR_STATUS_REL_UPSTRM;
         default:
             stl = MPR_STEAL_NONE;
     }

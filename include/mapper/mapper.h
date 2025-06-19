@@ -310,7 +310,7 @@ void mpr_dev_update_maps(mpr_dev device);
 /*! A signal handler function can be called whenever a signal value changes.
  *  \param signal       The signal that has changed.
  *  \param event        The type of event that has occurred, e.g. `MPR_SIG_UPDATE` when the value has
- *                      changed. Event types are listed in the enum `mpr_sig_evt` found in
+ *                      changed. Event types are listed in the enum `mpr_status` found in
  *                      `mapper_constants.h`
  *  \param instance     The identifier of the instance that has been changed, if applicable.
  *  \param length       The array length of the current value in the case of `MPR_SIG_UPDATE`
@@ -319,7 +319,7 @@ void mpr_dev_update_maps(mpr_dev device);
  *  \param value        A pointer to the current value in the case of `MPR_SIG_UPDATE` events, or
  *                      `NULL` for other events.
  *  \param time         The timetag associated with this event. */
-typedef void mpr_sig_handler(mpr_sig signal, mpr_sig_evt event, mpr_id instance, int length,
+typedef void mpr_sig_handler(mpr_sig signal, mpr_status event, mpr_id instance, int length,
                              mpr_type type, const void *value, mpr_time time);
 
 /*! Allocate and initialize a signal.  Values and strings pointed to by this call will be copied.
@@ -337,7 +337,7 @@ typedef void mpr_sig_handler(mpr_sig signal, mpr_sig_evt event, mpr_id instance,
  *                          instances will not be used.
  *  \param handler          Function to be called when the signal is updated, or `NULL` for none.
  *  \param events           Bitflags for types of events that should trigger the handler. Event
- *                          types are listed in the enum `mpr_sig_evt` found in `mapper_constants.h`
+ *                          types are listed in the enum `mpr_status` found in `mapper_constants.h`
  *  \return                 The new signal. */
 mpr_sig mpr_sig_new(mpr_dev parent, mpr_dir direction, const char *name, int length, mpr_type type,
                     const char *unit, const void *minimum, const void *maximum, int *num_instances,
@@ -385,7 +385,7 @@ mpr_dev mpr_sig_get_dev(mpr_sig signal);
  *  \param signal       The signal to operate on.
  *  \param handler      A pointer to a `mpr_sig_handler` function for processing incoming messages.
  *  \param events       Bitflags for types of events we are interested in. Event types are listed
- *                      in the enum `mpr_sig_evt` found in `mapper_constants.h` */
+ *                      in the enum `mpr_status` found in `mapper_constants.h` */
 void mpr_sig_set_cb(mpr_sig signal, mpr_sig_handler *handler, int events);
 
 /**** Signal Instances ****/

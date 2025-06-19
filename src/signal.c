@@ -594,11 +594,12 @@ again:
                     status = MPR_STATUS_NEW_VALUE;
             }
             if (mpr_value_get_has_value(sig->value, si->idx)) {
-                si->status |= (MPR_STATUS_HAS_VALUE | MPR_STATUS_UPDATE_REM | status);
+                status |= MPR_STATUS_UPDATE_REM;
+                si->status |= (status | MPR_STATUS_HAS_VALUE);
                 sig->obj.status |= si->status;
                 mpr_value_set_time(sig->value, time, si->idx, 0);
                 mpr_bitflags_unset(sig->updated_inst, si->idx);
-                mpr_sig_call_handler(sig, MPR_STATUS_UPDATE_REM, id_map->LID, si->idx, diff);
+                mpr_sig_call_handler(sig, status, id_map->LID, si->idx, diff);
                 /* Pass this update downstream if signal is an input and was not updated in handler. */
                 if (!(sig->dir & MPR_DIR_OUT) && !mpr_bitflags_get(sig->updated_inst, si->idx)) {
                     process_maps(sig, id_map_idx);
@@ -839,8 +840,8 @@ void mpr_sig_call_handler(mpr_local_sig lsig, int evt, mpr_id id, unsigned int i
     RETURN_UNLESS(value || lsig->ephemeral);
 
     mpr_sig_update_timing_stats(lsig, diff);
-    RETURN_UNLESS(evt & lsig->event_flags);
-    RETURN_UNLESS((h = (mpr_sig_handler*)lsig->handler));
+    evt &= lsig->event_flags;
+    RETURN_UNLESS(evt && (h = (mpr_sig_handler*)lsig->handler));
     time = mpr_value_get_time(lsig->value, inst_idx, 0);
 
     h((mpr_sig)lsig, evt, lsig->use_inst ? id : 0, value ? lsig->len : 0, lsig->type, value, *time);

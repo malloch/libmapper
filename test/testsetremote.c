@@ -88,7 +88,7 @@ void cleanup_graph(void)
     }
 }
 
-void handler(mpr_sig sig, mpr_sig_evt event, mpr_id instance, int length,
+void handler(mpr_sig sig, mpr_status event, mpr_id instance, int length,
              mpr_type type, const void *value, mpr_time t)
 {
     if (value) {
@@ -114,7 +114,7 @@ int setup_device(const char *iface)
             mpr_graph_get_interface(mpr_obj_get_graph(dev)));
 
     recvsig = mpr_sig_new(dev, MPR_DIR_IN, "insig", 1, MPR_FLT, NULL,
-                          &mn, &mx, NULL, handler, MPR_SIG_UPDATE);
+                          &mn, &mx, NULL, handler, MPR_STATUS_UPDATE_REM);
 
     eprintf("Input signal 'insig' registered.\n");
     l = mpr_dev_get_sigs(dev, MPR_DIR_IN);

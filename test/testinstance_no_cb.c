@@ -437,9 +437,9 @@ int loop(test_config *config)
                 }
                 last_val = val;
             }
-            num_inst = mpr_sig_get_num_inst(multirecv, MPR_SIG_REL_UPSTRM);
+            num_inst = mpr_sig_get_num_inst(multirecv, MPR_STATUS_REL_UPSTRM);
             for (j = num_inst - 1; j >= 0; j--) {
-                mpr_sig_get_inst_id(multirecv, j, MPR_SIG_REL_UPSTRM, &id);
+                mpr_sig_get_inst_id(multirecv, j, MPR_STATUS_REL_UPSTRM, &id);
                 eprintf("--> destination multirecv instance %i got upstream release\n", (int)id);
                 mpr_sig_release_inst(multirecv, id);
             }

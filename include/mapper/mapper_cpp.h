@@ -1072,7 +1072,7 @@ namespace mapper {
             } handler;
             enum handler_type type;
         } *handler_data;
-        static void _generic_handler(mpr_sig sig, mpr_sig_evt evt, mpr_id inst, int len,
+        static void _generic_handler(mpr_sig sig, mpr_status evt, mpr_id inst, int len,
                                      mpr_type type, const void *val, mpr_time time)
         {
             // recover signal user_data
@@ -2596,7 +2596,7 @@ namespace mapper {
 
     inline constexpr Signal::Event operator|(Signal::Event l, Signal::Event r)
     {
-        return static_cast<Signal::Event>(static_cast<mpr_sig_evt>(l) | static_cast<mpr_sig_evt>(r));
+        return static_cast<Signal::Event>(static_cast<mpr_status>(l) | static_cast<mpr_status>(r));
     }
 
     inline std::ostream& operator<<(std::ostream &os, const Direction& d)

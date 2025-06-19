@@ -35,7 +35,7 @@ static void eprintf(const char *format, ...)
     va_end(args);
 }
 
-void handler(mpr_sig sig, mpr_sig_evt event, mpr_id inst, int len,
+void handler(mpr_sig sig, mpr_status event, mpr_id inst, int len,
              mpr_type type, const void *val, mpr_time t)
 {
     const char *name;
@@ -145,7 +145,7 @@ int main(int argc, char ** argv)
             snprintf(signame, 32, "in%i", i);
             if (!(inputs[i] = mpr_sig_new(dev, MPR_DIR_IN, signame, 1, MPR_FLT,
                                           NULL, NULL, NULL, NULL, handler,
-                                          MPR_SIG_UPDATE))) {
+                                          MPR_STATUS_UPDATE_REM))) {
                 result = 1;
                 goto done;
             }

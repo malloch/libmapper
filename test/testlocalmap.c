@@ -37,7 +37,7 @@ static void eprintf(const char *format, ...)
     va_end(args);
 }
 
-void handler(mpr_sig sig, mpr_sig_evt event, mpr_id instance, int length,
+void handler(mpr_sig sig, mpr_status event, mpr_id instance, int length,
              mpr_type type, const void *value, mpr_time t)
 {
     if (!value)
@@ -73,7 +73,7 @@ int setup(const char *iface)
     mpr_list_free(l);
 
     recvsig = mpr_sig_new(dev, MPR_DIR_IN, "insig", 1, MPR_FLT, NULL,
-                          &mnf, &mxf, NULL, handler, MPR_SIG_UPDATE);
+                          &mnf, &mxf, NULL, handler, MPR_STATUS_UPDATE_REM);
     eprintf("Input signal 'insig' registered.\n");
     l = mpr_dev_get_sigs(dev, MPR_DIR_IN);
     eprintf("Number of inputs: %d\n", mpr_list_get_size(l));
@@ -136,7 +136,7 @@ int setup_loop_test(void)
     /* libmapper provides rudimentary loop detection so we will need a 3rd
        signal to create a loop. */
     sig3 = mpr_sig_new(dev, MPR_DIR_IN, "sig3", 1, MPR_FLT, NULL, NULL, NULL,
-                       NULL, handler, MPR_SIG_UPDATE);
+                       NULL, handler, MPR_STATUS_UPDATE_REM);
     eprintf("Input signal 'sig3' registered.\n");
 
     /* map from sendsig -> recvsig already exists */

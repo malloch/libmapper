@@ -37,7 +37,7 @@ static void eprintf(const char *format, ...)
     va_end(args);
 }
 
-void handler(mpr_sig sig, mpr_sig_evt event, mpr_id inst, int length,
+void handler(mpr_sig sig, mpr_status event, mpr_id inst, int length,
              mpr_type type, const void *val, mpr_time t)
 {
     const char *name = mpr_obj_get_prop_as_str(sig, MPR_PROP_NAME, NULL);
@@ -79,7 +79,7 @@ int setup_src(mpr_graph g, const char *iface)
 
     sendsig = mpr_sig_new(src, MPR_DIR_OUT, "outsig", 2, MPR_FLT, NULL,
                           mn, mx, NULL, NULL, 0);
-    mpr_sig_set_cb(sendsig, handler, MPR_SIG_UPDATE);
+    mpr_sig_set_cb(sendsig, handler, MPR_STATUS_UPDATE_REM);
 
     eprintf("Output signals registered.\n");
     l = mpr_dev_get_sigs(src, MPR_DIR_OUT);
@@ -117,7 +117,7 @@ int setup_dst(mpr_graph g, const char *iface)
             mpr_graph_get_interface(mpr_obj_get_graph((mpr_obj)dst)));
 
     recvsig = mpr_sig_new(dst, MPR_DIR_IN, "insig", 1, MPR_FLT, NULL,
-                          &mn, &mx, NULL, handler, MPR_SIG_UPDATE);
+                          &mn, &mx, NULL, handler, MPR_STATUS_UPDATE_REM);
 
     eprintf("Input signal insig registered.\n");
     l = mpr_dev_get_sigs(dst, MPR_DIR_IN);

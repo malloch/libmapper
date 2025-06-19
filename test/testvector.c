@@ -76,7 +76,7 @@ void cleanup_src(void)
     }
 }
 
-void handler(mpr_sig sig, mpr_sig_evt event, mpr_id instance, int length,
+void handler(mpr_sig sig, mpr_status event, mpr_id instance, int length,
              mpr_type type, const void *value, mpr_time t)
 {
     int i;
@@ -115,7 +115,7 @@ int setup_dst(mpr_graph g, const char *iface)
             mpr_graph_get_interface(mpr_obj_get_graph((mpr_obj)dst)));
 
     recvsig = mpr_sig_new(dst, MPR_DIR_IN, "insig", vec_len, MPR_FLT, NULL,
-                          dMin, dMax, NULL, handler, MPR_SIG_UPDATE);
+                          dMin, dMax, NULL, handler, MPR_STATUS_UPDATE_REM);
 
     mpr_obj_set_prop((mpr_obj)recvsig, MPR_PROP_MIN, NULL, 1, MPR_FLT, dMin, 1);
     mpr_obj_set_prop((mpr_obj)recvsig, MPR_PROP_MAX, NULL, 2, MPR_FLT, dMax, 1);

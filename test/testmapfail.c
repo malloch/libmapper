@@ -77,7 +77,7 @@ void cleanup_src(void)
     }
 }
 
-void handler(mpr_sig sig, mpr_sig_evt evt, mpr_id instance, int len,
+void handler(mpr_sig sig, mpr_status evt, mpr_id instance, int len,
              mpr_type type, const void *val, mpr_time t)
 {
     if (val) {
@@ -100,7 +100,7 @@ int setup_dst(const char *iface)
     eprintf("destination created using interface %s.\n", mpr_graph_get_interface(dstgraph));
 
     recvsig = mpr_sig_new(dst, MPR_DIR_IN, "insig", 1, MPR_FLT, NULL,
-                          &mn, &mx, NULL, handler, MPR_SIG_UPDATE);
+                          &mn, &mx, NULL, handler, MPR_STATUS_UPDATE_REM);
 
     eprintf("Input signal 'insig' registered.\n");
     l = mpr_dev_get_sigs(dst, MPR_DIR_IN);

@@ -35,7 +35,7 @@ static void eprintf(const char *format, ...)
     va_end(args);
 }
 
-void handler(mpr_sig sig, mpr_sig_evt event, mpr_id instance, int length,
+void handler(mpr_sig sig, mpr_status event, mpr_id instance, int length,
              mpr_type type, const void *value, mpr_time t)
 {
     if (value) {
@@ -84,13 +84,13 @@ int setup_devs(const char *iface)
             mpr_graph_get_interface(mpr_obj_get_graph(devices[0])));
 
     inputs[0] = mpr_sig_new(devices[0], MPR_DIR_IN, "insig_1", 1, MPR_FLT,
-                            NULL, mnf1, mxf1, NULL, handler, MPR_SIG_UPDATE);
+                            NULL, mnf1, mxf1, NULL, handler, MPR_STATUS_UPDATE_REM);
     inputs[1] = mpr_sig_new(devices[0], MPR_DIR_IN, "insig_2", 1, MPR_DBL,
-                            NULL, &mnd, &mxd, NULL, handler, MPR_SIG_UPDATE);
+                            NULL, &mnd, &mxd, NULL, handler, MPR_STATUS_UPDATE_REM);
     inputs[2] = mpr_sig_new(devices[1], MPR_DIR_IN, "insig_3", 3, MPR_FLT,
-                            NULL, mnf1, mxf1, NULL, handler, MPR_SIG_UPDATE);
+                            NULL, mnf1, mxf1, NULL, handler, MPR_STATUS_UPDATE_REM);
     inputs[3] = mpr_sig_new(devices[1], MPR_DIR_IN, "insig_4", 1, MPR_FLT,
-                            NULL, mnf2, mxf2, NULL, handler, MPR_SIG_UPDATE);
+                            NULL, mnf2, mxf2, NULL, handler, MPR_STATUS_UPDATE_REM);
 
     /* In this test inputs[2] will never get its full vector value from
      * external updates – for the handler to be called we will need to

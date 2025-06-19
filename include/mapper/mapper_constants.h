@@ -177,17 +177,6 @@ typedef enum {
     MPR_STATUS_ANY          = 0x1FFF
 } mpr_status;
 
-/* deprecated constants */
-/*! The set of possible signal events, used to register and inform callbacks.
- *  @ingroup signal */
-#define MPR_SIG_INST_NEW    MPR_STATUS_NEW          /*!< New instance has been created. */
-#define MPR_SIG_REL_UPSTRM  MPR_STATUS_REL_UPSTRM   /*!< Instance was released upstream. */
-#define MPR_SIG_REL_DNSTRM  MPR_STATUS_REL_DNSTRM   /*!< Instance was released downstream. */
-#define MPR_SIG_INST_OFLW   MPR_STATUS_OVERFLOW     /*!< No local instances left. */
-#define MPR_SIG_UPDATE      MPR_STATUS_UPDATE_REM   /*!< Instance value has been updated remotely. */
-#define MPR_SIG_ALL         MPR_STATUS_ANY
-#define mpr_sig_evt mpr_status
-
 /*! The set of possible graph events, used to inform callbacks.
  *  @ingroup graph */
 #define MPR_OBJ_NEW MPR_STATUS_NEW      /*!< New record has been added to the graph. */

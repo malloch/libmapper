@@ -94,7 +94,7 @@ void cleanup_src(void)
     }
 }
 
-void handler(mpr_sig sig, mpr_sig_evt evt, mpr_id id, int len, mpr_type type,
+void handler(mpr_sig sig, mpr_status evt, mpr_id id, int len, mpr_type type,
              const void *val, mpr_time t)
 {
     if (val) {
@@ -141,19 +141,19 @@ int setup_dst(mpr_graph g, const char *iface)
             mpr_graph_get_interface(mpr_obj_get_graph(dst)));
 
     recvsig_1 = mpr_sig_new(dst, MPR_DIR_IN, "insig_1", 1, MPR_FLT, NULL,
-                            mnf, mxf, NULL, handler, MPR_SIG_UPDATE);
+                            mnf, mxf, NULL, handler, MPR_STATUS_UPDATE_REM);
     recvsig_2 = mpr_sig_new(dst, MPR_DIR_IN, "insig_2", 1, MPR_DBL, NULL,
-                            &mnd, &mxd, NULL, handler, MPR_SIG_UPDATE);
+                            &mnd, &mxd, NULL, handler, MPR_STATUS_UPDATE_REM);
     recvsig_3 = mpr_sig_new(dst, MPR_DIR_IN, "insig_3", 3, MPR_FLT, NULL,
-                            mnf, mxf, NULL, handler, MPR_SIG_UPDATE);
+                            mnf, mxf, NULL, handler, MPR_STATUS_UPDATE_REM);
     recvsig_4 = mpr_sig_new(dst, MPR_DIR_IN, "insig_4", 1, MPR_FLT, NULL,
-                            mnf, mxf, NULL, handler, MPR_SIG_UPDATE);
+                            mnf, mxf, NULL, handler, MPR_STATUS_UPDATE_REM);
 
     eprintf("Input signal 'insig' registered.\n");
 
     /* Make sure we can add and remove inputs and inputs within crashing. */
     mpr_sig_free(mpr_sig_new(dst, MPR_DIR_IN, "insig_5", 1, MPR_FLT,
-                             NULL, &mnf, &mxf, NULL, NULL, MPR_SIG_UPDATE));
+                             NULL, &mnf, &mxf, NULL, NULL, MPR_STATUS_UPDATE_REM));
 
     l = mpr_dev_get_sigs(dst, MPR_DIR_IN);
     eprintf("Number of inputs: %d\n", mpr_list_get_size(l));
