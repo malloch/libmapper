@@ -11,10 +11,14 @@
 #include "slot.h"
 #include <mapper/mapper.h>
 
-void mpr_obj_init(mpr_obj o, mpr_graph g, mpr_type t)
+void mpr_obj_init(mpr_obj o, mpr_graph g, const char *name, mpr_type t, int is_local)
 {
+    trace("initializing %s object '%s'\n", is_local ? "local" : "remote", name);
     o->graph = g;
+    if (name)
+        o->name = strdup(name);
     o->type = t;
+    o->is_local = is_local;
     o->status = MPR_STATUS_NEW;
     mpr_obj_set_status((mpr_obj)o->graph, MPR_STATUS_NEW, 0);
 }

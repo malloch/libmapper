@@ -112,24 +112,19 @@ static int cmp_qry_sigs(const void *context_data, mpr_sig sig)
     return ((dir & mpr_sig_get_dir(sig)) && (dev_id == dev->obj.id));
 }
 
-void mpr_dev_init(mpr_dev dev, int is_local, const char *name, mpr_id id)
+void mpr_dev_init(mpr_dev dev, mpr_id id)
 {
     mpr_tbl tbl;
     mpr_list qry;
 
-    dev->obj.is_local = is_local;
     dev->obj.status = 0;
-    if (name) {
-        assert(!dev->obj.name);
-        dev->obj.name = strdup(name);
-    }
     if (id) {
         assert(!dev->obj.id);
         dev->obj.id = id;
     }
 
     dev->obj.props.synced = mpr_tbl_new();
-    if (!is_local)
+    if (!dev->obj.is_local)
         dev->obj.props.staged = mpr_tbl_new();
     tbl = dev->obj.props.synced;
 
@@ -146,7 +141,7 @@ void mpr_dev_init(mpr_dev dev, int is_local, const char *name, mpr_id id)
     link(NUM_SIGS_IN,  MPR_INT32, &dev->num_inputs,   MOD_NONE);
     link(NUM_SIGS_OUT, MPR_INT32, &dev->num_outputs,  MOD_NONE);
     link(ORDINAL,      MPR_INT32, &dev->ordinal,      MOD_NONE);
-    if (!is_local) {
+    if (!dev->obj.is_local) {
         qry = mpr_graph_new_query(dev->obj.graph, 0, MPR_SIG, (void*)cmp_qry_sigs,
                                   "hi", dev->obj.id, MPR_DIR_ANY);
         link(SIG,      MPR_LIST,  qry,                MOD_NONE | PROP_OWNED);
@@ -156,9 +151,9 @@ void mpr_dev_init(mpr_dev dev, int is_local, const char *name, mpr_id id)
     link(VERSION,      MPR_INT32, &dev->obj.version,  MOD_NONE);
 #undef link
 
-    if (is_local)
+    if (dev->obj.is_local)
         mpr_tbl_add_record(tbl, MPR_PROP_LIBVER, NULL, 1, MPR_STR, PACKAGE_VERSION, MOD_NONE);
-    mpr_tbl_add_record(tbl, MPR_PROP_IS_LOCAL, NULL, 1, MPR_BOOL, &is_local, LOCAL_ACCESS | MOD_NONE);
+    mpr_tbl_add_record(tbl, MPR_PROP_IS_LOCAL, NULL, 1, MPR_BOOL, &dev->obj.is_local, LOCAL_ACCESS | MOD_NONE);
 }
 
 /*! Allocate and initialize a device. This function is called to create a new
@@ -180,8 +175,9 @@ mpr_dev mpr_dev_new(const char *name_prefix, mpr_graph graph)
         mpr_graph_set_owned(g, 0);
     }
 
-    dev = (mpr_local_dev)mpr_graph_add_obj(g, MPR_DEV, 1);
-    mpr_dev_init((mpr_dev)dev, 1, NULL, 0);
+    /* omit object name since we are rewriting it anyway */
+    dev = (mpr_local_dev)mpr_graph_add_obj(g, NULL, MPR_DEV, 1);
+    mpr_dev_init((mpr_dev)dev, 0);
 
     dev->own_graph = graph ? 0 : 1;
     dev->prefix_len = strlen(name_prefix);
@@ -287,7 +283,6 @@ void mpr_dev_free(mpr_dev dev)
 void mpr_dev_free_mem(mpr_dev dev)
 {
     FUNC_IF(free, dev->linked);
-    FUNC_IF(free, dev->obj.name);
 }
 
 static void on_registered(mpr_local_dev dev)

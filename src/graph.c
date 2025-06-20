@@ -266,7 +266,7 @@ mpr_graph mpr_graph_new(int subscribe_flags)
     g = (mpr_graph) calloc(1, sizeof(mpr_graph_t));
     RETURN_ARG_UNLESS(g, NULL);
 
-    mpr_obj_init((mpr_obj)g, g, MPR_GRAPH);
+    mpr_obj_init((mpr_obj)g, g, "graph", MPR_GRAPH, 1);
     g->obj.id = 0;
     g->own = 1;
     g->net = mpr_net_new(g);
@@ -505,9 +505,8 @@ mpr_dev mpr_graph_add_dev(mpr_graph g, const char *name, mpr_msg msg, int force)
 
     if (!dev) {
         mpr_id id = mpr_id_from_str(no_slash);
-        dev = (mpr_dev)mpr_list_add_item((void**)&g->devs, mpr_dev_get_struct_size(0), 0);
-        mpr_obj_init((mpr_obj)dev, g, MPR_DEV);
-        mpr_dev_init(dev, 0, no_slash, id);
+        dev = (mpr_dev)mpr_graph_add_obj(g, no_slash, MPR_DEV, 0);
+        mpr_dev_init(dev, id);
 #ifdef DEBUG
         trace_graph(g, "added device ");
         mpr_prop_print(1, MPR_DEV, dev);
@@ -611,9 +610,8 @@ mpr_sig mpr_graph_add_sig(mpr_graph g, const char *name, const char *dev_name, m
 
     if (!sig) {
         int num_inst = 1;
-        sig = (mpr_sig)mpr_list_add_item((void**)&g->sigs, mpr_sig_get_struct_size(0), 0);
-        mpr_obj_init((mpr_obj)sig, g, MPR_SIG);
-        mpr_sig_init(sig, dev, 0, MPR_DIR_UNDEFINED, name, 0, 0, 0, 0, 0, &num_inst);
+        sig = (mpr_sig) mpr_graph_add_obj(g, name, MPR_SIG, 0);
+        mpr_sig_init(sig, dev, MPR_DIR_UNDEFINED, 0, 0, 0, 0, 0, &num_inst);
         rc = 1;
 #ifdef DEBUG
         trace_graph(g, "added signal ");
@@ -668,8 +666,7 @@ mpr_link mpr_graph_add_link(mpr_graph g, mpr_dev dev1, mpr_dev dev2)
     if (link)
         return link;
 
-    link = (mpr_link)mpr_list_add_item((void**)&g->links, mpr_link_get_struct_size(), 0);
-    mpr_obj_init((mpr_obj)link, g, MPR_LINK);
+    link = (mpr_link) mpr_graph_add_obj(g, NULL, MPR_LINK, 0);
     if (mpr_obj_get_is_local((mpr_obj)dev2))
         mpr_link_init(link, g, dev2, dev1);
     else
@@ -763,8 +760,8 @@ mpr_map mpr_graph_add_map(mpr_graph g, mpr_id id, int num_src, const char **src_
 
         map = (mpr_map)mpr_list_add_item((void**)&g->maps, mpr_map_get_struct_size(is_local),
                                          is_local);
-        mpr_obj_init((mpr_obj)map, g, MPR_MAP);
-        mpr_map_init(map, num_src, src_sigs, dst_sig, is_local);
+        mpr_obj_init((mpr_obj)map, g, NULL, MPR_MAP, is_local);
+        mpr_map_init(map, num_src, src_sigs, dst_sig);
         if (id && !mpr_obj_get_id((mpr_obj)map))
             mpr_obj_set_id((mpr_obj)map, id);
 #ifdef DEBUG
@@ -843,16 +840,14 @@ void mpr_graph_remove_map(mpr_graph g, mpr_map m, mpr_graph_evt e)
 void mpr_graph_print(mpr_graph g)
 {
     mpr_list devs = mpr_list_from_data(g->devs);
-    mpr_list sigs = mpr_list_from_data(g->sigs);
+    mpr_list sigs;
     mpr_list maps;
     printf("-------------------------------\n");
-    printf("Registered devices (%d) and signals (%d):\n",
-           mpr_list_get_size(devs), mpr_list_get_size(sigs));
-    mpr_list_free(sigs);
+    printf("%d Registered Devices:\n", mpr_list_get_size(devs));
     while (devs) {
         printf(" └─ ");
         mpr_obj_print(*devs, 0);
-        sigs = mpr_dev_get_sigs((mpr_dev)*devs, MPR_DIR_ANY);
+        mpr_list sigs = mpr_dev_get_sigs((mpr_dev)*devs, MPR_DIR_ANY);
         while (sigs) {
             mpr_sig sig = (mpr_sig)*sigs;
             sigs = mpr_list_get_next(sigs);
@@ -1116,25 +1111,39 @@ int mpr_graph_get_owned(mpr_graph g)
     return g->own;
 }
 
-mpr_obj mpr_graph_add_obj(mpr_graph g, int obj_type, int is_local)
+/* Strategy here
+ * each device is a tree-like structure though we may find examples where a signal or object should
+ * be shared by 2 or more parents through aliases, i.e. the value would be the same but the name
+ * would be different. Perhaps this is more like sharing a value than a signal?
+ *
+ * For efficient lookup we probably still want an iterable list of signals.
+ * Non-signal objects can just be stored in a linked-graph
+ *
+ * We should support adding a signal that overrides an existing object
+ * We should support removing a signal but leaving a same-named object in place if it has children
+ */
+
+mpr_obj mpr_graph_add_obj(mpr_graph g, const char *name, int obj_type, int is_local)
 {
     mpr_list *list = get_list_internal(g, obj_type);
     mpr_obj obj;
     size_t size;
     RETURN_ARG_UNLESS(list, 0);
+    assert(obj_type != MPR_OBJ);
 
     switch (obj_type) {
         case MPR_DEV:   size = mpr_dev_get_struct_size(is_local);   break;
         case MPR_SIG:   size = mpr_sig_get_struct_size(is_local);   break;
         case MPR_MAP:   size = mpr_map_get_struct_size(is_local);   break;
+        case MPR_LINK:  size = mpr_link_get_struct_size();          break;
         default:                                                    return 0;
     }
 
     obj = mpr_list_add_item((void**)list, size, is_local && (MPR_MAP == obj_type));
-    mpr_obj_init(obj, g, obj_type);
-
     if (MPR_MAP == obj_type)
         ++g->staged_maps;
+
+    mpr_obj_init(obj, g, name, obj_type, is_local);
 
     return obj;
 }

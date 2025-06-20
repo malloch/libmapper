@@ -23,8 +23,8 @@ int mpr_sig_osc_handler(const char *path, const char *types, lo_arg **argv, int 
                         lo_message msg, void *data);
 
 /*! Initialize an already-allocated mpr_sig structure. */
-void mpr_sig_init(mpr_sig sig, mpr_dev dev, int is_local, mpr_dir dir, const char *name, int len,
-                  mpr_type type, const char *unit, const void *min, const void *max, int *num_inst);
+void mpr_sig_init(mpr_sig sig, mpr_dev dev, mpr_dir dir, int len, mpr_type type,
+                  const char *unit, const void *min, const void *max, int *num_inst);
 
 void mpr_local_sig_add_to_net(mpr_local_sig sig, mpr_net net);
 

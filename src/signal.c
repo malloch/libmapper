@@ -639,12 +639,12 @@ mpr_sig mpr_sig_new(mpr_dev dev, mpr_dir dir, const char *name, int len,
 
     g = mpr_obj_get_graph((mpr_obj)dev);
 
-    lsig = (mpr_local_sig)mpr_graph_add_obj(g, MPR_SIG, 1);
+    lsig = (mpr_local_sig)mpr_graph_add_obj(g, name, MPR_SIG, 1);
     lsig->obj.id = mpr_dev_generate_unique_id(dev);
     lsig->period = -1;
     lsig->handler = (void*)h;
     lsig->event_flags = events;
-    mpr_sig_init((mpr_sig)lsig, dev, 1, dir, name, len, type, unit, min, max, num_inst);
+    mpr_sig_init((mpr_sig)lsig, dev, dir, len, type, unit, min, max, num_inst);
 
     mpr_local_dev_add_sig((mpr_local_dev)dev, lsig, dir);
     return (mpr_sig)lsig;
@@ -655,21 +655,17 @@ void mpr_local_sig_add_to_net(mpr_local_sig sig, mpr_net net)
     mpr_net_add_dev_server_method(net, sig->dev, sig->path, mpr_sig_osc_handler, sig);
 }
 
-void mpr_sig_init(mpr_sig sig, mpr_dev dev, int is_local, mpr_dir dir, const char *name, int len,
-                  mpr_type type, const char *unit, const void *min, const void *max, int *num_inst)
+void mpr_sig_init(mpr_sig sig, mpr_dev dev, mpr_dir dir, int len, mpr_type type,
+                  const char *unit, const void *min, const void *max, int *num_inst)
 {
-    int str_len, mod = is_local ? MOD_ANY : MOD_NONE;
+    int mod = sig->obj.is_local ? MOD_ANY : MOD_NONE;
     mpr_tbl tbl;
-    RETURN_UNLESS(name);
 
     sig->dev = dev;
 
-    name = mpr_path_skip_slash(name);
-    str_len = strlen(name)+2;
-    sig->path = malloc(str_len);
-    snprintf(sig->path, str_len, "/%s", name);
-    sig->obj.name = (char*)sig->path+1;
-    sig->obj.is_local = is_local;
+    sig->path = malloc(strlen(sig->obj.name) + 2);
+    sprintf(sig->path, "/%s", sig->obj.name);
+
     sig->len = len;
     sig->type = type;
     sig->dir = dir ? dir : MPR_DIR_OUT;
@@ -792,9 +788,9 @@ void mpr_sig_free_internal(mpr_sig sig)
         FUNC_IF(free, lsig->slots_out);
     }
 
-    mpr_obj_free(&sig->obj);
-    FUNC_IF(free, sig->path);
+    FUNC_IF(free, (char*)sig->path);
     FUNC_IF(free, sig->unit);
+    mpr_obj_free(&sig->obj);
 }
 
 static void mpr_sig_update_timing_stats(mpr_local_sig lsig, float diff)
@@ -849,7 +845,7 @@ void mpr_sig_call_handler(mpr_local_sig lsig, int evt, mpr_id id, unsigned int i
 
 /**** Instances ****/
 
-/* Id the `id` argument is NULL, we have an added requirement to avoid LIDs that are already in use
+/* If the `id` argument is NULL, we have an added requirement to avoid LIDs that are already in use
  * in the device id_map (i.e. that have a local refcount > 0 */
 static int get_inst_by_ids(mpr_local_sig lsig, mpr_id *LID, mpr_id *GID)
 {

@@ -222,7 +222,7 @@ static void relink_props(mpr_map m)
 #undef link
 }
 
-void mpr_map_init(mpr_map m, int num_src, mpr_sig *src, mpr_sig dst, int is_local)
+void mpr_map_init(mpr_map m, int num_src, mpr_sig *src, mpr_sig dst)
 {
     int i;
     mpr_graph g = m->obj.graph;
@@ -242,21 +242,21 @@ void mpr_map_init(mpr_map m, int num_src, mpr_sig *src, mpr_sig dst, int is_loca
                                     mpr_dev_get_name(mpr_sig_get_dev(src[i])), 0);
             mpr_sig_copy_props(sig, src[i]);
         }
-        m->src[i] = mpr_slot_new(m, sig, MPR_DIR_UNDEFINED, is_local, 1);
+        m->src[i] = mpr_slot_new(m, sig, MPR_DIR_UNDEFINED, m->obj.is_local, 1);
         mpr_slot_set_id(m->src[i], i);
     }
 
     m->dst = mpr_slot_new(m, dst, mpr_obj_get_is_local((mpr_obj)dst) ? MPR_DIR_IN : MPR_DIR_UNDEFINED,
-                          is_local, 0);
+                          m->obj.is_local, 0);
 
     relink_props(m);
 
     mpr_tbl_add_record(m->obj.props.synced, MPR_PROP_IS_LOCAL, NULL, 1,
-                       MPR_BOOL, &is_local, LOCAL_ACCESS | MOD_NONE);
+                       MPR_BOOL, &m->obj.is_local, LOCAL_ACCESS | MOD_NONE);
     m->obj.status = MPR_STATUS_NEW | MPR_STATUS_STAGED;
     m->protocol = MPR_PROTO_UDP;
 
-    if (is_local)
+    if (m->obj.is_local)
         mpr_local_map_init((mpr_local_map)m);
 }
 
@@ -373,7 +373,7 @@ mpr_map mpr_map_new(int num_src, mpr_sig *src, int num_dst, mpr_sig *dst)
         }
     }
 
-    m = (mpr_map)mpr_graph_add_obj(g, MPR_MAP, is_local);
+    m = (mpr_map)mpr_graph_add_obj(g, NULL, MPR_MAP, is_local);
     m->bundle = 1;
 
     /* Sort the source signals by name */
@@ -381,7 +381,7 @@ mpr_map mpr_map_new(int num_src, mpr_sig *src, int num_dst, mpr_sig *dst)
     memcpy(src_sorted, src, num_src * sizeof(mpr_sig));
     qsort(src_sorted, num_src, sizeof(mpr_sig), compare_sig_names);
 
-    mpr_map_init(m, num_src, src_sorted, *dst, is_local);
+    mpr_map_init(m, num_src, src_sorted, *dst);
     free(src_sorted);
 
     return m;

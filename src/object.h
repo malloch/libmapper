@@ -30,7 +30,7 @@ typedef struct _mpr_obj
 #include "util/mpr_inline.h"
 #include "table.h"
 
-void mpr_obj_init(mpr_obj obj, mpr_graph graph, mpr_type type);
+void mpr_obj_init(mpr_obj obj, mpr_graph graph, const char *name, mpr_type type, int is_local);
 
 void mpr_obj_free(mpr_obj obj);
 
