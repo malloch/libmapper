@@ -47,6 +47,7 @@ libmapper_la_CFLAGS = -Wall -I$(top_srcdir)/include $(liblo_CFLAGS)
 libmapper_la_SOURCES = device.c \
     expression.c \
     graph.c \
+    id_map.c \
     link.c \
     list.c \
     map.c \

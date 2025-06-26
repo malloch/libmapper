@@ -861,7 +861,8 @@ void mpr_map_send(mpr_local_map m, mpr_time time)
                     mpr_id_map tmp = mpr_dev_get_id_map_by_LID(dev, group, MPR_DEFAULT_INST_LID);
                     if (!tmp) {
                         /* add a new id_map to the device */
-                        tmp = mpr_dev_add_id_map(dev, group, MPR_DEFAULT_INST_LID, 0, 0);
+                        tmp = mpr_dev_add_id_map(dev, group, MPR_DEFAULT_INST_LID,
+                                                 mpr_dev_generate_unique_id((mpr_dev)dev), 0);
                     }
                     /* copy the new id_map values into the map's id_map */
                     id_map->LID = MPR_DEFAULT_INST_LID;

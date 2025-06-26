@@ -978,7 +978,8 @@ done:
     }
     if (!id_map) {
         /* Claim id map locally */
-        id_map = mpr_dev_add_id_map(lsig->dev, lsig->group, si->id, GID ? *GID : 0, 0);
+        id_map = mpr_dev_add_id_map(lsig->dev, lsig->group, si->id,
+                                    GID ? *GID : mpr_dev_generate_unique_id((mpr_dev)lsig->dev), 0);
     }
     else
         mpr_id_map_incr_local_refcount(id_map);
