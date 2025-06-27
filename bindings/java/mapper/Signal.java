@@ -4,6 +4,7 @@ package mapper;
 import mapper.Map;
 import mapper.signal.*;
 import mapper.Device;
+import mapper.object.*;
 import java.util.EnumSet;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
@@ -45,21 +46,21 @@ public class Signal extends AbstractObject
         }
         System.out.println("Error: no match for listener.");
     }
-    public Signal setListener(Listener l, Event event) {
-        _setListener(l, event.value());
+    public Signal setListener(Listener l, Status status) {
+        _setListener(l, status.value());
         return this;
     }
-    public Signal setListener(Listener l, EnumSet<Event> events) {
+    public Signal setListener(Listener l, EnumSet<Status> statuses) {
         int flags = 0;
-        for (Event e : Event.values()) {
-            if (events.contains(e))
-                flags |= e.value();
+        for (Status s : Status.values()) {
+            if (statuses.contains(s))
+                flags |= s.value();
         }
         _setListener(l, flags);
         return this;
     }
     public Signal setListener(Listener l) {
-        _setListener(l, Event.UPDATE.value());
+        _setListener(l, Status.REMOTE_UPDATE.value());
         return this;
     }
 
@@ -101,9 +102,9 @@ public class Signal extends AbstractObject
     public int numInstances(EnumSet<Status> statuses)
     {
         int flags = 0;
-        for (Status is : Status.values()) {
-            if (statuses.contains(is))
-                flags |= is.value();
+        for (Status s : Status.values()) {
+            if (statuses.contains(s))
+                flags |= s.value();
         }
         return _num_instances(_obj, flags);
     }

@@ -20,16 +20,16 @@ class testreverse {
 
         Signal input = dev.addSignal(mapper.signal.Direction.INCOMING, "insig", 1, Type.FLOAT,
                                      "Hz", null, null, null, new Listener() {
-            public void onEvent(Signal sig, mapper.signal.Event e, float v, Time time) {
-                if (e == mapper.signal.Event.UPDATE)
-                    System.out.println("  insig got: "+v);
+            public void onEvent(Signal signal, mapper.object.Status event, float value, Time time) {
+                if (event == mapper.object.Status.REMOTE_UPDATE)
+                    System.out.println("  insig got: "+value);
         }});
 
         Signal output = dev.addSignal(mapper.signal.Direction.OUTGOING, "outsig", 1, Type.INT32,
                                       "Hz", null, null, null, new Listener() {
-            public void onEvent(Signal sig, mapper.signal.Event e, int v, Time time) {
-                if (e == mapper.signal.Event.UPDATE)
-                    System.out.println("  outsig got(): "+v);
+            public void onEvent(Signal signal, mapper.object.Status event, int value, Time time) {
+                if (event == mapper.object.Status.REMOTE_UPDATE)
+                    System.out.println("  outsig got(): "+value);
         }});
 
         System.out.println("Waiting for ready...");

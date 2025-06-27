@@ -25,9 +25,9 @@ class testinstance {
 
         Signal inp1 = dev1.addSignal(mapper.signal.Direction.INCOMING, "insig1", 1, Type.INT32, "Hz",
                                      2.0f, null, 10, new mapper.signal.Listener() {
-            public void onEvent(Signal.Instance inst, mapper.signal.Event evt, int val, Time time) {
-                System.out.println(evt + " for " + inst.properties().get("name") + ": "
-                                   + val + " at t=" + time);
+            public void onEvent(Signal.Instance inst, mapper.object.Status event, int value, Time time) {
+                System.out.println(event + " for " + inst.properties().get("name") + ": "
+                                   + value + " at t=" + time);
             }});
 
         System.out.println("Input signal name: "+inp1.properties().get("name"));
@@ -65,9 +65,9 @@ class testinstance {
 
         // Test instances
         out1.setListener(new mapper.signal.Listener() {
-            public void onEvent(Signal.Instance inst, mapper.signal.Event evt, int val, Time time) {
-                System.out.println(evt + " for " + inst.properties().get("name")
-                                   + " instance " + inst.id() + ": " + evt);
+            public void onEvent(Signal.Instance inst, mapper.object.Status event, int value, Time time) {
+                System.out.println(event + " for " + inst.properties().get("name")
+                                   + " instance " + inst.id() + ": " + event);
                 java.lang.Object userObject = inst.getUserReference();
                 if (userObject != null) {
                     System.out.println("userObject.class = "+userObject.getClass());
@@ -76,11 +76,11 @@ class testinstance {
                                            + Arrays.toString((int[])userObject));
                     }
                 }
-            }}, mapper.signal.Event.ALL);
+            }}, mapper.object.Status.ANY);
 
         inp1.setListener(new mapper.signal.Listener() {
-            public void onEvent(Signal.Instance inst, mapper.signal.Event evt, int val, Time time) {
-                System.out.println(evt + " for " + inst.properties().get("name")
+            public void onEvent(Signal.Instance inst, mapper.object.Status event, int val, Time time) {
+                System.out.println(event + " for " + inst.properties().get("name")
                                    + " instance " + inst.id() + ": " + inst.getUserReference()
                                    + ", val= " + val);
             }});
@@ -137,7 +137,7 @@ class testinstance {
             dev1.poll(50);
             dev2.poll(50);
 
-            List<Signal.Instance> updated = inp1.instances(Status.UPDATE_REM);
+            List<Signal.Instance> updated = inp1.instances(mapper.object.Status.REMOTE_UPDATE);
             for (Signal.Instance inst : updated) {
                 System.out.println(inst.properties().get("name")
                                  + " instance " + inst.id() + " got value " + inst.getValue());

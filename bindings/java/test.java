@@ -26,7 +26,7 @@ class test {
             });
 
         g.addListener(new mapper.graph.Listener<Device>() {
-            public void onEvent(Device dev, mapper.graph.Event event) {
+            public void onEvent(Device dev, mapper.object.Status event) {
                 Device.Properties p = dev.properties();
                 System.out.println("graph record "+event+" for device "+p.get("name"));
                 int numProps = p.size();
@@ -37,7 +37,7 @@ class test {
             }});
 
         g.addListener(new mapper.graph.Listener<Signal>() {
-            public void onEvent(Signal sig, mapper.graph.Event event) {
+            public void onEvent(Signal sig, mapper.object.Status event) {
                 System.out.println("Graph evnt signal");
                 Signal.Properties ps = sig.properties();
                 Device.Properties pd = sig.device().properties();
@@ -51,7 +51,7 @@ class test {
             }});
 
         g.addListener(new mapper.graph.Listener<mapper.Map>() {
-            public void onEvent(mapper.Map map, mapper.graph.Event event) {
+            public void onEvent(mapper.Map map, mapper.object.Status event) {
                 System.out.println("Graph evnt map");
                 System.out.print("graph record "+event+" for map ");
                 for (mapper.Signal s : map.signals(Location.SOURCE))
@@ -71,9 +71,10 @@ class test {
 
         Signal inp1 = dev1.addSignal(mapper.signal.Direction.INCOMING, "insig1", 1, Type.INT32, "Hz",
                                      null, null, null, new mapper.signal.Listener() {
-            public void onEvent(Signal sig, mapper.signal.Event e, int v, Time time) {
-                System.out.println(sig.properties().get("name") + " got "
-                                   + v + " at t=" + time.toString() + ", status=" + sig.getStatus());
+            public void onEvent(Signal signal, mapper.object.Status event, int value, Time time) {
+                System.out.println(signal.properties().get("name") + " got "
+                                   + value + " at t=" + time.toString()
+                                   + ", status=" + signal.getStatus());
             }});
 
         System.out.println("Input signal name: "+inp1.properties().get("name"));

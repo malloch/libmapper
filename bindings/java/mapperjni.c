@@ -29,22 +29,6 @@
 JNIEnv *genv=0;
 int bailing=0;
 
-const char *graph_evt_strings[] = {
-    "NEW",
-    "MODIFIED",
-    "REMOVED",
-    "EXPIRED"
-};
-
-const char *signal_evt_strings[] = {
-    "NEW_INSTANCE",
-    "UPDATE",
-    "UPSTREAM_RELEASE",
-    "DOWNSTREAM_RELEASE",
-    "OVERFLOW",
-    "ALL"
-};
-
 const char *direction_strings[] = {
     "UNDEFINED",
     "INCOMING",
@@ -80,6 +64,13 @@ const char *status_strings[] = {
     "EXPIRED",
     "STAGED",
     "ACTIVE",
+    "HAS_VALUE",
+    "NEW_VALUE",
+    "LOCAL_UPDATE",
+    "REMOTE_UPDATE",
+    "UPSTREAM_RELEASE",
+    "DOWNSTREAM_RELEASE",
+    "OVERFLOW",
     "ANY"
 };
 
@@ -123,18 +114,18 @@ enum {
 };
 
 const char *signal_update_method_strings[] = {
-    "(Lmapper/Signal;Lmapper/signal/Event;ILmapper/Time;)V",
-    "(Lmapper/Signal;Lmapper/signal/Event;[ILmapper/Time;)V",
-    "(Lmapper/Signal;Lmapper/signal/Event;FLmapper/Time;)V",
-    "(Lmapper/Signal;Lmapper/signal/Event;[FLmapper/Time;)V",
-    "(Lmapper/Signal;Lmapper/signal/Event;DLmapper/Time;)V",
-    "(Lmapper/Signal;Lmapper/signal/Event;[DLmapper/Time;)V",
-    "(Lmapper/Signal$Instance;Lmapper/signal/Event;ILmapper/Time;)V",
-    "(Lmapper/Signal$Instance;Lmapper/signal/Event;[ILmapper/Time;)V",
-    "(Lmapper/Signal$Instance;Lmapper/signal/Event;FLmapper/Time;)V",
-    "(Lmapper/Signal$Instance;Lmapper/signal/Event;[FLmapper/Time;)V",
-    "(Lmapper/Signal$Instance;Lmapper/signal/Event;DLmapper/Time;)V",
-    "(Lmapper/Signal$Instance;Lmapper/signal/Event;[DLmapper/Time;)V",
+    "(Lmapper/Signal;Lmapper/object/Status;ILmapper/Time;)V",
+    "(Lmapper/Signal;Lmapper/object/Status;[ILmapper/Time;)V",
+    "(Lmapper/Signal;Lmapper/object/Status;FLmapper/Time;)V",
+    "(Lmapper/Signal;Lmapper/object/Status;[FLmapper/Time;)V",
+    "(Lmapper/Signal;Lmapper/object/Status;DLmapper/Time;)V",
+    "(Lmapper/Signal;Lmapper/object/Status;[DLmapper/Time;)V",
+    "(Lmapper/Signal$Instance;Lmapper/object/Status;ILmapper/Time;)V",
+    "(Lmapper/Signal$Instance;Lmapper/object/Status;[ILmapper/Time;)V",
+    "(Lmapper/Signal$Instance;Lmapper/object/Status;FLmapper/Time;)V",
+    "(Lmapper/Signal$Instance;Lmapper/object/Status;[FLmapper/Time;)V",
+    "(Lmapper/Signal$Instance;Lmapper/object/Status;DLmapper/Time;)V",
+    "(Lmapper/Signal$Instance;Lmapper/object/Status;[DLmapper/Time;)V",
 };
 
 typedef struct {
@@ -287,58 +278,40 @@ static jobject get_jobject_from_time(JNIEnv *env, mpr_time time)
     return jtime;
 }
 
-static jobject get_jobject_from_graph_evt(JNIEnv *env, mpr_graph_evt evt)
+static jobject get_jobject_from_status(JNIEnv *env, mpr_status status)
 {
     jobject obj = 0;
-    jclass cls = (*env)->FindClass(env, "mapper/graph/Event");
+    jclass cls = (*env)->FindClass(env, "mapper/object/Status");
     if (cls) {
-        switch (evt) {
-            case MPR_STATUS_NEW:        evt = 1;    break;
-            case MPR_STATUS_MODIFIED:   evt = 2;    break;
-            case MPR_STATUS_REMOVED:    evt = 3;    break;
-            case MPR_STATUS_EXPIRED:    evt = 4;    break;
-            default:                    evt = 0;    break;
+        switch (status) {
+            case MPR_STATUS_NEW:        status = 1;    break;
+            case MPR_STATUS_MODIFIED:   status = 2;    break;
+            case MPR_STATUS_REMOVED:    status = 3;    break;
+            case MPR_STATUS_EXPIRED:    status = 4;    break;
+            case MPR_STATUS_STAGED:     status = 5;    break;
+            case MPR_STATUS_ACTIVE:     status = 6;    break;
+            case MPR_STATUS_HAS_VALUE:  status = 7;    break;
+            case MPR_STATUS_NEW_VALUE:  status = 8;    break;
+            case MPR_STATUS_UPDATE_LOC: status = 9;    break;
+            case MPR_STATUS_UPDATE_REM: status = 10;   break;
+            case MPR_STATUS_REL_UPSTRM: status = 11;   break;
+            case MPR_STATUS_REL_DNSTRM: status = 12;   break;
+            case MPR_STATUS_OVERFLOW:   status = 13;   break;
+            default:                    status = 0;    break;
         }
-        jfieldID fid = (*env)->GetStaticFieldID(env, cls, graph_evt_strings[evt],
-                                                "Lmapper/graph/Event;");
+        jfieldID fid = (*env)->GetStaticFieldID(env, cls, status_strings[status],
+                                                "Lmapper/object/Status;");
         if (fid) {
             obj = (*env)->GetStaticObjectField(env, cls, fid);
         }
         else {
-            printf("Error looking up graph/Event field [%d].\n", evt);
+            printf("Error looking up object/Status field [%d].\n", status);
             exit(1);
         }
     }
     return obj;
 }
 
-static jobject get_jobject_from_signal_evt(JNIEnv *env, mpr_sig_evt evt)
-{
-    jobject obj = 0;
-    jclass cls = (*env)->FindClass(env, "mapper/signal/Event");
-    const char *evt_str;
-    switch (evt) {
-        case MPR_SIG_INST_NEW:      evt_str = signal_evt_strings[0];    break;
-        case MPR_SIG_UPDATE:        evt_str = signal_evt_strings[1];    break;
-        case MPR_SIG_REL_UPSTRM:    evt_str = signal_evt_strings[2];    break;
-        case MPR_SIG_REL_DNSTRM:    evt_str = signal_evt_strings[3];    break;
-        case MPR_SIG_INST_OFLW:     evt_str = signal_evt_strings[4];    break;
-        default:
-            printf("Error looking up signal event %d.\n", evt);
-            exit(1);
-    }
-    if (cls) {
-        jfieldID fid = (*env)->GetStaticFieldID(env, cls, evt_str, "Lmapper/signal/Event;");
-        if (fid) {
-            obj = (*env)->GetStaticObjectField(env, cls, fid);
-        }
-        else {
-            printf("Error looking up signal/Event field '%s'.\n", evt_str);
-            exit(1);
-        }
-    }
-    return obj;
-}
 static jobject build_value_object(JNIEnv *env, mpr_prop prop, const int len,
                                   mpr_type type, const void *val)
 {
@@ -531,7 +504,7 @@ static jobject build_value_object(JNIEnv *env, mpr_prop prop, const int len,
     return ret;
 }
 
-static void java_signal_update_cb(mpr_sig sig, mpr_sig_evt evt, mpr_id id, int len,
+static void java_signal_update_cb(mpr_sig sig, mpr_status evt, mpr_id id, int len,
                                   mpr_type type, const void *val, mpr_time time)
 {
     if (bailing)
@@ -544,8 +517,8 @@ static void java_signal_update_cb(mpr_sig sig, mpr_sig_evt evt, mpr_id id, int l
         return;
     }
 
-    jobject eventobj = get_jobject_from_signal_evt(genv, evt);
-    if (!eventobj) {
+    jobject statusobj = get_jobject_from_status(genv, evt);
+    if (!statusobj) {
         printf("Error looking up signal event\n");
         return;
     }
@@ -598,7 +571,7 @@ static void java_signal_update_cb(mpr_sig sig, mpr_sig_evt evt, mpr_id id, int l
                     case MPR_DBL:   ival = (int)*(double*)val;      break;
                 }
             }
-            (*genv)->CallVoidMethod(genv, update_cb, mid, sig_ptr, eventobj, ival, jtime);
+            (*genv)->CallVoidMethod(genv, update_cb, mid, sig_ptr, statusobj, ival, jtime);
             if ((*genv)->ExceptionOccurred(genv)) {
                 (*genv)->ExceptionDescribe(genv);
                 (*genv)->ExceptionClear(genv);
@@ -615,7 +588,7 @@ static void java_signal_update_cb(mpr_sig sig, mpr_sig_evt evt, mpr_id id, int l
                     case MPR_DBL:   fval = (float)*(double*)val;    break;
                 }
             }
-            (*genv)->CallVoidMethod(genv, update_cb, mid, sig_ptr, eventobj, fval, jtime);
+            (*genv)->CallVoidMethod(genv, update_cb, mid, sig_ptr, statusobj, fval, jtime);
             if ((*genv)->ExceptionOccurred(genv))
                 bailing = 1;
             break;
@@ -629,14 +602,14 @@ static void java_signal_update_cb(mpr_sig sig, mpr_sig_evt evt, mpr_id id, int l
                     case MPR_DBL:   dval = *(double*)val;           break;
                 }
             }
-            (*genv)->CallVoidMethod(genv, update_cb, mid, sig_ptr, eventobj, dval, jtime);
+            (*genv)->CallVoidMethod(genv, update_cb, mid, sig_ptr, statusobj, dval, jtime);
             if ((*genv)->ExceptionOccurred(genv))
                 bailing = 1;
             break;
         }
         case SIG_CB_VECT_INT: {
             if (!val) {
-                (*genv)->CallVoidMethod(genv, update_cb, mid, sig_ptr, eventobj, 0, jtime);
+                (*genv)->CallVoidMethod(genv, update_cb, mid, sig_ptr, statusobj, 0, jtime);
                 break;
             }
             jintArray arr = (*genv)->NewIntArray(genv, len);
@@ -661,13 +634,13 @@ static void java_signal_update_cb(mpr_sig sig, mpr_sig_evt evt, mpr_id id, int l
                     break;
                 }
             }
-            (*genv)->CallVoidMethod(genv, update_cb, mid, sig_ptr, eventobj, arr, jtime);
+            (*genv)->CallVoidMethod(genv, update_cb, mid, sig_ptr, statusobj, arr, jtime);
             (*genv)->DeleteLocalRef(genv, arr);
             break;
         }
         case SIG_CB_VECT_FLT: {
             if (!val) {
-                (*genv)->CallVoidMethod(genv, update_cb, mid, sig_ptr, eventobj, 0, jtime);
+                (*genv)->CallVoidMethod(genv, update_cb, mid, sig_ptr, statusobj, 0, jtime);
                 break;
             }
             jfloatArray arr = (*genv)->NewFloatArray(genv, len);
@@ -692,7 +665,7 @@ static void java_signal_update_cb(mpr_sig sig, mpr_sig_evt evt, mpr_id id, int l
                     break;
                 }
             }
-            (*genv)->CallVoidMethod(genv, update_cb, mid, sig_ptr, eventobj, arr, jtime);
+            (*genv)->CallVoidMethod(genv, update_cb, mid, sig_ptr, statusobj, arr, jtime);
             if ((*genv)->ExceptionOccurred(genv))
                 bailing = 1;
             (*genv)->DeleteLocalRef(genv, arr);
@@ -700,7 +673,7 @@ static void java_signal_update_cb(mpr_sig sig, mpr_sig_evt evt, mpr_id id, int l
         }
         case SIG_CB_VECT_DBL: {
             if (!val) {
-                (*genv)->CallVoidMethod(genv, update_cb, mid, sig_ptr, eventobj, 0, jtime);
+                (*genv)->CallVoidMethod(genv, update_cb, mid, sig_ptr, statusobj, 0, jtime);
                 break;
             }
             jdoubleArray arr = (*genv)->NewDoubleArray(genv, len);
@@ -725,7 +698,7 @@ static void java_signal_update_cb(mpr_sig sig, mpr_sig_evt evt, mpr_id id, int l
                     (*genv)->SetDoubleArrayRegion(genv, arr, 0, len, val);
                     break;
             }
-            (*genv)->CallVoidMethod(genv, update_cb, mid, sig_ptr, eventobj, arr, jtime);
+            (*genv)->CallVoidMethod(genv, update_cb, mid, sig_ptr, statusobj, arr, jtime);
             if ((*genv)->ExceptionOccurred(genv))
                 bailing = 1;
             (*genv)->DeleteLocalRef(genv, arr);
@@ -759,13 +732,13 @@ static int signal_listener_type(const char *cMethodSig)
     cMethodSig += 8;
     // check if is singleton or instanced listener
     int instanced = 0;
-    if (strncmp(cMethodSig, "mapper.Signal$Instance,mapper.signal.Event,", 43) == 0) {
+    if (strncmp(cMethodSig, "mapper.Signal$Instance,mapper.object.Status,", 43) == 0) {
         instanced = 1;
-        cMethodSig += 43;
+        cMethodSig += 44;
     }
-    else if (strncmp(cMethodSig, "mapper.Signal,mapper.signal.Event,", 34) == 0) {
+    else if (strncmp(cMethodSig, "mapper.Signal,mapper.object.Status,", 34) == 0) {
         instanced = 0;
-        cMethodSig += 34;
+        cMethodSig += 35;
     }
     else {
         printf("error parsing method signature (4) '%s'\n", cMethodSig);
@@ -1338,15 +1311,14 @@ static jobject get_jobject_from_mpr_obj(mpr_obj mobj)
     return mid ? (*genv)->NewObject(genv, cls, mid, jlong_ptr(mobj)) : NULL;
 }
 
-static void java_graph_cb(mpr_graph g, mpr_obj mobj, mpr_graph_evt evt,
-                          const void *user_data)
+static void java_graph_cb(mpr_graph g, mpr_obj mobj, mpr_status evt, const void *user_data)
 {
     if (bailing || !user_data || !mobj)
         return;
 
     jobject jobj = get_jobject_from_mpr_obj(mobj);
-    jobject eventobj = get_jobject_from_graph_evt(genv, evt);
-    if (!eventobj) {
+    jobject statusobj = get_jobject_from_status(genv, evt);
+    if (!statusobj) {
         printf("Error looking up graph event\n");
         return;
     }
@@ -1358,21 +1330,21 @@ static void java_graph_cb(mpr_graph g, mpr_obj mobj, mpr_graph_evt evt,
         switch (mpr_obj_get_type(mobj)) {
             case MPR_DEV:
                 mid = (*genv)->GetMethodID(genv, cls, "onEvent",
-                                           "(Lmapper/Device;Lmapper/graph/Event;)V");
+                                           "(Lmapper/Device;Lmapper/object/Status;)V");
                 break;
             case MPR_SIG:
                 mid = (*genv)->GetMethodID(genv, cls, "onEvent",
-                                           "(Lmapper/Signal;Lmapper/graph/Event;)V");
+                                           "(Lmapper/Signal;Lmapper/object/Status;)V");
                 break;
             case MPR_MAP:
                 mid = (*genv)->GetMethodID(genv, cls, "onEvent",
-                                           "(Lmapper/Map;Lmapper/graph/Event;)V");
+                                           "(Lmapper/Map;Lmapper/object/Status;)V");
                 break;
             default:
                 return;
         }
         if (mid) {
-            (*genv)->CallVoidMethod(genv, listener, mid, jobj, eventobj);
+            (*genv)->CallVoidMethod(genv, listener, mid, jobj, statusobj);
             if ((*genv)->ExceptionOccurred(genv))
                 bailing = 1;
         }
@@ -1510,7 +1482,7 @@ JNIEXPORT jobject JNICALL Java_mapper_Device_add_1signal
     mpr_sig sig = mpr_sig_new(dev, dir, cname, len, type, cunit,
                               0, 0, num_inst ? &num_inst : NULL, 0, 0);
     if (listener) {
-        mpr_sig_set_cb(sig, java_signal_update_cb, MPR_SIG_UPDATE);
+        mpr_sig_set_cb(sig, java_signal_update_cb, MPR_STATUS_UPDATE_REM);
     }
 
     (*env)->ReleaseStringUTFChars(env, name, cname);
