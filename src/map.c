@@ -63,7 +63,7 @@ typedef struct _mpr_local_map {
     mpr_local_slot *src;
     mpr_local_slot dst;
 
-    mpr_id_map_t id_map;            /*!< Associated mpr_id_map. */
+    mpr_id_pair_t id_pair;          /*!< Associated mpr_id_pair. */
 
     mpr_expr expr;                  /*!< The mapping expression. */
     mpr_bitflags updated_inst;      /*!< Bitflags to indicate updated instances. */
@@ -432,9 +432,9 @@ void mpr_map_free(mpr_map map)
     if (map->obj.is_local) {
         mpr_local_map lmap = (mpr_local_map)map;
 
-        if (lmap->id_map.LID) {
+        if (lmap->id_pair.LID) {
             /* release map-generated instances */
-            mpr_slot_build_msg(lmap->dst, 0, 0, &lmap->id_map);
+            mpr_slot_build_msg(lmap->dst, 0, 0, &lmap->id_pair);
             mpr_time time;
             mpr_time_set(&time, MPR_NOW);
             if (lmap->locality & MPR_LOC_DST) {
@@ -453,9 +453,9 @@ void mpr_map_free(mpr_map map)
                 if (mpr_obj_get_is_local((mpr_obj)sig)) {
                     mpr_local_dev dev = (mpr_local_dev)mpr_sig_get_dev(sig);
                     mpr_sig_group group = mpr_local_sig_get_group((mpr_local_sig)sig);
-                    mpr_id_map id_map = mpr_dev_get_id_map_by_GID(dev, group, lmap->id_map.GID);
-                    if (id_map)
-                        mpr_dev_remove_id_map(dev, group, id_map);
+                    mpr_id_pair id_pair = mpr_dev_get_id_pair_by_GID(dev, group, lmap->id_pair.GID);
+                    if (id_pair)
+                        mpr_dev_remove_id_pair(dev, group, id_pair);
                 }
             }
             {
@@ -463,9 +463,9 @@ void mpr_map_free(mpr_map map)
                 if (mpr_obj_get_is_local((mpr_obj)sig)) {
                     mpr_local_dev dev = (mpr_local_dev)mpr_sig_get_dev(sig);
                     mpr_sig_group group = mpr_local_sig_get_group((mpr_local_sig)sig);
-                    mpr_id_map id_map = mpr_dev_get_id_map_by_GID(dev, group, lmap->id_map.GID);
-                    if (id_map)
-                        mpr_dev_remove_id_map(dev, group, id_map);
+                    mpr_id_pair id_pair = mpr_dev_get_id_pair_by_GID(dev, group, lmap->id_pair.GID);
+                    if (id_pair)
+                        mpr_dev_remove_id_pair(dev, group, id_pair);
                 }
             }
         }
@@ -746,10 +746,10 @@ static int update_scope(mpr_map m, mpr_msg_atom a)
  * 3) can bundle map output during iteration
  *
  * Plan of change:
- * 1) move id_maps from signals to maps
- * 2) on release of local instance, can reuse instance resource and mark id_map as "to release"
- * 3) map should iterate through active id_maps instead of instances
- * 4) when it comes to "to release" id_map, send release and decref LID
+ * 1) move id_pairs from signals to maps
+ * 2) on release of local instance, can reuse instance resource and mark id_pair as "to release"
+ * 3) map should iterate through active id_pairs instead of instances
+ * 4) when it comes to "to release" id_pair, send release and decref LID
  */
 
 /* only called for outgoing, source-processed maps */
@@ -761,7 +761,7 @@ void mpr_map_send(mpr_local_map m, mpr_time time)
     mpr_local_dev dev;
     mpr_local_slot src_slot;
     mpr_local_sig src_sig;
-    mpr_id_map id_map = 0;
+    mpr_id_pair id_pair = 0;
     mpr_value src_vals[MAX_NUM_MAP_SRC], dst_val;
 
     assert(m->obj.is_local);
@@ -781,8 +781,8 @@ void mpr_map_send(mpr_local_map m, mpr_time time)
     RETURN_UNLESS(   m->updated && m->expr && !m->muted
                   && MPR_DIR_OUT == mpr_slot_get_dir((mpr_slot)m->src[0]));
 
-    /* temporary solution: use most multitudinous source signal for id_map
-     * permanent solution: move id_maps to map? */
+    /* temporary solution: use most multitudinous source signal for id_pair
+     * permanent solution: move id_pairs to map? */
     src_slot = m->src[0];
     src_sig = (mpr_local_sig)mpr_slot_get_sig((mpr_slot)src_slot);
     for (i = 0; i < m->num_src; i++) {
@@ -805,7 +805,7 @@ void mpr_map_send(mpr_local_map m, mpr_time time)
         }
         else {
             manage_inst = MPR_MAP;
-            id_map = &m->id_map;
+            id_pair = &m->id_pair;
         }
     }
 
@@ -827,15 +827,15 @@ void mpr_map_send(mpr_local_map m, mpr_time time)
         if (!status)
             continue;
 
-        /* if the map doesn't use instances we don't care about id_maps at all */
-        /* TODO: in future updates map-managed reinstancing should use a separate device id_map
-         * group to translate signal id_maps to the reinstanced versions. Or would it be feasible
-         * to add a third ID to the existing id_maps? */
+        /* if the map doesn't use instances we don't care about id_pairs at all */
+        /* TODO: in future updates map-managed reinstancing should use a separate device id_pair
+         * group to translate signal id_pairs to the reinstanced versions. Or would it be feasible
+         * to add a third ID to the existing id_pairs? */
         if (MPR_SIG == manage_inst) {
-            /* we need to use the source signal's id_map */
-            id_map = mpr_local_sig_get_id_map_by_inst_idx(src_sig, i);
-            if (!id_map) {
-                trace("error: couldn't find id_map for signal instance idx %d\n", i);
+            /* we need to use the source signal's id_pair */
+            id_pair = mpr_local_sig_get_id_pair_by_inst_idx(src_sig, i);
+            if (!id_pair) {
+                trace("error: couldn't find id_pair for signal instance idx %d\n", i);
                 continue;
             }
         }
@@ -843,48 +843,48 @@ void mpr_map_send(mpr_local_map m, mpr_time time)
         /* send instance release if dst is instanced and either src or map is also instanced. */
         if (status & EXPR_RELEASE_BEFORE_UPDATE) {
             /* build release message */
-            mpr_slot_build_msg(m->dst, 0, 0, id_map);
+            mpr_slot_build_msg(m->dst, 0, 0, id_pair);
 
-            if (MPR_MAP == manage_inst && id_map->LID) {
-                /* need to clear id_maps */
-                mpr_id_map tmp = mpr_dev_get_id_map_by_LID(dev, group, MPR_DEFAULT_INST_LID);
-                mpr_dev_remove_id_map(dev, group, tmp);
-                id_map->LID = 0;
+            if (MPR_MAP == manage_inst && id_pair->LID) {
+                /* need to clear id_pairs */
+                mpr_id_pair tmp = mpr_dev_get_id_pair_by_LID(dev, group, MPR_DEFAULT_INST_LID);
+                mpr_dev_remove_id_pair(dev, group, tmp);
+                id_pair->LID = 0;
             }
-            /* TODO: if signal is managing instances we should retire reinstancing id_map here */
+            /* TODO: if signal is managing instances we should retire reinstancing id_pair here */
         }
 
         if (status & EXPR_UPDATE) {
             if (MPR_MAP == manage_inst) {
-                if (!id_map->LID) {
-                    /* need to (re)create id_map */
-                    mpr_id_map tmp = mpr_dev_get_id_map_by_LID(dev, group, MPR_DEFAULT_INST_LID);
+                if (!id_pair->LID) {
+                    /* need to (re)create id_pair */
+                    mpr_id_pair tmp = mpr_dev_get_id_pair_by_LID(dev, group, MPR_DEFAULT_INST_LID);
                     if (!tmp) {
-                        /* add a new id_map to the device */
-                        tmp = mpr_dev_add_id_map(dev, group, MPR_DEFAULT_INST_LID,
-                                                 mpr_dev_generate_unique_id((mpr_dev)dev), 0);
+                        /* add a new id_pair to the device */
+                        tmp = mpr_dev_add_id_pair(dev, group, MPR_DEFAULT_INST_LID,
+                                                  mpr_dev_generate_unique_id((mpr_dev)dev), 0);
                     }
-                    /* copy the new id_map values into the map's id_map */
-                    id_map->LID = MPR_DEFAULT_INST_LID;
-                    id_map->GID = tmp->GID;
+                    /* copy the new id_pair values into the map's id_pair */
+                    id_pair->LID = MPR_DEFAULT_INST_LID;
+                    id_pair->GID = tmp->GID;
                 }
             }
             /* build update message */
-            mpr_slot_build_msg(m->dst, dst_val, i, id_map);
+            mpr_slot_build_msg(m->dst, dst_val, i, id_pair);
         }
 
         /* send instance release if dst is instanced and either src or map is also instanced. */
         if (status & EXPR_RELEASE_AFTER_UPDATE) {
             /* build release message */
-            mpr_slot_build_msg(m->dst, 0, 0, id_map);
+            mpr_slot_build_msg(m->dst, 0, 0, id_pair);
 
-            if (MPR_MAP == manage_inst && id_map->LID) {
-                /* need to clear id_maps */
-                mpr_id_map tmp = mpr_dev_get_id_map_by_LID(dev, group, MPR_DEFAULT_INST_LID);
-                mpr_dev_remove_id_map(dev, group, tmp);
-                id_map->LID = 0;
+            if (MPR_MAP == manage_inst && id_pair->LID) {
+                /* need to clear id_pairs */
+                mpr_id_pair tmp = mpr_dev_get_id_pair_by_LID(dev, group, MPR_DEFAULT_INST_LID);
+                mpr_dev_remove_id_pair(dev, group, tmp);
+                id_pair->LID = 0;
             }
-            /* TODO: if signal is managing instances we should retire reinstancing id_map here */
+            /* TODO: if signal is managing instances we should retire reinstancing id_pair here */
         }
 
         if (status & EXPR_EVAL_DONE)
@@ -927,8 +927,8 @@ void mpr_map_receive(mpr_local_map m, mpr_time time)
     RETURN_UNLESS(m->updated && m->expr && !m->muted
                   && MPR_DIR_IN == mpr_slot_get_dir((mpr_slot)m->src[0]));
 
-    /* temporary solution: use most multitudinous source signal for id_map
-     * permanent solution: move id_maps to map */
+    /* temporary solution: use most multitudinous source signal for id_pair
+     * permanent solution: move id_pairs to map */
     src_slot = m->src[0];
     src_sig = mpr_slot_get_sig((mpr_slot)src_slot);
     for (i = 0; i < m->num_src; i++) {
@@ -965,19 +965,19 @@ void mpr_map_receive(mpr_local_map m, mpr_time time)
         /* TODO: Also apply to all instances if the map is convergent and other slot signals are instanced */
         if (!m->use_inst) {
             /* apply update to all active destination instances */
-            mpr_local_sig_set_inst_value(dst_sig, value, -1, &m->id_map, status, map_manages_inst, time);
+            mpr_local_sig_set_inst_value(dst_sig, value, -1, &m->id_pair, status, map_manages_inst, time);
         }
         else if (status & EXPR_EVAL_DONE) {
             /* expression reduces across instances, no need to recompute result */
             for (; i < m->num_inst; i++) {
                 if (!mpr_bitflags_get(m->updated_inst, i))
                     continue;
-                mpr_local_sig_set_inst_value(dst_sig, value, i, &m->id_map, status, map_manages_inst, time);
+                mpr_local_sig_set_inst_value(dst_sig, value, i, &m->id_pair, status, map_manages_inst, time);
             }
             break;
         }
         else {
-            mpr_local_sig_set_inst_value(dst_sig, value, i, &m->id_map, status, map_manages_inst, time);
+            mpr_local_sig_set_inst_value(dst_sig, value, i, &m->id_pair, status, map_manages_inst, time);
         }
     }
     mpr_bitflags_clear(m->updated_inst);
@@ -1467,7 +1467,7 @@ static int set_expr(mpr_local_map m, const char *expr_str)
 
     trace("setting map expression to '%s'\n", expr_str ? expr_str : "default");
 
-    m->id_map.LID = 0;
+    m->id_pair.LID = 0;
 
     if (!(m->process_loc & m->locality)) {
         /* don't need to compile */
@@ -2309,7 +2309,7 @@ void mpr_map_status_decr(mpr_map map)
         map->obj.status |= MPR_STATUS_EXPIRED;
 }
 
-mpr_id_map mpr_local_map_get_id_map(mpr_local_map map)
+mpr_id_pair mpr_local_map_get_id_pair(mpr_local_map map)
 {
-    return &map->id_map;
+    return &map->id_pair;
 }

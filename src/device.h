@@ -71,9 +71,9 @@ int mpr_dev_add_link(mpr_dev dev1, mpr_dev dev2);
 
 void mpr_dev_remove_link(mpr_dev dev1, mpr_dev dev2);
 
-int mpr_dev_LID_decref(mpr_local_dev dev, int group, mpr_id_map id_map);
+int mpr_dev_LID_decref(mpr_local_dev dev, int group, mpr_id_pair id_pair);
 
-int mpr_dev_GID_decref(mpr_local_dev dev, int group, mpr_id_map id_map);
+int mpr_dev_GID_decref(mpr_local_dev dev, int group, mpr_id_pair id_pair);
 
 void mpr_dev_init(mpr_dev dev, mpr_id id);
 
@@ -126,21 +126,21 @@ void mpr_local_dev_handler_logout(mpr_local_dev dev, mpr_dev remote, const char 
 
 void mpr_local_dev_add_sig(mpr_local_dev dev, mpr_local_sig sig, mpr_dir dir);
 
-mpr_id_map mpr_dev_add_id_map(mpr_local_dev dev, int group, mpr_id LID, mpr_id GID, int indirect);
+mpr_id_pair mpr_dev_add_id_pair(mpr_local_dev dev, int group, mpr_id LID, mpr_id GID, int indirect);
 
-mpr_id_map mpr_dev_get_id_map_by_LID(mpr_local_dev dev, int group, mpr_id LID);
+mpr_id_pair mpr_dev_get_id_pair_by_LID(mpr_local_dev dev, int group, mpr_id LID);
 
-mpr_id_map mpr_dev_get_id_map_by_GID(mpr_local_dev dev, int group, mpr_id GID);
+mpr_id_pair mpr_dev_get_id_pair_by_GID(mpr_local_dev dev, int group, mpr_id GID);
 
 /* TODO: rename this function */
-mpr_id_map mpr_dev_get_id_map_GID_free(mpr_local_dev dev, int group, mpr_id last_GID);
+mpr_id_pair mpr_dev_get_id_pair_GID_free(mpr_local_dev dev, int group, mpr_id last_GID);
 
-int mpr_local_dev_get_num_id_maps(mpr_local_dev dev, int active);
+int mpr_local_dev_get_id_map_size(mpr_local_dev dev, int active);
 
-void mpr_dev_remove_id_map(mpr_local_dev dev, int group, mpr_id_map rem);
+void mpr_dev_remove_id_pair(mpr_local_dev dev, int group, mpr_id_pair rem);
 
 #ifdef DEBUG
-void mpr_local_dev_print_id_maps(mpr_local_dev dev);
+void mpr_local_dev_print_id_map(mpr_local_dev dev);
 #endif
 
 #endif /* __MPR_DEVICE_H__ */
