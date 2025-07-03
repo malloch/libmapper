@@ -214,16 +214,28 @@ void* mpr_value_get_value(mpr_value v, unsigned int inst_idx, int hist_idx)
     return (char*)b->samps + idx * v->vlen * mpr_type_get_size(v->type);
 }
 
-void mpr_value_set_next(mpr_value v, unsigned int inst_idx, const void *s, mpr_time *t)
+int mpr_value_set_next(mpr_value v, unsigned int inst_idx, const void *s, mpr_time *t)
 {
-    mpr_value_incr_idx(v, inst_idx);
-    if (s) {
-        mpr_value_buffer b = &v->inst[inst_idx % v->num_inst];
-        mpr_bitflags_set_all(b->known);
-        memcpy(mpr_value_get_value(v, inst_idx, 0), s, v->vlen * mpr_type_get_size(v->type));
+    int cmp = 1;
+    mpr_value_buffer b = &v->inst[inst_idx % v->num_inst];
+    RETURN_ARG_UNLESS(s, 0);
+
+    if (mpr_bitflags_get_all(b->known)) {
+        /* we can compare to last value */
+        cmp = memcmp(mpr_value_get_value(v, inst_idx, 0), s, v->vlen * mpr_type_get_size(v->type));
     }
+    else {
+        mpr_bitflags_set_all(b->known);
+    }
+
+    mpr_value_incr_idx(v, inst_idx);
+
+    memcpy(mpr_value_get_value(v, inst_idx, 0), s, v->vlen * mpr_type_get_size(v->type));
+
     if (t)
         memcpy(mpr_value_get_time(v, inst_idx, 0), t, sizeof(mpr_time));
+
+    return cmp != 0;
 }
 
 void mpr_value_cpy_next(mpr_value v, unsigned int inst_idx)
@@ -247,7 +259,6 @@ void mpr_value_cpy_next(mpr_value v, unsigned int inst_idx)
 int mpr_value_set_element(mpr_value v, unsigned int inst_idx, int el_idx, void *new)
 {
     mpr_value_buffer b = &v->inst[inst_idx % v->num_inst];
-    int idx = (b->pos + v->mlen) % v->mlen;
     size_t size = mpr_type_get_size(v->type);
     char *old;
 
@@ -258,11 +269,11 @@ int mpr_value_set_element(mpr_value v, unsigned int inst_idx, int el_idx, void *
     if (el_idx < 0)
         el_idx += v->vlen;
 
-    old = (char*)b->samps + idx * v->vlen * size;
-    RETURN_ARG_UNLESS(old, 0);
-
     /* set bitflag indicating this element has a value */
     mpr_bitflags_set(b->known, el_idx);
+
+    old = (char*)b->samps + b->pos * v->vlen * size;
+    RETURN_ARG_UNLESS(old, 0);
 
     if (memcmp(old + el_idx * size, new, size)) {
         memcpy(old + el_idx * size, new, size);

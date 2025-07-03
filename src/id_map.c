@@ -10,41 +10,41 @@ typedef struct _mpr_id_map {
 
 mpr_id_map mpr_id_map_new()
 {
-    mpr_id_map m = (mpr_id_map) calloc(1, sizeof(mpr_id_map_t));
-    return m;
+    mpr_id_map map = (mpr_id_map) calloc(1, sizeof(mpr_id_map_t));
+    return map;
 }
 
 void mpr_id_map_free(mpr_id_map map)
 {
     /* Release active id maps */
     while (map->active) {
-        mpr_id_pair id_pair = map->active;
-        map->active = id_pair->next;
-        free(id_pair);
+        mpr_id_pair ids = map->active;
+        map->active = ids->next;
+        free(ids);
     }
     /* Release reserve id maps */
     while (map->reserve) {
-        mpr_id_pair id_pair = map->reserve;
-        map->reserve = id_pair->next;
-        free(id_pair);
+        mpr_id_pair ids = map->reserve;
+        map->reserve = ids->next;
+        free(ids);
     }
     free(map);
 }
 
 void mpr_id_map_reserve(mpr_id_map map)
 {
-    mpr_id_pair id_pair = (mpr_id_pair) calloc(1, sizeof(mpr_id_pair_t));
-    id_pair->next = map->reserve;
-    map->reserve = id_pair;
+    mpr_id_pair ids = (mpr_id_pair) calloc(1, sizeof(mpr_id_pair_t));
+    ids->next = map->reserve;
+    map->reserve = ids;
 }
 
 int mpr_id_map_get_size(mpr_id_map map, int active)
 {
     int count = 0;
-    mpr_id_pair id_pair = active ? map->active : map->reserve;
-    while (id_pair) {
+    mpr_id_pair ids = active ? map->active : map->reserve;
+    while (ids) {
         ++count;
-        id_pair = id_pair->next;
+        ids = ids->next;
     }
     return count;
 }
@@ -53,128 +53,134 @@ int mpr_id_map_get_size(mpr_id_map map, int active)
 void mpr_id_map_print(mpr_id_map map)
 {
     printf("ACTIVE ID PAIRS:\n");
-    mpr_id_pair id_pair = map->active;
-    while (id_pair) {
-        printf("  %p: %"PR_MPR_ID" (%d) -> %"PR_MPR_ID"%s (%d)\n", id_pair, id_pair->LID,
-               id_pair->LID_refcount, id_pair->GID, id_pair->indirect ? "*" : "", id_pair->GID_refcount);
-        id_pair = id_pair->next;
+    mpr_id_pair ids = map->active;
+    printf("  address\t\t  local\tglobal\n");
+    while (ids) {
+        printf("  %p: %"PR_MPR_ID" (%d) -> %"PR_MPR_ID"%s (%d)\n", ids, ids->local,
+               ids->refcount.local, ids->global, ids->indirect ? "*" : "", ids->refcount.global);
+        ids = ids->next;
     }
 }
 #endif
 
-mpr_id_pair mpr_id_map_add(mpr_id_map map, mpr_id LID, mpr_id GID, int indirect)
+mpr_id_pair mpr_id_map_add(mpr_id_map map, mpr_id local, mpr_id global, int indirect)
 {
-    mpr_id_pair id_pair;
+    mpr_id_pair ids;
     if (!map->reserve)
         mpr_id_map_reserve(map);
-    id_pair = map->reserve;
-    id_pair->LID = LID;
-    id_pair->GID = GID;
+    ids = map->reserve;
+    ids->local = local;
+    ids->global = global;
 #ifdef DEBUG
-    trace("mpr_id_map_add() %"PR_MPR_ID" -> %"PR_MPR_ID"\n", LID, id_pair->GID);
+    trace("mpr_id_map_add() %"PR_MPR_ID" -> %"PR_MPR_ID"\n", local, global);
 #endif
-    id_pair->LID_refcount = 1;
-    id_pair->GID_refcount = 0;
-    id_pair->indirect = indirect;
+    ids->refcount.local = 1;
+    ids->refcount.global = 0;
+    ids->indirect = indirect;
 
     /* remove from reserve list */
-    map->reserve = id_pair->next;
+    map->reserve = ids->next;
 
     /* add to active list */
-    id_pair->next = map->active;
-    map->active = id_pair;
+    ids->next = map->active;
+    map->active = ids;
 
-    return id_pair;
+    return ids;
 }
 
 void mpr_id_map_remove(mpr_id_map map, mpr_id_pair rem)
 {
-    mpr_id_pair *pair = &map->active;
+    mpr_id_pair *ids = &map->active;
 #ifdef DEBUG
-    trace("mpr_id_map_remove() %"PR_MPR_ID" -> %"PR_MPR_ID"\n", rem->LID, rem->GID);
+    trace("mpr_id_map_remove() %"PR_MPR_ID" -> %"PR_MPR_ID"\n", rem->local, rem->global);
 #endif
-    while (*pair) {
-        if ((*pair) == rem) {
-            *pair = (*pair)->next;
+    while (*ids) {
+        if ((*ids) == rem) {
+            *ids = (*ids)->next;
             rem->next = map->reserve;
             map->reserve = rem;
             break;
         }
-        pair = &(*pair)->next;
+        ids = &(*ids)->next;
     }
 }
 
-int mpr_id_map_LID_decref(mpr_id_map map, mpr_id_pair id_pair)
+int mpr_id_map_decref_local(mpr_id_map map, mpr_id_pair ids)
 {
-    --id_pair->LID_refcount;
+    --ids->refcount.local;
 #ifdef DEBUG
-    trace("mpr_id_map_LID_decref() %"PR_MPR_ID" -> %"PR_MPR_ID"\n", id_pair->LID, id_pair->GID);
-    trace("  refcounts: {LID:%d, GID:%d}\n", id_pair->LID_refcount, id_pair->GID_refcount);
+    trace("mpr_id_map_decref_local() %"PR_MPR_ID" -> %"PR_MPR_ID"\n", ids->local, ids->global);
+    trace("  refcounts: {local:%d, global:%d}\n", ids->refcount.local, ids->refcount.global);
 #endif
-    if (id_pair->LID_refcount <= 0) {
-        id_pair->LID_refcount = 0;
-        if (id_pair->GID_refcount <= 0) {
-            mpr_id_map_remove(map, id_pair);
+    if (ids->refcount.local <= 0) {
+        ids->refcount.local = 0;
+        if (ids->refcount.global <= 0) {
+            mpr_id_map_remove(map, ids);
             return 1;
         }
     }
     return 0;
 }
 
-int mpr_id_map_GID_decref(mpr_id_map map, mpr_id_pair id_pair)
+int mpr_id_map_decref_global(mpr_id_map map, mpr_id_pair ids)
 {
-    --id_pair->GID_refcount;
+    --ids->refcount.global;
 #ifdef DEBUG
-    trace("mpr_id_map_GID_decref() %"PR_MPR_ID" -> %"PR_MPR_ID"\n", id_pair->LID, id_pair->GID);
-    trace("  refcounts: {LID:%d, GID:%d}\n", id_pair->LID_refcount, id_pair->GID_refcount);
+    trace("mpr_id_map_decref_global() %"PR_MPR_ID" -> %"PR_MPR_ID"\n", ids->local, ids->global);
+    trace("  refcounts: {local:%d, global:%d}\n", ids->refcount.local, ids->refcount.global);
 #endif
-    if (id_pair->GID_refcount <= 0) {
-        id_pair->GID_refcount = 0;
-        if (id_pair->LID_refcount <= id_pair->indirect) {
-            mpr_id_map_remove(map, id_pair);
+    if (ids->refcount.global <= 0) {
+        ids->refcount.global = 0;
+        if (ids->refcount.local <= ids->indirect) {
+            mpr_id_map_remove(map, ids);
             return 1;
         }
     }
     return 0;
 }
 
-mpr_id_pair mpr_id_map_get_by_LID(mpr_id_map map, mpr_id LID)
+mpr_id_pair mpr_id_map_get_first(mpr_id_map map)
 {
-    mpr_id_pair id_pair = map->active;
-    while (id_pair) {
-        if (id_pair->LID == LID && id_pair->LID_refcount > 0) {
-            return id_pair;
+    return map->active;
+}
+
+mpr_id_pair mpr_id_map_get_local(mpr_id_map map, mpr_id id)
+{
+    mpr_id_pair ids = map->active;
+    while (ids) {
+        if (ids->local == id && ids->refcount.local > 0) {
+            return ids;
         }
-        id_pair = id_pair->next;
+        ids = ids->next;
     }
     return 0;
 }
 
-mpr_id_pair mpr_id_map_get_by_GID(mpr_id_map map, mpr_id GID)
+mpr_id_pair mpr_id_map_get_global(mpr_id_map map, mpr_id id)
 {
-    mpr_id_pair id_pair = map->active;
-    while (id_pair) {
-        if (id_pair->GID == GID)
-            return id_pair;
-        id_pair = id_pair->next;
+    mpr_id_pair ids = map->active;
+    while (ids) {
+        if (ids->global == id)
+            return ids;
+        ids = ids->next;
     }
     return 0;
 }
 
 /* TODO: rename this function */
-mpr_id_pair mpr_id_map_get_GID_free(mpr_id_map map, mpr_id last_GID)
+mpr_id_pair mpr_id_map_get_global_free(mpr_id_map map, mpr_id last_id)
 {
-    int searching = last_GID != 0;
-    mpr_id_pair id_pair = map->active;
-    while (id_pair && searching) {
-        if (id_pair->GID == last_GID)
+    int searching = last_id != 0;
+    mpr_id_pair ids = map->active;
+    while (ids && searching) {
+        if (ids->global == last_id)
             searching = 0;
-        id_pair = id_pair->next;
+        ids = ids->next;
     }
-    while (id_pair) {
-        if (id_pair->GID_refcount <= 0)
-            return id_pair;
-        id_pair = id_pair->next;
+    while (ids) {
+        if (ids->refcount.global <= 0)
+            return ids;
+        ids = ids->next;
     }
     return 0;
 }

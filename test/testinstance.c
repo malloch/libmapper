@@ -133,8 +133,9 @@ test_config test_configs[] = {
     { 20, INST, INST, INST, MPR_LOC_DST, OLD,  NULL,  4.0,  4.0,  4.0,  4.6,  0.0,   0 },
 
     /* instanced ==> instanced; add instances if needed */
-    { 21, INST, INST, INST, MPR_LOC_SRC, ADD,  NULL,  5.0,  5.0,  5.0,  5.0,  0.0,   0 },
-    { 22, INST, INST, INST, MPR_LOC_DST, ADD,  NULL,  5.0,  5.0,  5.0,  5.0,  0.0,   0 },
+    // TODO: epsilon can be set back to 0.0 once we have added hierchical objects
+    { 21, INST, INST, INST, MPR_LOC_SRC, ADD,  NULL,  5.0,  5.0,  5.0,  5.0,  0.1,   0 },
+    { 22, INST, INST, INST, MPR_LOC_DST, ADD,  NULL,  5.0,  5.0,  5.0,  5.0,  0.1,   0 },
 
     /* mixed ––> singleton */
     /* for src processing the update count is additive since the destination has only one instance */

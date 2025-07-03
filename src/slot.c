@@ -425,15 +425,15 @@ void mpr_slot_clear_msg(mpr_local_slot slot)
     slot->num_msg = slot->sending = 0;
 }
 
-void mpr_slot_build_msg(mpr_local_slot slot, mpr_value val, unsigned int idx, mpr_id_pair id_pair)
+void mpr_slot_build_msg(mpr_local_slot slot, mpr_value val, unsigned int idx, mpr_id_pair ids)
 {
     int i;
     lo_message msg = slot->msg;
 
-    if (id_pair) {
-        /* add instance GID */
+    if (ids) {
+        /* add global instance id */
         lo_message_add_string(msg, "@in");
-        lo_message_add_int64(msg, id_pair->GID);
+        lo_message_add_int64(msg, ids->global);
     }
 
     if (val) {

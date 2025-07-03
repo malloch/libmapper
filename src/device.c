@@ -550,7 +550,7 @@ void mpr_dev_set_time(mpr_dev dev, mpr_time time)
     ldev->time_is_stale = 0;
 }
 
-void mpr_dev_reserve_id_pair(mpr_local_dev dev)
+void mpr_dev_reserve_ids(mpr_local_dev dev)
 {
     mpr_id_map_reserve(dev->id_map);
 }
@@ -568,16 +568,16 @@ void mpr_local_dev_print_id_map(mpr_local_dev dev)
 }
 #endif
 
-mpr_id_pair mpr_dev_add_id_pair(mpr_local_dev dev, int group, mpr_id LID, mpr_id GID, int indirect)
+mpr_id_pair mpr_dev_add_ids(mpr_local_dev dev, int group, mpr_id local, mpr_id global, int indirect)
 {
-    mpr_id_pair id_pair = mpr_id_map_add(dev->id_map, LID, GID, indirect);
+    mpr_id_pair ids = mpr_id_map_add(dev->id_map, local, global, indirect);
 #ifdef DEBUG
     mpr_id_map_print(dev->id_map);
 #endif
-    return id_pair;
+    return ids;
 }
 
-void mpr_dev_remove_id_pair(mpr_local_dev dev, int group, mpr_id_pair rem)
+void mpr_dev_remove_ids(mpr_local_dev dev, int group, mpr_id_pair rem)
 {
     mpr_id_map_remove(dev->id_map, rem);
 #ifdef DEBUG
@@ -585,30 +585,30 @@ void mpr_dev_remove_id_pair(mpr_local_dev dev, int group, mpr_id_pair rem)
 #endif
 }
 
-int mpr_dev_LID_decref(mpr_local_dev dev, int group, mpr_id_pair id_pair)
+int mpr_dev_ids_decref_local(mpr_local_dev dev, int group, mpr_id_pair ids)
 {
-    return mpr_id_map_LID_decref(dev->id_map, id_pair);
+    return mpr_id_map_decref_local(dev->id_map, ids);
 }
 
-int mpr_dev_GID_decref(mpr_local_dev dev, int group, mpr_id_pair id_pair)
+int mpr_dev_ids_decref_global(mpr_local_dev dev, int group, mpr_id_pair ids)
 {
-    return mpr_id_map_GID_decref(dev->id_map, id_pair);
+    return mpr_id_map_decref_global(dev->id_map, ids);
 }
 
-mpr_id_pair mpr_dev_get_id_pair_by_LID(mpr_local_dev dev, int group, mpr_id LID)
+mpr_id_pair mpr_dev_get_ids_local(mpr_local_dev dev, int group, mpr_id id)
 {
-    return mpr_id_map_get_by_LID(dev->id_map, LID);
+    return mpr_id_map_get_local(dev->id_map, id);
 }
 
-mpr_id_pair mpr_dev_get_id_pair_by_GID(mpr_local_dev dev, int group, mpr_id GID)
+mpr_id_pair mpr_dev_get_ids_global(mpr_local_dev dev, int group, mpr_id id)
 {
-    return mpr_id_map_get_by_GID(dev->id_map, GID);
+    return mpr_id_map_get_global(dev->id_map, id);
 }
 
 /* TODO: rename this function */
-mpr_id_pair mpr_dev_get_id_pair_GID_free(mpr_local_dev dev, int group, mpr_id last_GID)
+mpr_id_pair mpr_dev_get_ids_global_free(mpr_local_dev dev, int group, mpr_id last_id)
 {
-    return mpr_id_map_get_GID_free(dev->id_map, last_GID);
+    return mpr_id_map_get_global_free(dev->id_map, last_id);
 }
 
 /*! Probe the network to see if a device's proposed name.ordinal is available. */

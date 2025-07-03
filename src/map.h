@@ -96,7 +96,7 @@ void mpr_map_remove_scope_internal(mpr_map map, mpr_dev dev);
 
 void mpr_map_clear_empty_props(mpr_local_map map);
 
-mpr_id_pair mpr_local_map_get_id_pair(mpr_local_map map);
+mpr_id_pair mpr_local_map_get_ids(mpr_local_map map);
 
 void mpr_map_memswap(mpr_map dst, mpr_map src);
 

@@ -124,16 +124,16 @@ test_config test_configs[] = {
     /* instanced ==> instanced; steal newest instance */
     { 17, INST, INST, INST, MPR_LOC_SRC, NEW,  NULL,  4.0,  4.0,  1.79, 1.79, 0.01,  0 },
     /* TODO: verify that shared_graph version is behaving properly */
-    { 18, INST, INST, INST, MPR_LOC_DST, NEW,  NULL,  4.0,  4.0,  1.50, 1.79, 0.01,  0 },
+    { 18, INST, INST, INST, MPR_LOC_DST, NEW,  NULL,  4.0,  4.0,  1.79, 1.79, 0.01,  0 },
 
     /* instanced ==> instanced; steal oldest instance */
     /* TODO: document why multiplier is not 5.0 */
-    { 19, INST, INST, INST, MPR_LOC_SRC, OLD,  NULL,  4.0,  4.0,  3.85, 3.85, 0.01,  0 },
-    { 20, INST, INST, INST, MPR_LOC_DST, OLD,  NULL,  4.0,  4.0,  2.00, 3.85, 0.01,  0 },
+    { 19, INST, INST, INST, MPR_LOC_SRC, OLD,  NULL,  4.0,  4.0,  3.95, 3.95, 0.01,  0 },
+    { 20, INST, INST, INST, MPR_LOC_DST, OLD,  NULL,  4.0,  4.0,  3.95, 3.95, 0.01,  0 },
 
     /* instanced ==> instanced; add instances if needed */
-    { 21, INST, INST, INST, MPR_LOC_SRC, ADD,  NULL,  5.0,  5.0,  4.76, 4.76, 0.01,  0 },
-    { 22, INST, INST, INST, MPR_LOC_DST, ADD,  NULL,  5.0,  5.0,  2.00, 4.76, 0.01,  0 },
+    { 21, INST, INST, INST, MPR_LOC_SRC, ADD,  NULL,  5.0,  5.0,  4.86, 4.91, 0.01,  0 },
+    { 22, INST, INST, INST, MPR_LOC_DST, ADD,  NULL,  5.0,  5.0,  4.91, 4.91, 0.01,  0 },
 
     /* mixed ––> singleton */
     /* for src processing the update count is additive since the destination has only one instance */
@@ -443,7 +443,7 @@ int loop(test_config *config)
                 eprintf("--> destination multirecv instance %i got upstream release\n", (int)id);
                 mpr_sig_release_inst(multirecv, id);
             }
-            if (!num_inst && mpr_obj_get_status((mpr_obj)multirecv) & MPR_STATUS_OVERFLOW) {
+            if (mpr_obj_get_status((mpr_obj)multirecv) & MPR_STATUS_OVERFLOW) {
                 switch (config->oflw_action) {
                     case ADD:
                         eprintf("OVERFLOW!! ALLOCATING ANOTHER INSTANCE.\n");
@@ -462,6 +462,7 @@ int loop(test_config *config)
                 }
             }
         }
+        mpr_obj_reset_status((mpr_obj)multirecv);
 
         if (verbose) {
             printf("ID:     ");

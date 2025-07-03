@@ -75,8 +75,7 @@ lo_address mpr_slot_get_addr(mpr_slot slot);
 
 void mpr_slot_clear_msg(mpr_local_slot slot);
 
-void mpr_slot_build_msg(mpr_local_slot slot, mpr_value val, unsigned int val_idx,
-                        mpr_id_pair id_pair);
+void mpr_slot_build_msg(mpr_local_slot slot, mpr_value val, unsigned int val_idx, mpr_id_pair ids);
 
 lo_message mpr_slot_get_msg(mpr_local_slot slot);
 

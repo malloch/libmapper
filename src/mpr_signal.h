@@ -79,7 +79,7 @@ void mpr_local_sig_set_inst_value(mpr_local_sig sig, const void *value, int inst
                                   mpr_id_pair id_pair, int status, int map_manages_inst,
                                   mpr_time time);
 
-mpr_id_pair mpr_local_sig_get_id_pair_by_inst_idx(mpr_local_sig sig, unsigned int inst_idx);
+mpr_id_pair mpr_local_sig_get_ids_by_inst_idx(mpr_local_sig sig, unsigned int inst_idx);
 
 mpr_sig_group mpr_local_sig_get_group(mpr_local_sig sig);
 
