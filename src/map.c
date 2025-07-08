@@ -1047,7 +1047,7 @@ void mpr_map_alloc_values(mpr_local_map m, int quiet)
             /* set position to 0 since we are not currently allowing history on user variables */
         }
         for (j = 0; j < var_num_inst; j++)
-            mpr_value_incr_idx(vars[i], j);
+            mpr_value_incr_idx(vars[i], j, MPR_NOW);
     }
 
     /* free old variables and replace with new */
@@ -1516,7 +1516,7 @@ static int set_expr(mpr_local_map m, const char *expr_str)
     /* TODO: should call handler for all instances updated through this map. */
     if (mpr_expr_get_num_src(m->expr) <= 0 && !m->use_inst && mpr_obj_get_is_local((mpr_obj)dst_sig)) {
         /* call handler if it exists */
-        mpr_sig_call_handler((mpr_local_sig)dst_sig, MPR_STATUS_UPDATE_REM, 0, 0, 0);
+        mpr_sig_call_handler((mpr_local_sig)dst_sig, MPR_STATUS_UPDATE_REM, 0, 0);
     }
 
     /* check whether each source slot causes computation */
