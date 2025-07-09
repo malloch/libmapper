@@ -10,6 +10,8 @@
 #include "util/mpr_set_coerced.h"
 #include "value.h"
 
+#define GET_BUFFER() &v->inst[inst_idx % v->num_inst]
+
 typedef struct _mpr_value_buffer
 {
     mpr_time created;           /*!< Time at which this instance was created. */
@@ -233,7 +235,7 @@ static void update_timing_stats(mpr_value v, mpr_time t)
 
 void* mpr_value_get_value(mpr_value v, unsigned int inst_idx, int hist_idx)
 {
-    mpr_value_buffer b = &v->inst[inst_idx % v->num_inst];
+    mpr_value_buffer b = GET_BUFFER();
     int idx = (b->pos + v->mlen + hist_idx) % v->mlen;
     RETURN_ARG_UNLESS(b->pos >= 0, NULL);
     if (idx < 0)
@@ -243,7 +245,7 @@ void* mpr_value_get_value(mpr_value v, unsigned int inst_idx, int hist_idx)
 
 static mpr_time* mpr_value_get_time_internal(mpr_value v, unsigned int inst_idx, int hist_idx)
 {
-    mpr_value_buffer b = &v->inst[inst_idx % v->num_inst];
+    mpr_value_buffer b = GET_BUFFER();
     int idx = 0;
     if (b->pos >= 0) {
         idx = (b->pos + v->mlen + hist_idx) % v->mlen;
@@ -263,7 +265,7 @@ mpr_time mpr_value_get_time(mpr_value v, unsigned int inst_idx, int hist_idx)
 int mpr_value_set_next(mpr_value v, unsigned int inst_idx, const void *s, mpr_time t)
 {
     int cmp = 1;
-    mpr_value_buffer b = &v->inst[inst_idx % v->num_inst];
+    mpr_value_buffer b = GET_BUFFER();
     RETURN_ARG_UNLESS(s, 0);
 
     if (mpr_bitflags_get_all(b->known)) {
@@ -286,14 +288,13 @@ int mpr_value_set_next(mpr_value v, unsigned int inst_idx, const void *s, mpr_ti
 void mpr_value_cpy_next(mpr_value v, unsigned int inst_idx, mpr_time t)
 {
     const void *s;
-    mpr_value_buffer b = &v->inst[inst_idx % v->num_inst];
-    int idx = b->pos;
+    mpr_value_buffer b = GET_BUFFER();
 
-    if (idx < 0) {
+    if (b->pos < 0) {
         mpr_value_incr_idx(v, inst_idx, t);
     }
     else if (v->mlen > 1 && mpr_bitflags_get_all(b->known)) {
-        s = (char*)b->samps + idx * v->vlen * mpr_type_get_size(v->type);
+        s = (char*)b->samps + b->pos * v->vlen * mpr_type_get_size(v->type);
         mpr_value_set_next(v, inst_idx, s, t);
     }
 }
@@ -301,7 +302,7 @@ void mpr_value_cpy_next(mpr_value v, unsigned int inst_idx, mpr_time t)
 /* returns 1 if the element value was changed */
 int mpr_value_set_element(mpr_value v, unsigned int inst_idx, int el_idx, void *new)
 {
-    mpr_value_buffer b = &v->inst[inst_idx % v->num_inst];
+    mpr_value_buffer b = GET_BUFFER();
     size_t size = mpr_type_get_size(v->type);
     char *old;
 
@@ -328,7 +329,7 @@ int mpr_value_set_element(mpr_value v, unsigned int inst_idx, int el_idx, void *
 
 void mpr_value_set_elements_known(mpr_value v, unsigned int inst_idx, int start, int num)
 {
-    mpr_value_buffer b = &v->inst[inst_idx % v->num_inst];
+    mpr_value_buffer b = GET_BUFFER();
     int i = start, vlen = v->vlen;
     if (num > vlen)
         num = vlen;
@@ -341,14 +342,14 @@ void mpr_value_set_elements_known(mpr_value v, unsigned int inst_idx, int start,
 
 mpr_bitflags mpr_value_get_elements_known(mpr_value v, unsigned int inst_idx)
 {
-    mpr_value_buffer b = &v->inst[inst_idx % v->num_inst];
+    mpr_value_buffer b = GET_BUFFER();
     return b->known;
 }
 
 /* TODO: use an extra 'value known' bitflag for faster comparison? */
 int mpr_value_get_has_value(mpr_value v, unsigned int inst_idx)
 {
-    mpr_value_buffer b = &v->inst[inst_idx % v->num_inst];
+    mpr_value_buffer b = GET_BUFFER();
     return b->pos >= 0 && mpr_bitflags_get_all(b->known);
 }
 
@@ -359,7 +360,7 @@ int mpr_value_set_next_coerced(mpr_value v, unsigned int inst_idx, unsigned int 
     mpr_value_incr_idx(v, inst_idx, t);
     status = mpr_set_coerced(len, type, s, v->vlen, v->type, mpr_value_get_value(v, inst_idx, 0));
     if (status >= 0) {
-        mpr_value_buffer b = &v->inst[inst_idx % v->num_inst];
+        mpr_value_buffer b = GET_BUFFER();
         mpr_bitflags_set_all(b->known);
         memcpy(mpr_value_get_time_internal(v, inst_idx, 0), &t, sizeof(mpr_time));
         update_timing_stats(v, t);
@@ -369,7 +370,7 @@ int mpr_value_set_next_coerced(mpr_value v, unsigned int inst_idx, unsigned int 
 
 void mpr_value_set_time(mpr_value v, mpr_time t, unsigned int inst_idx, int hist_idx)
 {
-    mpr_value_buffer b = &v->inst[inst_idx % v->num_inst];
+    mpr_value_buffer b = GET_BUFFER();
     int idx = (b->pos + v->mlen + hist_idx) % v->mlen;
     if (idx < 0)
         idx += v->mlen;
@@ -386,7 +387,7 @@ int mpr_value_cmp(mpr_value v, unsigned int inst_idx, int hist_idx, const void *
 
 void mpr_value_incr_idx(mpr_value v, unsigned int inst_idx, mpr_time t)
 {
-    mpr_value_buffer b = &v->inst[inst_idx % v->num_inst];
+    mpr_value_buffer b = GET_BUFFER();
     if (b->pos < 0) {
         ++v->num_active_inst;
         b->created = t;
@@ -403,14 +404,14 @@ void mpr_value_incr_idx(mpr_value v, unsigned int inst_idx, mpr_time t)
 
 void mpr_value_decr_idx(mpr_value v, unsigned int inst_idx)
 {
-    mpr_value_buffer b = &v->inst[inst_idx % v->num_inst];
+    mpr_value_buffer b = GET_BUFFER();
     if (--b->pos < 0)
         b->pos = v->mlen - 1;
 }
 
 unsigned int mpr_value_get_num_samps(mpr_value v, unsigned int inst_idx)
 {
-    mpr_value_buffer b = &v->inst[inst_idx % v->num_inst];
+    mpr_value_buffer b = GET_BUFFER();
     return b->full ? v->mlen : (b->pos + 1);
 }
 
@@ -442,7 +443,7 @@ mpr_type mpr_value_get_type(mpr_value v)
 void mpr_value_add_to_msg(mpr_value v, unsigned int inst_idx, lo_message msg)
 {
     /* value of vector elements can be <type> or NULL */
-    mpr_value_buffer b = &v->inst[inst_idx % v->num_inst];
+    mpr_value_buffer b = GET_BUFFER();
     void *val;
     RETURN_UNLESS(b->pos >= 0);
     val = (char*)b->samps + b->pos * v->vlen * mpr_type_get_size(v->type);
