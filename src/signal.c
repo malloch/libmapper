@@ -373,7 +373,7 @@ again:
             TRACE_RETURN_UNLESS(types[offset + 1] == MPR_INT64, 0,
                                 "error in mpr_sig_osc_handler: bad arguments for 'instance' prop.\n")
             global_id = argv[offset + 1]->i64;
-            trace("retrieved global id %llu from message index %d\n", global_id, offset + 1);
+            trace("retrieved global id %"PR_MPR_ID" from message index %d\n", global_id, offset + 1);
             offset += 2;
         }
         else {
