@@ -61,12 +61,6 @@ mpr_list mpr_dev_get_links(mpr_dev dev, mpr_dir dir);
 
 mpr_list mpr_dev_get_maps(mpr_dev dev, mpr_dir dir);
 
-/*! Find information for a registered signal.
- *  \param dev          The device to query.
- *  \param sig_name     Name of the signal to find in the graph.
- *  \return             Information about the signal, or zero if not found. */
-mpr_sig mpr_dev_get_sig_by_name(mpr_dev dev, const char *sig_name);
-
 int mpr_dev_add_link(mpr_dev dev1, mpr_dev dev2);
 
 void mpr_dev_remove_link(mpr_dev dev1, mpr_dev dev2);

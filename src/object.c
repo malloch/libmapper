@@ -23,15 +23,273 @@ void mpr_obj_init(mpr_obj o, mpr_graph g, const char *name, mpr_type t, int is_l
     mpr_obj_set_status((mpr_obj)o->graph, MPR_STATUS_NEW, 0);
 }
 
+static mpr_obj mpr_obj_build_tree(mpr_obj parent, const char *name, mpr_type type, int is_local)
+{
+    mpr_obj o;
+    RETURN_ARG_UNLESS(name, NULL);
+    if ('/' == name[0])
+        ++name;
+    trace("adding object '%s' to '%s'\n", name, parent ? parent->name : "NULL");
+
+    if (parent) {
+        /* check if there is already a child object with this name */
+        o = parent->child;
+        while (o) {
+            if (0 == strcmp(o->name, name))
+                return o;
+            o = o->next;
+        }
+    }
+
+    /* allocate a new object */
+    o = (mpr_obj) calloc(1, sizeof(mpr_obj_t));
+    o->name = strdup(name);
+    o->status = MPR_STATUS_NEW;
+
+    if (parent) {
+        o->parent = parent;
+
+        if (parent->root) {
+            o->root = parent->root;
+            o->id = mpr_graph_generate_unique_id(o->graph);
+            mpr_obj_set_status((mpr_obj)o->graph, MPR_STATUS_NEW, 0);
+        }
+        else {
+
+        }
+
+        /* add child to parent */
+        if (parent->child) {
+            o->next = parent->child;
+        }
+        parent->child = o;
+    }
+    return o;
+}
+
+void mpr_obj_build_tree_temp(mpr_obj parent, mpr_obj child)
+{
+    trace("building tree from '%s' to '%s'\n", parent->name, child->name);
+
+    mpr_obj o = parent;
+    if (strchr(child->name, '/')) {
+        char *name = child->name, *slash;
+        while ((slash = strchr(name, '/'))) {
+            slash[0] = '\0';
+            o = mpr_obj_build_tree(o, name, MPR_OBJ, child->is_local);
+            name = slash + 1;
+        }
+        name = strdup(name);
+        free(child->name);
+        child->name = name;
+    }
+
+    if (o->child) {
+        child->next = o->child;
+    }
+    o->child = child;
+    child->parent = o;
+}
+
+mpr_obj mpr_obj_new_internal(mpr_obj parent, const char *name, int num_inst, int ephemeral,
+                             mpr_type type, int is_local)
+{
+    mpr_obj o = parent;
+
+    // for now:
+    assert(MPR_SIG == type);
+
+    RETURN_ARG_UNLESS(name && *name && ('/' != name[strlen(name)-1]), NULL);
+    // no parents for maps? or links?
+    RETURN_ARG_UNLESS(!parent || parent->type != MPR_MAP, NULL);
+
+    if ('/' == name[0])
+        ++name;
+
+    /* we are adding a device, signal, or generic object */
+    if (!parent) {
+        /* add a graph structure */
+        trace("Adding new parent graph\n");
+        o = (mpr_obj)mpr_graph_new(0);
+        mpr_graph_set_owned((mpr_graph)o, 0);
+    }
+
+    if (strchr(name, '/')) {
+        char *slash;
+        while ((slash = strchr(name, '/'))) {
+            slash[0] = '\0';
+            o = mpr_obj_build_tree(o, name, MPR_OBJ, is_local);
+            name = slash + 1;
+        }
+    }
+    o = mpr_obj_build_tree(o, name, type, is_local);
+
+#ifdef DEBUG
+    name = mpr_obj_get_full_name(o, 0);
+    printf("added object '%s'\n", name);
+    free((char*)name);
+#endif
+
+//    if (!parent) {
+//        /* add a new graph */
+//        mpr_graph g = mpr_graph_new();
+//        mpr_obj o2 = o;
+//        while (1) {
+//            o2->graph = g;
+//            if (o2->parent)
+//                o2 = o2->parent;
+//            else {
+//                /* promote root object to a device */
+//                mpr_obj o3 = mpr_graph_add_obj(g, MPR_DEV)
+//                break;
+//            }
+//        }
+//    }
+//    else if (MPR_GRAPH == parent->type) {
+//        /* adding a new device */
+//    }
+
+    o->is_local = is_local;
+    o->num_inst = num_inst;
+    o->status = MPR_STATUS_NEW;
+//    if (ephemeral)
+//        o->flags |= MPR_INST_EPHEMERAL;
+
+    if (MPR_GRAPH == parent->type) {
+        /* make room for device struct */
+        mpr_obj old_ptr = o;
+        o = realloc(o, mpr_dev_get_struct_size(is_local));
+
+        trace("reallocating device struct...\n");
+        o->type = MPR_DEV;
+
+        // rewrite parent (graph) ptr to this object
+        if (parent->child == old_ptr)
+            parent->child = o;
+        else if (parent->child) {
+            mpr_obj o2 = parent->child;
+            while (o2->next) {
+                if (o2->next == old_ptr) {
+                    o->next = o2->next->next;
+                    o2->next = o;
+                    break;
+                }
+                o2 = o2->next;
+            }
+        }
+
+        // no children yet
+
+        /* set root to self */
+        o->root = (mpr_dev)o;
+    }
+    else
+        o->root = parent->root;
+
+    /* inform graph */
+//    mpr_graph_add_obj((mpr_graph)(((mpr_obj)o->root)->parent), o);
+
+    // TODO: update parent status flags?
+
+    return o;
+}
+
+//not used for maps, links
+mpr_obj mpr_obj_new(const char *name, mpr_obj parent)
+{
+    RETURN_ARG_UNLESS(name && *name && parent, NULL);
+    return mpr_obj_new_internal(parent, name, 1, 0, MPR_OBJ, 1);
+}
+
 void mpr_obj_free(mpr_obj o)
 {
+    // free children recursively
+    while (o->child) {
+        mpr_obj child = o->child;
+        o->child = o->child->next;
+        mpr_obj_free(child);
+    }
+    trace("freeing obj %s%s\n", o->name, o->is_local ? "*" : "");
+    // remove from parent
+    if (o->parent) {
+        mpr_obj *child = &o->parent->child, temp; // address of parent->child
+        while (*child) {
+            if (*child == o) {
+                temp = *child;
+                *child = temp->next;
+                break;
+            }
+            child = &(*child)->next;
+        }
+    }
+
+    // TODO: free implicitly-added objects that are now childless
+
+//    switch(o->type) {
+//        case MPR_DEV:
+//            mpr_dev_free_internal((mpr_dev)o);
+//        case MPR_SIG:
+//            mpr_sig_free_internal((mpr_sig)o);
+//        case MPR_MAP:
+//            mpr_map_free_internal((mpr_map)o);
+//        case MPR_GRAPH:
+//            mpr_graph_free_internal((mpr_graph)o);
+//        default:
+//            break;
+//    }
+
+    FUNC_IF(free, o->name);
     FUNC_IF(mpr_tbl_free, o->props.staged);
     FUNC_IF(mpr_tbl_free, o->props.synced);
+//    FUNC_IF(mpr_id_mapper_free, o->id_mapper);
 }
+
+const char *mpr_obj_get_full_name(mpr_obj o, int offset)
+{
+    int depth = 0, length = 0;
+    char *full_name;
+    mpr_obj o2 = o;
+
+    RETURN_ARG_UNLESS(o->name, NULL);
+
+    while ((o2 = o2->parent))
+        ++depth;
+
+    RETURN_ARG_UNLESS(depth >= offset, NULL);
+    depth -= offset;
+
+    o2 = o;
+    do {
+        length += (strlen(o2->name) + 1);
+        --depth;
+    } while (depth >= 0 && (o2 = o2->parent) && o2->name);
+    full_name = malloc(length + 1);
+    full_name[length] = '\0';
+
+    o2 = o;
+    do {
+        int str_len = strlen(o2->name);
+        length -= str_len;
+        memcpy(full_name + length, o2->name, str_len);
+        full_name[--length] = '/';
+    } while ((o2 = o2->parent) && length > 0);
+
+    return full_name;
+}
+
+#ifdef DEBUG
+void *mpr_obj_print_full_name(mpr_obj o)
+{
+    if (o->parent && o->parent.name)
+        mpr_obj_print_full_name(o->parent);
+    printf("/%s", o->name);
+}
+#endif
 
 mpr_graph mpr_obj_get_graph(mpr_obj o)
 {
     return o ? o->graph : 0;
+//    return (o && o->root) ? o->root->parent : 0;
 }
 
 mpr_type mpr_obj_get_type(mpr_obj o)
@@ -39,20 +297,68 @@ mpr_type mpr_obj_get_type(mpr_obj o)
     return o ? o->type : 0;
 }
 
-void mpr_obj_incr_version(mpr_obj o)
+mpr_obj mpr_obj_get_child_by_name(mpr_obj o, const char *name)
 {
-    RETURN_UNLESS(o);
+    RETURN_ARG_UNLESS(o && name, NULL);
+
+    /* skip leading slash */
+    if ('/' == name[0])
+        ++name;
+
+    o = o->child;
+    while (o && name) {
+        char *slash = strchr(name, '/');
+        int len  = slash ? slash - name : strlen(name);
+        while (o) {
+            if (strlen(o->name) == len && !strncmp(o->name, name, len)) {
+                /* found matching object */
+                if (!slash) {
+                    /* no more string to match */
+                    return o;
+                }
+                /* advance to next section and check this object's children */
+                name = slash + 1;
+                o = o->child;
+                break;
+            }
+            o = o->next;
+        }
+    }
+    return NULL;
+}
+
+//mpr_obj mpr_obj_get_child_by_id(mpr_obj o, mpr_id id)
+//{
+//    RETURN_ARG_UNLESS(id && o && (o = o->child), NULL);
+//
+//    while (o) {
+//        if (id == o->id)
+//            break;
+//        o = o->next;
+//    };
+//    return o;
+//}
+
+int mpr_obj_incr_version(mpr_obj o)
+{
+    int version;
+    RETURN_ARG_UNLESS(o, 0);
     if (o->is_local) {
         ++o->version;
+//        o->version = version = ++o->root->version;
         mpr_tbl_set_is_dirty(o->props.synced, 1);
         if (o->type == MPR_SIG)
             ((mpr_obj)mpr_sig_get_dev((mpr_sig)o))->status |= MPR_DEV_SIG_CHANGED;
     }
-    else if (o->props.staged)
+    else if (o->props.staged) {
         mpr_tbl_set_is_dirty(o->props.staged, 1);
-    o->status |= MPR_STATUS_MODIFIED;
-
-    mpr_obj_set_status((mpr_obj)o->graph, MPR_STATUS_MODIFIED, 0);
+    }
+    version = o->version;
+//    while (o) {
+//        o->status |= MPR_STATUS_MODIFIED;
+//        o = o->parent;
+//    }
+    return version;
 }
 
 int mpr_obj_get_status(mpr_obj obj)
@@ -60,7 +366,12 @@ int mpr_obj_get_status(mpr_obj obj)
     return obj->status & 0xFFFF;
 }
 
-void mpr_obj_reset_status(mpr_obj obj)
+void mpr_obj_set_status(mpr_obj obj, int add, int remove)
+{
+    obj->status = (obj->status | add) & ~remove;
+}
+
+void mpr_obj_reset_status(mpr_obj obj)//, int recursive)
 {
     obj->status &= (  MPR_STATUS_EXPIRED
                     | MPR_STATUS_STAGED
@@ -69,6 +380,13 @@ void mpr_obj_reset_status(mpr_obj obj)
                     | 0xFFFF0000);
     if (MPR_GRAPH == obj->type)
         mpr_graph_reset_obj_statuses((mpr_graph)obj);
+//    if (recursive) {
+//        obj = obj->child;
+//        while (obj) {
+//            mpr_obj_reset_status(obj, 1);
+//            obj = obj->next;
+//        }
+//    }
 }
 
 int mpr_obj_get_num_props(mpr_obj o, int staged)
@@ -312,7 +630,7 @@ void mpr_obj_push(mpr_obj o)
 {
     mpr_net n;
     RETURN_UNLESS(o);
-    n = mpr_graph_get_net(o->graph);
+    n = mpr_graph_get_net(mpr_obj_get_graph(o));
     ++o->version;
 
     if (MPR_DEV == o->type) {
@@ -374,7 +692,7 @@ void mpr_obj_print(mpr_obj o, int staged)
     mpr_type type;
     const void *val;
 
-    RETURN_UNLESS(o && o->props.synced);
+    RETURN_UNLESS(o);
 
     switch (o->type) {
         case MPR_GRAPH:
@@ -397,6 +715,7 @@ void mpr_obj_print(mpr_obj o, int staged)
             return;
     }
 
+    RETURN_UNLESS(o->props.synced);
     num_props = mpr_obj_get_num_props(o, 0);
     for (i = 0; i < num_props; i++) {
         p = mpr_tbl_get_record_by_idx(o->props.synced, i, &key, &len, &type, &val, 0);
@@ -455,4 +774,18 @@ void mpr_obj_print(mpr_obj o, int staged)
         mpr_slot_print(mpr_map_get_dst_slot(map), 1);
     }
     printf("\n");
+}
+
+void mpr_obj_print_tree(mpr_obj o, int indent)
+{
+    int i;
+    for (i = 0; i < indent; i++)
+        printf(" ");
+    printf("%s (%p)\n", o->name, o->name);
+
+    o = o->child;
+    while (o) {
+        mpr_obj_print_tree(o, indent + 2);
+        o = o->next;
+    }
 }

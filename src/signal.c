@@ -28,7 +28,6 @@
  * */
 
 /* Function prototypes */
-static int mpr_sig_full_name(mpr_sig sig, char *name, int len);
 static int mpr_sig_get_inst(mpr_local_sig lsig, mpr_id *local_id, mpr_id *global_id,
                             mpr_time time, int flags, uint8_t activate, uint8_t call_handler);
 static void mpr_sig_release_inst_internal(mpr_local_sig lsig, int id_map_idx);
@@ -38,7 +37,7 @@ static int initialize_instance(mpr_local_sig lsig, mpr_sig_inst si, mpr_id_pair 
 
 #define MPR_SIG_STRUCT_ITEMS                                                            \
     mpr_obj_t obj;              /* always first */                                      \
-    char *path;                 /*! OSC path.  Must start with '/'. */                  \
+    const char *path;           /*! OSC path.  Must start with '/'. */                  \
     char *unit;                 /*!< The unit of this signal, or NULL for N/A. */       \
     int dir;                    /*!< `DIR_OUTGOING` / `DIR_INCOMING` / `DIR_BOTH` */    \
     int len;                    /*!< Length of the signal vector, or 1 for scalars. */  \
@@ -159,7 +158,7 @@ static void process_maps(mpr_local_sig sig, int id_map_idx)
 
     /* abort if signal is already being processed - might be a local loop */
     if (*locked) {
-        trace("Mapping loop detected on signal %s! (1)\n", sig->obj.name);
+        trace("Mapping loop detected on signal %s! (1)\n", sig->path);
         return;
     }
 
@@ -347,11 +346,11 @@ int mpr_sig_osc_handler(const char *path, const char *types, lo_arg **argv, int 
     dev = sig->dev;
 
 #ifdef DEBUG
-    printf("'%s:%s' received update: ", mpr_dev_get_name((mpr_dev)dev), sig->obj.name);
+    printf("'%s:%s' received update: ", mpr_dev_get_name((mpr_dev)dev), sig->path);
     lo_message_pp(msg);
 #endif
 
-    TRACE_RETURN_UNLESS(sig->num_inst, 0, "signal '%s' has no instances.\n", sig->obj.name);
+    TRACE_RETURN_UNLESS(sig->num_inst, 0, "signal '%s' has no instances.\n", sig->path);
     RETURN_ARG_UNLESS(argc, 0);
 
     time = mpr_net_get_bundle_time(net);
@@ -634,12 +633,13 @@ mpr_sig mpr_sig_new(mpr_dev dev, mpr_dir dir, const char *name, int len,
     TRACE_RETURN_UNLESS(dir == MPR_DIR_IN || dir == MPR_DIR_OUT, 0,
                         "signal direction must be either input or output.\n")
 
-    if ((lsig = (mpr_local_sig)mpr_dev_get_sig_by_name(dev, name)))
+    if ((lsig = (mpr_local_sig)mpr_obj_get_child_by_name((mpr_obj)dev, name)))
         return (mpr_sig)lsig;
 
     g = mpr_obj_get_graph((mpr_obj)dev);
 
     lsig = (mpr_local_sig)mpr_graph_add_obj(g, name, MPR_SIG, 1);
+    mpr_obj_build_tree_temp((mpr_obj)dev, (mpr_obj)lsig);
     lsig->obj.id = mpr_dev_generate_unique_id(dev);
     lsig->handler = (void*)h;
     lsig->event_flags = events;
@@ -662,8 +662,7 @@ void mpr_sig_init(mpr_sig sig, mpr_dev dev, mpr_dir dir, int len, mpr_type type,
 
     sig->dev = dev;
 
-    sig->path = malloc(strlen(sig->obj.name) + 2);
-    sprintf(sig->path, "/%s", sig->obj.name);
+    sig->path = mpr_obj_get_full_name((mpr_obj)sig, 1);
 
     sig->len = len;
     sig->type = type;
@@ -755,12 +754,13 @@ void mpr_sig_free(mpr_sig sig)
     if (mpr_dev_get_is_registered((mpr_dev)ldev)) {
         /* Notify subscribers */
         int dir = (sig->dir == MPR_DIR_IN) ? MPR_SIG_IN : MPR_SIG_OUT;
-        char sig_name[BUFFSIZE];
+        const char *sig_name;
         NEW_LO_MSG(msg, return);
-        RETURN_UNLESS(mpr_sig_full_name((mpr_sig)lsig, sig_name, BUFFSIZE));
+        RETURN_UNLESS(sig_name = mpr_obj_get_full_name((mpr_obj)lsig, 1));
         mpr_net_use_subscribers(net, ldev, dir);
         lo_message_add_string(msg, sig_name);
         mpr_net_add_msg(mpr_graph_get_net(lsig->obj.graph), 0, MSG_SIG_REM, msg);
+        free((char*)sig_name);
     }
 
     sig->obj.status |= MPR_STATUS_REMOVED;
@@ -1341,10 +1341,8 @@ void mpr_sig_set_value(mpr_sig sig, mpr_id id, int len, mpr_type type, const voi
         if (!mpr_value_set_next_coerced(lsig->value, si->idx, lsig->len, type, val, time))
             status |= MPR_STATUS_NEW_VALUE;
     }
-    else {
-        if (mpr_value_cmp(lsig->value, si->idx, 0, val))
-            si->status |= MPR_STATUS_NEW_VALUE;
-        mpr_value_set_next(lsig->value, si->idx, val, time);
+    else if (mpr_value_set_next(lsig->value, si->idx, val, time)) {
+        si->status |= MPR_STATUS_NEW_VALUE;
     }
     si->status |= status;
     sig->obj.status |= status;
@@ -1590,22 +1588,6 @@ void mpr_sig_set_cb(mpr_sig sig, mpr_sig_handler *h, int events)
 
 /**** Signal Properties ****/
 
-static int mpr_sig_full_name(mpr_sig sig, char *name, int len)
-{
-    int dev_name_len;
-    const char *dev_name = mpr_dev_get_name(sig->dev);
-    RETURN_ARG_UNLESS(dev_name, 0);
-
-    dev_name_len = strlen(dev_name);
-    if (dev_name_len >= len)
-        return 0;
-    if ((dev_name_len + strlen(sig->obj.name) + 1) > len)
-        return 0;
-
-    snprintf(name, len, "%s%s", dev_name, sig->path);
-    return strlen(name);
-}
-
 mpr_dev mpr_sig_get_dev(mpr_sig sig)
 {
     return sig ? sig->dev : NULL;
@@ -1664,7 +1646,6 @@ static int initialize_instance(mpr_local_sig lsig, mpr_sig_inst si, mpr_id_pair 
 
 void mpr_sig_send_state(mpr_sig sig, net_msg_t cmd)
 {
-    char str[BUFFSIZE];
     lo_message msg;
     mpr_net net;
     RETURN_UNLESS(sig);
@@ -1673,7 +1654,8 @@ void mpr_sig_send_state(mpr_sig sig, net_msg_t cmd)
     net = mpr_graph_get_net(sig->obj.graph);
 
     if (cmd == MSG_SIG_MOD) {
-        lo_message_add_string(msg, sig->obj.name);
+        char str[BUFFSIZE];
+        lo_message_add_string(msg, sig->path + 1);
 
         /* properties */
         mpr_obj_add_props_to_msg((mpr_obj)sig, msg);
@@ -1684,8 +1666,9 @@ void mpr_sig_send_state(mpr_sig sig, net_msg_t cmd)
         mpr_net_send(net);
     }
     else {
-        RETURN_UNLESS(mpr_sig_full_name(sig, str, BUFFSIZE));
-        lo_message_add_string(msg, str);
+        const char *sig_name = mpr_obj_get_full_name((mpr_obj)sig, 0);
+        lo_message_add_string(msg, sig_name);
+        free((char*)sig_name);
 
         /* properties */
         mpr_obj_add_props_to_msg((mpr_obj)sig, msg);
@@ -1779,19 +1762,9 @@ int mpr_sig_get_len(mpr_sig sig)
     return sig->len;
 }
 
-const char *mpr_sig_get_name(mpr_sig sig)
-{
-    return sig->obj.name;
-}
-
 const char *mpr_sig_get_path(mpr_sig sig)
 {
     return sig->path;
-}
-
-int mpr_sig_get_full_name(mpr_sig sig, char *name, int len)
-{
-    return snprintf(name, len, "%s/%s", mpr_dev_get_name(sig->dev), sig->obj.name);
 }
 
 mpr_type mpr_sig_get_type(mpr_sig sig)
@@ -1808,7 +1781,7 @@ int mpr_sig_compare_names(mpr_sig l, mpr_sig r)
 {
     int res = strcmp(mpr_dev_get_name(l->dev), mpr_dev_get_name(r->dev));
     if (0 == res)
-        res = strcmp(l->obj.name, r->obj.name);
+        res = strcmp(l->path, r->path);
     return res;
 }
 

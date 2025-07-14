@@ -1472,7 +1472,7 @@ static int handler_sig_mod(const char *path, const char *types, lo_arg **av,
     RETURN_ARG_UNLESS(dev && mpr_dev_get_is_ready((mpr_dev)dev) && ac > 1 && MPR_STR == types[0], 0);
 
     /* retrieve signal */
-    sig = mpr_dev_get_sig_by_name((mpr_dev)dev, &av[0]->s);
+    sig = (mpr_sig)mpr_obj_get_child_by_name((mpr_obj)dev, &av[0]->s);
     TRACE_DEV_RETURN_UNLESS(sig, 0, "no signal found with name '%s'.\n", &av[0]->s);
 
     props = mpr_msg_parse_props(ac-1, &types[1], &av[1]);
@@ -1512,7 +1512,8 @@ static int handler_sig_removed(const char *path, const char *types, lo_arg **av,
 
     dev = mpr_graph_get_dev_by_name(gph, devname);
     if (dev && !mpr_obj_get_is_local((mpr_obj)dev))
-        mpr_graph_remove_sig(gph, mpr_dev_get_sig_by_name(dev, signamep), MPR_STATUS_REMOVED);
+        mpr_graph_remove_sig(gph, (mpr_sig)mpr_obj_get_child_by_name((mpr_obj)dev, signamep),
+                             MPR_STATUS_REMOVED);
     return 0;
 }
 
@@ -1707,7 +1708,7 @@ static mpr_map find_map(mpr_net net, const char *types, int ac, lo_arg **av, mpr
             if (!mpr_dev_get_is_registered((mpr_dev)dev))
                 continue;
             if (   !prefix_cmp(&av[dst_idx]->s, mpr_dev_get_name((mpr_dev)dev), &sig_name)
-                && (sig = mpr_dev_get_sig_by_name((mpr_dev)dev, sig_name))) {
+                && (sig = (mpr_sig)mpr_obj_get_child_by_name((mpr_obj)dev, sig_name))) {
                 is_loc = 1;
                 break;
             }
@@ -1723,7 +1724,7 @@ static mpr_map find_map(mpr_net net, const char *types, int ac, lo_arg **av, mpr
                 if (!mpr_dev_get_is_registered((mpr_dev)dev))
                     continue;
                 if (   !prefix_cmp(src_names[i], mpr_dev_get_name((mpr_dev)dev), &sig_name)
-                    && (sig = mpr_dev_get_sig_by_name((mpr_dev)dev, sig_name))) {
+                    && (sig = (mpr_sig)mpr_obj_get_child_by_name((mpr_obj)dev, sig_name))) {
                     is_loc = 1;
                     break;
                 }

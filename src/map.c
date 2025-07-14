@@ -234,13 +234,18 @@ void mpr_map_init(mpr_map m, int num_src, mpr_sig *src, mpr_sig dst)
     for (i = 0; i < num_src; i++) {
         mpr_sig sig;
         if (mpr_obj_get_graph((mpr_obj)src[i]) == g) {
+            /* signal object shares graph with this map */
             sig = src[i];
         }
-        else if (  !(sig = (mpr_sig)mpr_graph_get_obj_by_id(g, mpr_obj_get_id((mpr_obj)src[i]), MPR_SIG))
-                 || (mpr_sig_get_dev(sig) != mpr_sig_get_dev(src[i]))) {
-            sig = mpr_graph_add_sig(g, mpr_sig_get_name(src[i]),
-                                    mpr_dev_get_name(mpr_sig_get_dev(src[i])), 0);
-            mpr_sig_copy_props(sig, src[i]);
+        else {
+            /* graph is not shared, try looking up signal by id */
+            sig = (mpr_sig) mpr_graph_get_obj_by_id(g, mpr_obj_get_id((mpr_obj)src[i]), MPR_SIG);
+            if (!sig) { //|| (mpr_sig_get_dev(sig) != mpr_sig_get_dev(src[i]))) {
+                /* add signal to map's graph and copy properties */
+                sig = mpr_graph_add_sig(g, mpr_sig_get_path(src[i]) + 1,
+                                        mpr_dev_get_name(mpr_sig_get_dev(src[i])), 0);
+                mpr_sig_copy_props(sig, src[i]);
+            }
         }
         m->src[i] = mpr_slot_new(m, sig, MPR_DIR_UNDEFINED, m->obj.is_local, 1);
         mpr_slot_set_id(m->src[i], i);
@@ -318,7 +323,7 @@ mpr_map mpr_map_new(int num_src, mpr_sig *src, int num_dst, mpr_sig *dst)
             mpr_dev dst_dev = mpr_sig_get_dev(dst[j]);
             if (src[i] == dst[j]) {
                 trace("Cannot connect signal '%s:%s' to itself.\n",
-                      mpr_dev_get_name(src_dev), mpr_sig_get_name(src[i]));
+                      mpr_dev_get_name(src_dev), mpr_sig_get_path(src[i]));
                 return 0;
             }
             if (!mpr_dev_get_is_ready(src_dev) || !mpr_dev_get_is_ready(dst_dev)) {
@@ -330,7 +335,7 @@ mpr_map mpr_map_new(int num_src, mpr_sig *src, int num_dst, mpr_sig *dst)
             }
             if (0 == mpr_sig_compare_names(src[i], dst[j])) {
                 trace("Cannot connect signal '%s:%s' to itself.\n",
-                      mpr_dev_get_name(src_dev), mpr_sig_get_name(src[i]));
+                      mpr_dev_get_name(src_dev), mpr_sig_get_path(src[i]));
                 return 0;
             }
         }
@@ -1848,7 +1853,6 @@ done:
 int mpr_map_send_state(mpr_map m, int slot_idx, net_msg_t cmd, int version)
 {
     lo_message msg;
-    char buffer[256];
     int i, staged;
     mpr_link link;
     mpr_dir dst_dir = mpr_slot_get_dir(m->dst);
@@ -1866,9 +1870,10 @@ int mpr_map_send_state(mpr_map m, int slot_idx, net_msg_t cmd, int version)
 
     if (MPR_DIR_IN == dst_dir) {
         /* add mapping destination */
-        mpr_sig_get_full_name(mpr_slot_get_sig(m->dst), buffer, 256);
-        lo_message_add_string(msg, buffer);
+        const char *sig_name = mpr_obj_get_full_name((mpr_obj)mpr_slot_get_sig(m->dst), 0);
+        lo_message_add_string(msg, sig_name);
         lo_message_add_string(msg, "<-");
+        free((char*)sig_name);
     }
 
     if (mpr_obj_get_is_local((mpr_obj)m) && ((mpr_local_map)m)->one_src)
@@ -1880,15 +1885,17 @@ int mpr_map_send_state(mpr_map m, int slot_idx, net_msg_t cmd, int version)
     for (; i < m->num_src; i++) {
         if ((slot_idx >= 0) && link && (link != mpr_slot_get_link(m->src[i])))
             break;
-        mpr_sig_get_full_name(mpr_slot_get_sig(m->src[i]), buffer, 256);
-        lo_message_add_string(msg, buffer);
+        const char *sig_name = mpr_obj_get_full_name((mpr_obj)mpr_slot_get_sig(m->src[i]), 0);
+        lo_message_add_string(msg, sig_name);
+        free((char*)sig_name);
     }
 
     if (MPR_DIR_OUT == dst_dir || !dst_dir) {
         /* add mapping destination */
-        mpr_sig_get_full_name(mpr_slot_get_sig(m->dst), buffer, 256);
+        const char *sig_name = mpr_obj_get_full_name((mpr_obj)mpr_slot_get_sig(m->dst), 0);
         lo_message_add_string(msg, "->");
-        lo_message_add_string(msg, buffer);
+        lo_message_add_string(msg, sig_name);
+        free((char*)sig_name);
     }
 
     /* Add unique id */

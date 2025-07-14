@@ -12,10 +12,16 @@ typedef struct _mpr_dict {
 
 #include "id.h"
 #include "mpr_type.h"
+#include "value.h"
 
 typedef struct _mpr_obj
 {
     struct _mpr_graph *graph;       /*!< Pointer back to the graph. */
+    struct _mpr_dev *root;          /*!< Pointer back to the root of this tree. */
+    struct _mpr_obj *parent;        /*!< Parent of this object – only one for now. */
+    struct _mpr_obj *child;         /*!< Chidren of this object. */
+    struct _mpr_obj *next;          /*!< Next sibling object. */
+
     mpr_id id;                      /*!< Unique id for this object. */
     char *name;                     /*!< The name of this object. */
     void *data;                     /*!< User context pointer. */
@@ -24,17 +30,30 @@ typedef struct _mpr_obj
     int version;                    /*!< Version number. */
     uint16_t status;
     mpr_type type;                  /*!< Object type. */
+
+    uint16_t num_inst;
 } mpr_obj_t;
 
 #include "graph.h"
 #include "util/mpr_inline.h"
 #include "table.h"
 
+// TODO: make static later
+void mpr_obj_build_tree_temp(mpr_obj parent, mpr_obj child);
+
+mpr_obj mpr_obj_new(const char *name, mpr_obj parent);
+
 void mpr_obj_init(mpr_obj obj, mpr_graph graph, const char *name, mpr_type type, int is_local);
 
 void mpr_obj_free(mpr_obj obj);
 
-void mpr_obj_incr_version(mpr_obj obj);
+int mpr_obj_incr_version(mpr_obj obj);
+
+const char *mpr_obj_get_full_name(mpr_obj o, int offset);
+
+mpr_obj mpr_obj_get_child_by_name(mpr_obj o, const char *name);
+
+void mpr_obj_print_tree(mpr_obj o, int indent);
 
 MPR_INLINE static mpr_id mpr_obj_get_id(mpr_obj obj)
     { return obj->id; }
@@ -42,8 +61,7 @@ MPR_INLINE static mpr_id mpr_obj_get_id(mpr_obj obj)
 MPR_INLINE static void mpr_obj_set_id(mpr_obj obj, mpr_id id)
     { obj->id = id; }
 
-MPR_INLINE static void mpr_obj_set_status(mpr_obj obj, int add, int remove)
-    { obj->status = (obj->status | add) & ~remove; }
+void mpr_obj_set_status(mpr_obj obj, int add, int remove);
 
 MPR_INLINE static int mpr_obj_get_is_local(mpr_obj obj)
     { return obj->is_local; }

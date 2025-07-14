@@ -341,21 +341,6 @@ mpr_list mpr_dev_get_sigs(mpr_dev dev, mpr_dir dir)
                                "hi", dev->obj.id, dir);
 }
 
-mpr_sig mpr_dev_get_sig_by_name(mpr_dev dev, const char *sig_name)
-{
-    mpr_list sigs;
-    RETURN_ARG_UNLESS(dev && sig_name, 0);
-    sigs = mpr_graph_get_list(dev->obj.graph, MPR_SIG);
-    while (sigs) {
-        mpr_sig sig = (mpr_sig)*sigs;
-        if (   mpr_sig_get_dev(sig) == dev
-            && strcmp(mpr_sig_get_name(sig), mpr_path_skip_slash(sig_name))==0)
-            return sig;
-        sigs = mpr_list_get_next(sigs);
-    }
-    return 0;
-}
-
 static int cmp_qry_maps(const void *context_data, mpr_map map)
 {
     mpr_id dev_id = *(mpr_id*)context_data;

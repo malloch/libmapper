@@ -601,7 +601,7 @@ mpr_sig mpr_graph_add_sig(mpr_graph g, const char *name, const char *dev_name, m
 
     mpr_dev dev = mpr_graph_get_dev_by_name(g, dev_name);
     if (dev) {
-        sig = mpr_dev_get_sig_by_name(dev, name);
+        sig = (mpr_sig)mpr_obj_get_child_by_name((mpr_obj)dev, name);
         if (sig && mpr_obj_get_is_local((mpr_obj)sig))
             return sig;
     }
@@ -611,6 +611,7 @@ mpr_sig mpr_graph_add_sig(mpr_graph g, const char *name, const char *dev_name, m
     if (!sig) {
         int num_inst = 1;
         sig = (mpr_sig) mpr_graph_add_obj(g, name, MPR_SIG, 0);
+        mpr_obj_build_tree_temp((mpr_obj)dev, (mpr_obj)sig);
         mpr_sig_init(sig, dev, MPR_DIR_UNDEFINED, 0, 0, 0, 0, 0, &num_inst);
         rc = 1;
 #ifdef DEBUG

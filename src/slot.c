@@ -216,7 +216,7 @@ int mpr_slot_match_full_name(mpr_slot slot, const char *full_name)
     len = sig_name - full_name;
     dev_name = mpr_dev_get_name(mpr_sig_get_dev(slot->sig));
     return (strlen(dev_name) != len || strncmp(full_name, dev_name, len)
-            || strcmp(sig_name+1, mpr_sig_get_name(slot->sig))) ? 1 : 0;
+            || strcmp(sig_name, mpr_sig_get_path(slot->sig))) ? 1 : 0;
 }
 
 int mpr_slot_alloc_values(mpr_local_slot slot, unsigned int num_inst, int hist_size)
@@ -397,7 +397,7 @@ int mpr_slot_compare_names(mpr_slot l, mpr_slot r)
     int result = strcmp(mpr_dev_get_name(mpr_sig_get_dev(lsig)),
                         mpr_dev_get_name(mpr_sig_get_dev(rsig)));
     if (0 == result)
-        return strcmp(mpr_sig_get_name(lsig), mpr_sig_get_name(rsig));
+        return strcmp(mpr_sig_get_path(lsig), mpr_sig_get_path(rsig));
     return result;
 }
 

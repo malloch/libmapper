@@ -43,17 +43,7 @@ void mpr_local_sig_set_dev_id(mpr_local_sig sig, mpr_id id);
 
 mpr_dir mpr_sig_get_dir(mpr_sig sig);
 
-/*! Get the full OSC name of a signal, including device name prefix.
- *  \param sig  The signal value to query.
- *  \param name A string to accept the name.
- *  \param len  The length of string pointed to by name.
- *  \return     The number of characters used, or 0 if error.  Note that in some
- *              cases the name may not be available. */
-int mpr_sig_get_full_name(mpr_sig sig, char *name, int len);
-
 int mpr_sig_get_len(mpr_sig sig);
-
-const char *mpr_sig_get_name(mpr_sig sig);
 
 const char *mpr_sig_get_path(mpr_sig sig);
 

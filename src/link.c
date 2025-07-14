@@ -230,7 +230,7 @@ int mpr_link_process_bundles(mpr_link link, mpr_time t)
                 while (j < count) {
                     /* Find the local signal matching the message path in the destination device. */
                     lo_message m = lo_bundle_get_message(lb, j, &path);
-                    mpr_sig dst = mpr_dev_get_sig_by_name(link->devs[i], path + 1);
+                    mpr_sig dst = (mpr_sig)mpr_obj_get_child_by_name((mpr_obj)link->devs[i], path + 1);
                     if (dst)
                         mpr_sig_osc_handler(NULL, lo_message_get_types(m), lo_message_get_argv(m),
                                             lo_message_get_argc(m), m, dst);
