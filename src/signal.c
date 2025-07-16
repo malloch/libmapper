@@ -97,7 +97,6 @@ typedef struct _mpr_local_sig
     mpr_local_slot *slots_in;
     mpr_local_slot *slots_out;
 
-    mpr_sig_group group;            /* TODO: replace with hierarchical instancing */
     uint8_t locked;
     uint8_t updated;                /* TODO: fold into updated_inst bitflags. */
 } mpr_local_sig_t;
@@ -184,7 +183,7 @@ static void process_maps(mpr_local_sig sig, int id_map_idx)
             mpr_id_pair tmp_ids = mpr_local_map_get_ids(map);
             if (tmp_ids->global == ids->global) {
                 tmp_ids->local = tmp_ids->global = 0;
-                mpr_dev_ids_decref_global(sig->dev, sig->group, ids);
+                mpr_dev_ids_decref_global(sig->dev, ids);
             }
 
             /* reset associated output memory */
@@ -449,7 +448,7 @@ again:
 
     if (global_id) {
         /* don't activate an instance just to release it again */
-        remote_ids = mpr_dev_get_ids_global(dev, sig->group, global_id);
+        remote_ids = mpr_dev_get_ids_global(dev, global_id);
 
         if (remote_ids && remote_ids->indirect) {
             trace("remapping instance GUID %"PR_MPR_ID" -> %"PR_MPR_ID"\n", global_id, remote_ids->local);
@@ -470,10 +469,10 @@ again:
             /* instance was already released locally, we are only interested in release messages */
             if (0 == vals) {
                 /* we can clear signal's reference to map */
-                mpr_dev_ids_decref_global(dev, sig->group, sig->id_map[id_map_idx].ids);
+                mpr_dev_ids_decref_global(dev, sig->id_map[id_map_idx].ids);
                 sig->id_map[id_map_idx].ids = 0;
                 if (remote_ids) {
-                    mpr_dev_ids_decref_global(dev, sig->group, remote_ids);
+                    mpr_dev_ids_decref_global(dev, remote_ids);
                 }
             }
             trace("instance already released locally\n");
@@ -511,9 +510,9 @@ again:
             else
                 sig->id_map[id_map_idx].inst->status |= MPR_STATUS_REL_DNSTRM;
             sig->obj.status |= sig->id_map[id_map_idx].inst->status;
-            mpr_dev_ids_decref_global(dev, sig->group, ids);
+            mpr_dev_ids_decref_global(dev, ids);
             if (remote_ids) {
-                mpr_dev_ids_decref_global(dev, sig->group, remote_ids);
+                mpr_dev_ids_decref_global(dev, remote_ids);
             }
         }
         /* if user-code has registered callback for release events we will proceed even if the
@@ -846,7 +845,7 @@ static int activate_instance(mpr_local_sig lsig, mpr_id *local_id, mpr_id *globa
 
     if (local_id) {
         /* check if the device already has an id_pair for this local id */
-        ids = mpr_dev_get_ids_local(lsig->dev, lsig->group, *local_id);
+        ids = mpr_dev_get_ids_local(lsig->dev, *local_id);
         /* try to find existing instance with this id */
         if ((si = _find_inst_by_id(lsig, *local_id))) {
             trace("found existing match...\n");
@@ -855,10 +854,10 @@ static int activate_instance(mpr_local_sig lsig, mpr_id *local_id, mpr_id *globa
     }
     else if (global_id) {
         /* check if the device already has an id_pair for this global id */
-        ids = mpr_dev_get_ids_global(lsig->dev, lsig->group, *global_id);
+        ids = mpr_dev_get_ids_global(lsig->dev, *global_id);
         if (ids) {
             trace("found existing id_pair for global id\n");
-            remote_ids = mpr_dev_get_ids_local(lsig->dev, lsig->group, *global_id);
+            remote_ids = mpr_dev_get_ids_local(lsig->dev, *global_id);
             if ((si = _find_inst_by_id(lsig, ids->local))) {
                 trace("found existing match...\n");
                 goto done;
@@ -876,7 +875,7 @@ static int activate_instance(mpr_local_sig lsig, mpr_id *local_id, mpr_id *globa
                     continue;
             }
             else {
-                ids = mpr_dev_get_ids_local(lsig->dev, lsig->group, si->id);
+                ids = mpr_dev_get_ids_local(lsig->dev, si->id);
                 if (ids && (lsig->ephemeral || ids->refcount.global > 0))
                     continue;
             }
@@ -890,7 +889,7 @@ static int activate_instance(mpr_local_sig lsig, mpr_id *local_id, mpr_id *globa
     for (i = 0; i < lsig->num_inst; i++) {
         si = lsig->inst[i];
         if (   (!lsig->ephemeral || !(si->status & MPR_STATUS_ACTIVE))
-            && (local_id || !mpr_dev_get_ids_local(lsig->dev, lsig->group, si->id))) {
+            && (local_id || !mpr_dev_get_ids_local(lsig->dev, si->id))) {
             trace("    found inactive instance at inst[%d] idx %d\n", i, si->idx);
             goto done;
         }
@@ -911,7 +910,7 @@ static int activate_instance(mpr_local_sig lsig, mpr_id *local_id, mpr_id *globa
                 /* set up indirect id_pair to refer to old id_pair */
                 trace("  setting up id_pair indirection: %"PR_MPR_ID" -> %"PR_MPR_ID" : %"PR_MPR_ID"\n",
                       *global_id, ids->global, ids->local);
-                mpr_id_pair indirect = mpr_dev_add_ids(lsig->dev, lsig->group, ids->global, *global_id, 1);
+                mpr_id_pair indirect = mpr_dev_add_ids(lsig->dev, ids->global, *global_id, 1);
 
                 /* increment global id refcounts for both id_pairs */
                 mpr_ids_incref_global(indirect);
@@ -926,14 +925,14 @@ static int activate_instance(mpr_local_sig lsig, mpr_id *local_id, mpr_id *globa
 
     {
         mpr_id last = 0;
-        while ((ids = mpr_dev_get_ids_global_free(lsig->dev, lsig->group, last))) {
+        while ((ids = mpr_dev_get_ids_global_free(lsig->dev, last))) {
             trace("  found freed id_pair %"PR_MPR_ID" (%d) : %"PR_MPR_ID" (%d)\n", ids->local,
                   ids->refcount.local, ids->global, ids->refcount.global);
             if ((si = _find_inst_by_id(lsig, ids->local))) {
                 /* set up indirect id_pair to refer to old id_pair */
                 trace("  setting up id_pair indirection: %"PR_MPR_ID" -> %"PR_MPR_ID" : %"PR_MPR_ID"\n",
                       *global_id, ids->global, ids->local);
-                mpr_id_pair indirect = mpr_dev_add_ids(lsig->dev, lsig->group, ids->global, *global_id, 1);
+                mpr_id_pair indirect = mpr_dev_add_ids(lsig->dev, ids->global, *global_id, 1);
 
                 /* increment global id refcounts for new id_pair */
                 mpr_ids_incref_global(indirect);
@@ -957,7 +956,7 @@ done:
     }
     if (!ids) {
         /* Claim id map locally */
-        ids = mpr_dev_add_ids(lsig->dev, lsig->group, si->id,
+        ids = mpr_dev_add_ids(lsig->dev, si->id,
                               global_id ? *global_id : mpr_dev_generate_unique_id((mpr_dev)lsig->dev), 0);
     }
     else
@@ -1379,7 +1378,7 @@ static void mpr_sig_release_inst_internal(mpr_local_sig lsig, int id_map_idx)
     time = mpr_dev_get_time((mpr_dev)lsig->dev);
     mpr_value_reset_inst(lsig->value, smap->inst->idx, time);
     process_maps(lsig, id_map_idx);
-    if (smap->ids && mpr_dev_ids_decref_local((mpr_local_dev)lsig->dev, lsig->group, smap->ids)) {
+    if (smap->ids && mpr_dev_ids_decref_local((mpr_local_dev)lsig->dev, smap->ids)) {
         smap->ids = 0;
     }
     else if ((lsig->dir & MPR_DIR_OUT) || smap->status & RELEASED_REMOTELY) {
@@ -1414,7 +1413,7 @@ void mpr_local_sig_release_inst_by_origin(mpr_local_sig lsig, mpr_dev origin)
         if (   si     && si->status & MPR_STATUS_ACTIVE
             && ids && (ids->global & 0xFFFFFFFF00000000) == id) {
             /* decrement the id_pair's global refcount */
-            mpr_dev_ids_decref_global(lsig->dev, lsig->group, ids);
+            mpr_dev_ids_decref_global(lsig->dev, ids);
 
             mpr_sig_call_handler(lsig, MPR_STATUS_REL_UPSTRM, si->id, si->idx);
         }
@@ -1954,11 +1953,6 @@ void mpr_local_sig_remove_slot(mpr_local_sig sig, mpr_local_slot slot, mpr_dir d
             sig->slots_out = realloc(sig->slots_out, sizeof(mpr_local_slot) * sig->num_maps_out);
         }
     }
-}
-
-mpr_sig_group mpr_local_sig_get_group(mpr_local_sig sig)
-{
-    return sig->group;
 }
 
 /* Functions below are only used by testinstance.c for printing instance indices */

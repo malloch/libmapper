@@ -6,7 +6,6 @@
 typedef struct _mpr_sig *mpr_sig;
 typedef struct _mpr_local_sig *mpr_local_sig;
 typedef struct _mpr_sig_inst *mpr_sig_inst;
-typedef int mpr_sig_group;
 
 #include "id_map.h"
 #include "mpr_time.h"
@@ -70,8 +69,6 @@ void mpr_local_sig_set_inst_value(mpr_local_sig sig, const void *value, int inst
                                   mpr_time time);
 
 mpr_id_pair mpr_local_sig_get_ids_by_inst_idx(mpr_local_sig sig, unsigned int inst_idx);
-
-mpr_sig_group mpr_local_sig_get_group(mpr_local_sig sig);
 
 void mpr_local_sig_release_inst_by_origin(mpr_local_sig sig, mpr_dev origin);
 

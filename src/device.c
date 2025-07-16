@@ -553,7 +553,7 @@ void mpr_local_dev_print_id_map(mpr_local_dev dev)
 }
 #endif
 
-mpr_id_pair mpr_dev_add_ids(mpr_local_dev dev, int group, mpr_id local, mpr_id global, int indirect)
+mpr_id_pair mpr_dev_add_ids(mpr_local_dev dev, mpr_id local, mpr_id global, int indirect)
 {
     mpr_id_pair ids = mpr_id_map_add(dev->id_map, local, global, indirect);
 #ifdef DEBUG
@@ -562,7 +562,7 @@ mpr_id_pair mpr_dev_add_ids(mpr_local_dev dev, int group, mpr_id local, mpr_id g
     return ids;
 }
 
-void mpr_dev_remove_ids(mpr_local_dev dev, int group, mpr_id_pair rem)
+void mpr_dev_remove_ids(mpr_local_dev dev, mpr_id_pair rem)
 {
     mpr_id_map_remove(dev->id_map, rem);
 #ifdef DEBUG
@@ -570,28 +570,28 @@ void mpr_dev_remove_ids(mpr_local_dev dev, int group, mpr_id_pair rem)
 #endif
 }
 
-int mpr_dev_ids_decref_local(mpr_local_dev dev, int group, mpr_id_pair ids)
+int mpr_dev_ids_decref_local(mpr_local_dev dev, mpr_id_pair ids)
 {
     return mpr_id_map_decref_local(dev->id_map, ids);
 }
 
-int mpr_dev_ids_decref_global(mpr_local_dev dev, int group, mpr_id_pair ids)
+int mpr_dev_ids_decref_global(mpr_local_dev dev, mpr_id_pair ids)
 {
     return mpr_id_map_decref_global(dev->id_map, ids);
 }
 
-mpr_id_pair mpr_dev_get_ids_local(mpr_local_dev dev, int group, mpr_id id)
+mpr_id_pair mpr_dev_get_ids_local(mpr_local_dev dev, mpr_id id)
 {
     return mpr_id_map_get_local(dev->id_map, id);
 }
 
-mpr_id_pair mpr_dev_get_ids_global(mpr_local_dev dev, int group, mpr_id id)
+mpr_id_pair mpr_dev_get_ids_global(mpr_local_dev dev, mpr_id id)
 {
     return mpr_id_map_get_global(dev->id_map, id);
 }
 
 /* TODO: rename this function */
-mpr_id_pair mpr_dev_get_ids_global_free(mpr_local_dev dev, int group, mpr_id last_id)
+mpr_id_pair mpr_dev_get_ids_global_free(mpr_local_dev dev, mpr_id last_id)
 {
     return mpr_id_map_get_global_free(dev->id_map, last_id);
 }

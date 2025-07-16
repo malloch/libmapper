@@ -65,9 +65,9 @@ int mpr_dev_add_link(mpr_dev dev1, mpr_dev dev2);
 
 void mpr_dev_remove_link(mpr_dev dev1, mpr_dev dev2);
 
-int mpr_dev_ids_decref_local(mpr_local_dev dev, int group, mpr_id_pair ids);
+int mpr_dev_ids_decref_local(mpr_local_dev dev, mpr_id_pair ids);
 
-int mpr_dev_ids_decref_global(mpr_local_dev dev, int group, mpr_id_pair ids);
+int mpr_dev_ids_decref_global(mpr_local_dev dev, mpr_id_pair ids);
 
 void mpr_dev_init(mpr_dev dev, mpr_id id);
 
@@ -120,18 +120,18 @@ void mpr_local_dev_handler_logout(mpr_local_dev dev, mpr_dev remote, const char 
 
 void mpr_local_dev_add_sig(mpr_local_dev dev, mpr_local_sig sig, mpr_dir dir);
 
-mpr_id_pair mpr_dev_add_ids(mpr_local_dev dev, int group, mpr_id local, mpr_id global, int indirect);
+mpr_id_pair mpr_dev_add_ids(mpr_local_dev dev, mpr_id local, mpr_id global, int indirect);
 
-mpr_id_pair mpr_dev_get_ids_local(mpr_local_dev dev, int group, mpr_id id);
+mpr_id_pair mpr_dev_get_ids_local(mpr_local_dev dev, mpr_id id);
 
-mpr_id_pair mpr_dev_get_ids_global(mpr_local_dev dev, int group, mpr_id id);
+mpr_id_pair mpr_dev_get_ids_global(mpr_local_dev dev, mpr_id id);
 
 /* TODO: rename this function */
-mpr_id_pair mpr_dev_get_ids_global_free(mpr_local_dev dev, int group, mpr_id last_id);
+mpr_id_pair mpr_dev_get_ids_global_free(mpr_local_dev dev, mpr_id last_id);
 
 int mpr_local_dev_get_id_map_size(mpr_local_dev dev, int active);
 
-void mpr_dev_remove_ids(mpr_local_dev dev, int group, mpr_id_pair rem);
+void mpr_dev_remove_ids(mpr_local_dev dev, mpr_id_pair rem);
 
 #ifdef DEBUG
 void mpr_local_dev_print_id_map(mpr_local_dev dev);

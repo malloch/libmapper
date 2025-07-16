@@ -4,8 +4,8 @@
 #include "util/mpr_debug.h"
 
 typedef struct _mpr_id_map {
-    struct _mpr_id_pair *active;    /*!< The list of active instance id maps. */
-    struct _mpr_id_pair *reserve;   /*!< The list of reserve instance id maps. */
+    struct _mpr_id_pair *active;    /*!< The list of active instance id pairs. */
+    struct _mpr_id_pair *reserve;   /*!< The list of reserve instance id pairs. */
 } mpr_id_map_t;
 
 mpr_id_map mpr_id_map_new()
