@@ -133,7 +133,7 @@ int main(int argc, char **argv)
 
     graph = mpr_graph_new(MPR_OBJ);
     dev = mpr_dev_new("testprops", 0);
-    sig = (mpr_obj)mpr_sig_new(dev, MPR_DIR_IN, "test", 3, MPR_FLT,
+    sig = (mpr_obj)mpr_sig_new((mpr_obj)dev, MPR_DIR_IN, "test", 3, MPR_FLT,
                                "Hz", NULL, NULL, NULL, NULL, 0);
 
     while (!mpr_dev_get_is_ready(dev)) {

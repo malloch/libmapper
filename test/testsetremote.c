@@ -113,7 +113,7 @@ int setup_device(const char *iface)
     eprintf("destination created using interface %s.\n",
             mpr_graph_get_interface(mpr_obj_get_graph(dev)));
 
-    recvsig = mpr_sig_new(dev, MPR_DIR_IN, "insig", 1, MPR_FLT, NULL,
+    recvsig = mpr_sig_new((mpr_obj)dev, MPR_DIR_IN, "insig", 1, MPR_FLT, NULL,
                           &mn, &mx, NULL, handler, MPR_STATUS_UPDATE_REM);
 
     eprintf("Input signal 'insig' registered.\n");

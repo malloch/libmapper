@@ -11,13 +11,15 @@
 #include "slot.h"
 #include <mapper/mapper.h>
 
-void mpr_obj_init(mpr_obj o, mpr_graph g, const char *name, mpr_type t, int is_local)
+void mpr_obj_init(mpr_obj o, mpr_graph g, const char *name, mpr_type type, int is_local)
 {
     trace("initializing %s object '%s'\n", is_local ? "local" : "remote", name);
     o->graph = g;
     if (name)
         o->name = strdup(name);
-    o->type = t;
+    if (MPR_DEV == type)
+        o->root = (MPR_DEV == type) ? (mpr_dev)o : o->root;
+    o->type = type;
     o->is_local = is_local;
     o->status = MPR_STATUS_NEW;
     mpr_obj_set_status((mpr_obj)o->graph, MPR_STATUS_NEW, 0);
@@ -43,7 +45,9 @@ static mpr_obj mpr_obj_build_tree(mpr_obj parent, const char *name, mpr_type typ
 
     /* allocate a new object */
     o = (mpr_obj) calloc(1, sizeof(mpr_obj_t));
+    o->graph = parent->graph;
     o->name = strdup(name);
+    o->type = type;
     o->status = MPR_STATUS_NEW;
 
     if (parent) {
@@ -97,7 +101,7 @@ mpr_obj mpr_obj_new_internal(mpr_obj parent, const char *name, int num_inst, int
     mpr_obj o = parent;
 
     // for now:
-    assert(MPR_SIG == type);
+    assert(MPR_OBJ == type || MPR_SIG == type);
 
     RETURN_ARG_UNLESS(name && *name && ('/' != name[strlen(name)-1]), NULL);
     // no parents for maps? or links?
@@ -195,7 +199,7 @@ mpr_obj mpr_obj_new_internal(mpr_obj parent, const char *name, int num_inst, int
 }
 
 //not used for maps, links
-mpr_obj mpr_obj_new(const char *name, mpr_obj parent)
+mpr_obj mpr_obj_new(mpr_obj parent, const char *name)
 {
     RETURN_ARG_UNLESS(name && *name && parent, NULL);
     return mpr_obj_new_internal(parent, name, 1, 0, MPR_OBJ, 1);
@@ -277,14 +281,12 @@ const char *mpr_obj_get_full_name(mpr_obj o, int offset)
     return full_name;
 }
 
-#ifdef DEBUG
-void *mpr_obj_print_full_name(mpr_obj o)
+void mpr_obj_print_full_name(mpr_obj o)
 {
-    if (o->parent && o->parent.name)
+    if (o->parent && o->parent->name)
         mpr_obj_print_full_name(o->parent);
     printf("/%s", o->name);
 }
-#endif
 
 mpr_graph mpr_obj_get_graph(mpr_obj o)
 {
@@ -404,14 +406,14 @@ int mpr_obj_get_num_props(mpr_obj o, int staged)
 mpr_prop mpr_obj_get_prop_by_key(mpr_obj o, const char *s, int *l, mpr_type *t,
                                  const void **v, int *p)
 {
-    RETURN_ARG_UNLESS(o && s, 0);
+    RETURN_ARG_UNLESS(o && o->props.synced && s, 0);
     return mpr_tbl_get_record_by_key(o->props.synced, s, l, t, v, p);
 }
 
 mpr_prop mpr_obj_get_prop_by_idx(mpr_obj o, int p, const char **k, int *l,
                                  mpr_type *t, const void **v, int *pub)
 {
-    RETURN_ARG_UNLESS(o, 0);
+    RETURN_ARG_UNLESS(o && o->props.synced, 0);
     return mpr_tbl_get_record_by_idx(o->props.synced, p, k, l, t, v, pub);
 }
 
@@ -420,7 +422,7 @@ int mpr_obj_get_prop_as_int32(mpr_obj o, mpr_prop p, const char *s)
     const void *val;
     mpr_type type;
     int len;
-    RETURN_ARG_UNLESS(o, 0);
+    RETURN_ARG_UNLESS(o && o->props.synced, 0);
     if (s)
         p = mpr_tbl_get_record_by_key(o->props.synced, s, &len, &type, &val, NULL);
     else
@@ -444,7 +446,7 @@ int64_t mpr_obj_get_prop_as_int64(mpr_obj o, mpr_prop p, const char *s)
     const void *val;
     mpr_type type;
     int len;
-    RETURN_ARG_UNLESS(o, 0);
+    RETURN_ARG_UNLESS(o && o->props.synced, 0);
     if (s)
         p = mpr_tbl_get_record_by_key(o->props.synced, s, &len, &type, &val, NULL);
     else
@@ -468,7 +470,7 @@ float mpr_obj_get_prop_as_flt(mpr_obj o, mpr_prop p, const char *s)
     const void *val;
     mpr_type type;
     int len;
-    RETURN_ARG_UNLESS(o, 0);
+    RETURN_ARG_UNLESS(o && o->props.synced, 0);
     if (s)
         p = mpr_tbl_get_record_by_key(o->props.synced, s, &len, &type, &val, NULL);
     else
@@ -492,7 +494,7 @@ double mpr_obj_get_prop_as_dbl(mpr_obj o, mpr_prop p, const char *s)
     const void *val;
     mpr_type type;
     int len;
-    RETURN_ARG_UNLESS(o, 0);
+    RETURN_ARG_UNLESS(o && o->props.synced, 0);
     if (s)
         p = mpr_tbl_get_record_by_key(o->props.synced, s, &len, &type, &val, NULL);
     else
@@ -516,7 +518,7 @@ const char *mpr_obj_get_prop_as_str(mpr_obj o, mpr_prop p, const char *s)
     const void *val;
     mpr_type type;
     int len;
-    RETURN_ARG_UNLESS(o, 0);
+    RETURN_ARG_UNLESS(o && o->props.synced, 0);
     if (s)
         p = mpr_tbl_get_record_by_key(o->props.synced, s, &len, &type, &val, NULL);
     else
@@ -530,7 +532,7 @@ const void *mpr_obj_get_prop_as_ptr(mpr_obj o, mpr_prop p, const char *s)
     const void *val;
     mpr_type type;
     int len;
-    RETURN_ARG_UNLESS(o, 0);
+    RETURN_ARG_UNLESS(o && o->props.synced, 0);
     if (s)
         p = mpr_tbl_get_record_by_key(o->props.synced, s, &len, &type, &val, NULL);
     else
@@ -544,7 +546,7 @@ mpr_obj mpr_obj_get_prop_as_obj(mpr_obj o, mpr_prop p, const char *s)
     const void *val;
     mpr_type type;
     int len;
-    RETURN_ARG_UNLESS(o, 0);
+    RETURN_ARG_UNLESS(o && o->props.synced, 0);
     if (s)
         p = mpr_tbl_get_record_by_key(o->props.synced, s, &len, &type, &val, NULL);
     else
@@ -558,7 +560,7 @@ mpr_list mpr_obj_get_prop_as_list(mpr_obj o, mpr_prop p, const char *s)
     const void *val;
     mpr_type type;
     int len;
-    RETURN_ARG_UNLESS(o, 0);
+    RETURN_ARG_UNLESS(o && o->props.synced, 0);
     if (s)
         p = mpr_tbl_get_record_by_key(o->props.synced, s, &len, &type, &val, NULL);
     else
@@ -684,7 +686,7 @@ void mpr_obj_push(mpr_obj o)
     FUNC_IF(mpr_tbl_clear, o->props.staged);
 }
 
-void mpr_obj_print(mpr_obj o, int staged)
+void mpr_obj_print(mpr_obj o, int include_props)
 {
     int i = 0, len, num_props;
     mpr_prop p;
@@ -697,6 +699,10 @@ void mpr_obj_print(mpr_obj o, int staged)
     switch (o->type) {
         case MPR_GRAPH:
             mpr_graph_print((mpr_graph)o);
+            break;
+        case MPR_OBJ:
+            printf("OBJ: ");
+            mpr_prop_print(1, MPR_OBJ, o);
             break;
         case MPR_DEV:
             printf("DEVICE: ");
@@ -715,7 +721,7 @@ void mpr_obj_print(mpr_obj o, int staged)
             return;
     }
 
-    RETURN_UNLESS(o->props.synced);
+    RETURN_UNLESS(include_props && o->props.synced);
     num_props = mpr_obj_get_num_props(o, 0);
     for (i = 0; i < num_props; i++) {
         p = mpr_tbl_get_record_by_idx(o->props.synced, i, &key, &len, &type, &val, 0);
@@ -752,7 +758,7 @@ void mpr_obj_print(mpr_obj o, int staged)
         else
             mpr_prop_print(len, type, val);
 
-        if (!staged || !o->props.staged)
+        if (!o->props.staged)
             continue;
 
         /* check if staged values exist */

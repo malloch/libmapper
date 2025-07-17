@@ -616,7 +616,7 @@ done:
 }
 
 /* Add a signal to a parent object. */
-mpr_sig mpr_sig_new(mpr_dev dev, mpr_dir dir, const char *name, int len,
+mpr_sig mpr_sig_new(mpr_obj parent, mpr_dir dir, const char *name, int len,
                     mpr_type type, const char *unit, const void *min,
                     const void *max, int *num_inst, mpr_sig_handler *h,
                     int events)
@@ -625,26 +625,25 @@ mpr_sig mpr_sig_new(mpr_dev dev, mpr_dir dir, const char *name, int len,
     mpr_local_sig lsig;
 
     /* For now we only allow adding signals to devices. */
-    RETURN_ARG_UNLESS(dev && mpr_obj_get_is_local((mpr_obj)dev), 0);
+    RETURN_ARG_UNLESS(parent && parent->type != MPR_MAP && parent->is_local, 0);
     RETURN_ARG_UNLESS(name && !check_sig_length(len) && mpr_type_get_is_num(type), 0);
     TRACE_RETURN_UNLESS(name[strlen(name)-1] != '/', 0,
                         "trailing slash detected in signal name.\n");
     TRACE_RETURN_UNLESS(dir == MPR_DIR_IN || dir == MPR_DIR_OUT, 0,
                         "signal direction must be either input or output.\n")
 
-    if ((lsig = (mpr_local_sig)mpr_obj_get_child_by_name((mpr_obj)dev, name)))
-        return (mpr_sig)lsig;
+    if ((lsig = (mpr_local_sig) mpr_obj_get_child_by_name(parent, name)))
+        return (mpr_sig) lsig;
 
-    g = mpr_obj_get_graph((mpr_obj)dev);
+    g = mpr_obj_get_graph(parent);
 
-    lsig = (mpr_local_sig)mpr_graph_add_obj(g, name, MPR_SIG, 1);
-    mpr_obj_build_tree_temp((mpr_obj)dev, (mpr_obj)lsig);
-    lsig->obj.id = mpr_dev_generate_unique_id(dev);
+    lsig = (mpr_local_sig) mpr_graph_add_obj(g, name, MPR_SIG, 1);
+    mpr_obj_build_tree_temp(parent, (mpr_obj)lsig);
+    lsig->obj.id = mpr_dev_generate_unique_id(parent->root);
     lsig->handler = (void*)h;
     lsig->event_flags = events;
-    mpr_sig_init((mpr_sig)lsig, dev, dir, len, type, unit, min, max, num_inst);
-
-    mpr_local_dev_add_sig((mpr_local_dev)dev, lsig, dir);
+    mpr_sig_init((mpr_sig)lsig, parent->root, dir, len, type, unit, min, max, num_inst);
+    mpr_local_dev_add_sig((mpr_local_dev) parent->root, lsig, dir);
     return (mpr_sig)lsig;
 }
 
@@ -670,6 +669,7 @@ void mpr_sig_init(mpr_sig sig, mpr_dev dev, mpr_dir dir, int len, mpr_type type,
     sig->ephemeral = 0;
     sig->steal_mode = MPR_STEAL_NONE;
 
+    // TODO: move to obj
     sig->obj.type = MPR_SIG;
     sig->obj.props.synced = mpr_tbl_new();
 

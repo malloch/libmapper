@@ -41,8 +41,6 @@ typedef struct _mpr_obj
 // TODO: make static later
 void mpr_obj_build_tree_temp(mpr_obj parent, mpr_obj child);
 
-mpr_obj mpr_obj_new(const char *name, mpr_obj parent);
-
 void mpr_obj_init(mpr_obj obj, mpr_graph graph, const char *name, mpr_type type, int is_local);
 
 void mpr_obj_free(mpr_obj obj);
@@ -54,6 +52,8 @@ const char *mpr_obj_get_full_name(mpr_obj o, int offset);
 mpr_obj mpr_obj_get_child_by_name(mpr_obj o, const char *name);
 
 void mpr_obj_print_tree(mpr_obj o, int indent);
+
+void mpr_obj_print_full_name(mpr_obj o);
 
 MPR_INLINE static mpr_id mpr_obj_get_id(mpr_obj obj)
     { return obj->id; }

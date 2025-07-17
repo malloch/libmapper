@@ -84,7 +84,7 @@ void generate_name(char *str, int len)
 
 int setup_devs(const char *iface)
 {
-	char str[20];
+	char name[20];
 	float mn = 0, mx = 1;
     int i, j;
 
@@ -104,20 +104,17 @@ int setup_devs(const char *iface)
 
         /* give each device N inputs and N outputs */
 		for (j = 0; j < 10; j++) {
+            mpr_obj obj;
             mn = fmod(rand() * 0.01, 21.f) - 10.f;
             mx = fmod(rand() * 0.01, 21.f) - 10.f;
-            generate_name(str, 20);
-			mpr_sig_new(devices[i], MPR_DIR_IN, str, 1, MPR_FLT, NULL,
-                        &mn, &mx, NULL, NULL, 0);
+            generate_name(name, 20);
+            obj = mpr_obj_new(devices[i], name);
+			mpr_sig_new(obj, MPR_DIR_IN, "signal", 1, MPR_FLT, NULL, &mn, &mx, NULL, NULL, 0);
             mn = fmod(rand() * 0.01, 21.f) - 10.f;
             mx = fmod(rand() * 0.01, 21.f) - 10.f;
-            generate_name(str, 20);
-            if (j%2==0)
-                mpr_sig_new(devices[i], MPR_DIR_OUT, str, 1, MPR_FLT, NULL,
-                            &mn, &mx, NULL, NULL, 0);
-            else
-                mpr_sig_new(devices[i], MPR_DIR_OUT, str, 1, MPR_FLT, NULL,
-                            &mn, NULL, NULL, NULL, 0);
+            generate_name(name, 20);
+            obj = mpr_obj_new(devices[i], name);
+            mpr_sig_new(obj, MPR_DIR_OUT, "signal", 1, MPR_FLT, NULL, &mn, &mx, NULL, NULL, 0);
 		}
 	}
     return 0;

@@ -73,9 +73,9 @@ int setup_devs(mpr_graph g, const char *iface)
         eprintf("device created using interface %s.\n",
                 mpr_graph_get_interface(mpr_obj_get_graph(dev)));
 
-        sendsigs[i] = mpr_sig_new(dev, MPR_DIR_OUT, "outsig", 1, MPR_FLT, NULL,
+        sendsigs[i] = mpr_sig_new((mpr_obj)dev, MPR_DIR_OUT, "outsig", 1, MPR_FLT, NULL,
                                   &mn, &mx, &num_inst, NULL, 0);
-        recvsigs[i] = mpr_sig_new(dev, MPR_DIR_IN, "insig", 1, MPR_FLT, NULL,
+        recvsigs[i] = mpr_sig_new((mpr_obj)dev, MPR_DIR_IN, "insig", 1, MPR_FLT, NULL,
                                   &mn, &mx, &num_inst, handler, MPR_STATUS_UPDATE_REM);
     }
     return 0;

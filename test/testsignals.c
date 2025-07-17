@@ -143,7 +143,7 @@ int main(int argc, char ** argv)
         mpr_dev_poll(dev, 100);
         if (i < num_inputs) {
             snprintf(signame, 32, "in%i", i);
-            if (!(inputs[i] = mpr_sig_new(dev, MPR_DIR_IN, signame, 1, MPR_FLT,
+            if (!(inputs[i] = mpr_sig_new((mpr_obj)dev, MPR_DIR_IN, signame, 1, MPR_FLT,
                                           NULL, NULL, NULL, NULL, handler,
                                           MPR_STATUS_UPDATE_REM))) {
                 result = 1;
@@ -152,7 +152,7 @@ int main(int argc, char ** argv)
         }
         if (i < num_outputs) {
             snprintf(signame, 32, "out%i", i);
-            if (!(outputs[i] = mpr_sig_new(dev, MPR_DIR_OUT, signame, 1, MPR_FLT,
+            if (!(outputs[i] = mpr_sig_new((mpr_obj)dev, MPR_DIR_OUT, signame, 1, MPR_FLT,
                                            NULL, NULL, NULL, NULL, NULL, 0))) {
                 result = 1;
                 goto done;

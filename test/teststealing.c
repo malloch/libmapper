@@ -52,7 +52,7 @@ int setup_src(mpr_graph g, const char *iface)
     eprintf("source created using interface %s.\n",
             mpr_graph_get_interface(mpr_obj_get_graph(src)));
 
-    sendsig = mpr_sig_new(src, MPR_DIR_OUT, "outsig", 1, MPR_INT32, NULL,
+    sendsig = mpr_sig_new((mpr_obj)src, MPR_DIR_OUT, "outsig", 1, MPR_INT32, NULL,
                           NULL, NULL, &num_inst, NULL, 0);
 
     eprintf("Output signal 'outsig' registered.\n");
@@ -98,7 +98,7 @@ int setup_dst(mpr_graph g, const char *iface)
     eprintf("destination created using interface %s.\n",
             mpr_graph_get_interface(mpr_obj_get_graph(dst)));
 
-    recvsig = mpr_sig_new(dst, MPR_DIR_IN, "insig", 1, MPR_FLT, NULL, NULL, NULL,
+    recvsig = mpr_sig_new((mpr_obj)dst, MPR_DIR_IN, "insig", 1, MPR_FLT, NULL, NULL, NULL,
                           &num_inst, handler, MPR_STATUS_UPDATE_REM);
     mpr_obj_set_prop((mpr_obj)recvsig, MPR_PROP_EPHEM, NULL, 1, MPR_INT32, &ephemeral, 1);
 

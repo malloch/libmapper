@@ -111,14 +111,14 @@ int mpr_prop_get_protocol_type(mpr_prop p)
     return static_props[PROP_TO_INDEX(p)].protocol_type;
 }
 
-const char *mpr_prop_as_str(mpr_prop p, int skip_slash)
+const char *mpr_prop_as_str(mpr_prop p, int skip_prefix)
 {
     const char *s;
     p = MASK_PROP_BITFLAGS(p);
     die_unless(p > MPR_PROP_UNKNOWN && p <= MPR_PROP_EXTRA,
                "called mpr_prop_as_str() with bad index %d.\n", p);
     s = static_props[PROP_TO_INDEX(p)].key;
-    return skip_slash ? s + 1 : s;
+    return skip_prefix ? s + 1 : s;
 }
 
 mpr_prop mpr_prop_from_str(const char *string)
@@ -281,6 +281,19 @@ void mpr_prop_print(int len, mpr_type type, const void *val)
                     printf("%p, ", ((void**)val)[i]);
             }
             break;
+        case MPR_OBJ:
+        case MPR_SIG:
+            /* just print full obj name */
+            if (1 == len) {
+                mpr_obj_print_full_name((mpr_obj)val);
+            }
+            else {
+                mpr_obj *o = (mpr_obj*)val;
+                for (i = 0; i < len; i++)
+                    mpr_obj_print_full_name(o[i]);
+            }
+            break;
+        // TODO: remove specific handling od MPR_DEV
         case MPR_DEV:
             /* just print device name */
             if (1 == len) {
@@ -294,21 +307,6 @@ void mpr_prop_print(int len, mpr_type type, const void *val)
                            mpr_obj_get_is_local((mpr_obj)d[i]) ? "*" : "");
             }
             break;
-        case MPR_SIG: {
-            /* just print signal name */
-            if (1 == len) {
-                mpr_sig s = (mpr_sig)val;
-                printf("'%s:%s%s', ", mpr_dev_get_name(mpr_sig_get_dev(s)), mpr_sig_get_path(s),
-                       mpr_obj_get_is_local((mpr_obj)s) ? "*" : "");
-            }
-            else {
-                mpr_sig *s = (mpr_sig*)val;
-                for (i = 0; i < len; i++)
-                    printf("'%s:%s%s', ", mpr_dev_get_name(mpr_sig_get_dev(s[i])),
-                           mpr_sig_get_path(s[i]), mpr_obj_get_is_local((mpr_obj)s[i]) ? "*" : "");
-            }
-            break;
-        }
         case MPR_LINK: {
             mpr_link l = (mpr_link)val;
             if (1 != len)

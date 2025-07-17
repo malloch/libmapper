@@ -83,13 +83,13 @@ int setup_devs(const char *iface)
             mpr_graph_get_interface(mpr_obj_get_graph(devices[0])),
             mpr_graph_get_interface(mpr_obj_get_graph(devices[0])));
 
-    inputs[0] = mpr_sig_new(devices[0], MPR_DIR_IN, "insig_1", 1, MPR_FLT,
+    inputs[0] = mpr_sig_new((mpr_obj)devices[0], MPR_DIR_IN, "insig_1", 1, MPR_FLT,
                             NULL, mnf1, mxf1, NULL, handler, MPR_STATUS_UPDATE_REM);
-    inputs[1] = mpr_sig_new(devices[0], MPR_DIR_IN, "insig_2", 1, MPR_DBL,
+    inputs[1] = mpr_sig_new((mpr_obj)devices[0], MPR_DIR_IN, "insig_2", 1, MPR_DBL,
                             NULL, &mnd, &mxd, NULL, handler, MPR_STATUS_UPDATE_REM);
-    inputs[2] = mpr_sig_new(devices[1], MPR_DIR_IN, "insig_3", 3, MPR_FLT,
+    inputs[2] = mpr_sig_new((mpr_obj)devices[1], MPR_DIR_IN, "insig_3", 3, MPR_FLT,
                             NULL, mnf1, mxf1, NULL, handler, MPR_STATUS_UPDATE_REM);
-    inputs[3] = mpr_sig_new(devices[1], MPR_DIR_IN, "insig_4", 1, MPR_FLT,
+    inputs[3] = mpr_sig_new((mpr_obj)devices[1], MPR_DIR_IN, "insig_4", 1, MPR_FLT,
                             NULL, mnf2, mxf2, NULL, handler, MPR_STATUS_UPDATE_REM);
 
     /* In this test inputs[2] will never get its full vector value from

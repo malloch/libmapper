@@ -26,6 +26,12 @@ to get started with libmapper concepts.
 
      @{ Objects provide a generic representation of Graphs, Devices, Signals, and Maps. */
 
+/*! Create a new object.
+ *  \param parent           The parent object to which the new object will be added.
+ *  \param name             The name of the new object. Must be unique among the parent's children.
+ *  \return                 The new object. */
+mpr_obj mpr_obj_new(mpr_obj parent, const char *name);
+
 /*! Return the internal `mpr_graph` structure used by an object.
  *  \param object       The object to query.
  *  \return             The `mpr_graph` used by this object. */
@@ -188,7 +194,7 @@ mpr_list mpr_obj_get_prop_as_list(mpr_obj object, mpr_prop property, const char 
  *  \param length       The length of value array.
  *  \param type         The property  datatype.
  *  \param value        An array of property values.
- *  \param publish      1 to publish to the distributed graph, `0` for local-only.
+ *  \param publish      `1` to publish to the distributed graph, `0` for local-only.
  *  \return             Symbolic identifier of the set property, or
  *                      `MPR_PROP_UNKNOWN` if not found. */
 mpr_prop mpr_obj_set_prop(mpr_obj object, mpr_prop property, const char *key, int length,
@@ -198,7 +204,7 @@ mpr_prop mpr_obj_set_prop(mpr_obj object, mpr_prop property, const char *key, in
  *  \param object       The object to operate on.
  *  \param property     Symbolic identifier of the property to remove.
  *  \param key          The name of the property to remove.
- *  \return             1 if property has been removed, `0` otherwise. */
+ *  \return             `1` if property has been removed, `0` otherwise. */
 int mpr_obj_remove_prop(mpr_obj object, mpr_prop property, const char *key);
 
 /*! Push any staged property changes out to the distributed graph.
@@ -207,8 +213,8 @@ void mpr_obj_push(mpr_obj object);
 
 /*! Helper to print the properties of an object.
  *  \param object       The object to print.
- *  \param staged       1 to print staged properties, `0` otherwise. */
-void mpr_obj_print(mpr_obj object, int staged);
+ *  \param properties   `1` to print the object's properties, `0` otherwise. */
+void mpr_obj_print(mpr_obj object, int include_props);
 
 /*** Devices ***/
 
@@ -339,7 +345,7 @@ typedef void mpr_sig_handler(mpr_sig signal, mpr_status event, mpr_id instance, 
  *  \param events           Bitflags for types of events that should trigger the handler. Event
  *                          types are listed in the enum `mpr_status` found in `mapper_constants.h`
  *  \return                 The new signal. */
-mpr_sig mpr_sig_new(mpr_dev parent, mpr_dir direction, const char *name, int length, mpr_type type,
+mpr_sig mpr_sig_new(mpr_obj parent, mpr_dir direction, const char *name, int length, mpr_type type,
                     const char *unit, const void *minimum, const void *maximum, int *num_instances,
                     mpr_sig_handler *handler, int events);
 

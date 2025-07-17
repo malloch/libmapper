@@ -65,14 +65,14 @@ int setup(const char *iface)
     eprintf("device created using interface %s.\n",
             mpr_graph_get_interface(mpr_obj_get_graph(dev)));
 
-    sendsig = mpr_sig_new(dev, MPR_DIR_IN, "outsig", 1, MPR_INT32, NULL,
+    sendsig = mpr_sig_new((mpr_obj)dev, MPR_DIR_IN, "outsig", 1, MPR_INT32, NULL,
                           &mni, &mxi, NULL, NULL, 0);
     eprintf("Output signal 'outsig' registered.\n");
     l = mpr_dev_get_sigs(dev, MPR_DIR_OUT);
     eprintf("Number of outputs: %d\n", mpr_list_get_size(l));
     mpr_list_free(l);
 
-    recvsig = mpr_sig_new(dev, MPR_DIR_IN, "insig", 1, MPR_FLT, NULL,
+    recvsig = mpr_sig_new((mpr_obj)dev, MPR_DIR_IN, "insig", 1, MPR_FLT, NULL,
                           &mnf, &mxf, NULL, handler, MPR_STATUS_UPDATE_REM);
     eprintf("Input signal 'insig' registered.\n");
     l = mpr_dev_get_sigs(dev, MPR_DIR_IN);
@@ -135,7 +135,7 @@ int setup_loop_test(void)
 
     /* libmapper provides rudimentary loop detection so we will need a 3rd
        signal to create a loop. */
-    sig3 = mpr_sig_new(dev, MPR_DIR_IN, "sig3", 1, MPR_FLT, NULL, NULL, NULL,
+    sig3 = mpr_sig_new((mpr_obj)dev, MPR_DIR_IN, "sig3", 1, MPR_FLT, NULL, NULL, NULL,
                        NULL, handler, MPR_STATUS_UPDATE_REM);
     eprintf("Input signal 'sig3' registered.\n");
 
