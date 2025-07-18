@@ -14,6 +14,25 @@ typedef struct _mpr_dict {
 #include "mpr_type.h"
 #include "value.h"
 
+typedef struct _mpr_obj_inst
+{
+    mpr_id id;                      /*!< User-assignable instance id. */
+    void *data;                     /*!< User data of this instance. */
+    mpr_time created;               /*!< The instance's creation timestamp. */
+
+    uint16_t status;                /*!< Status of this instance. */
+    uint8_t idx;                    /*!< Index for accessing signal values. */
+} mpr_obj_inst_t;
+
+/* plan: remove inst, add map/slot resource index (is this the same for all source signals?) */
+typedef struct _mpr_obj_id_pair
+{
+    struct _mpr_id_pair *ids;       /*!< Associated mpr_id_pair. */
+    struct _mpr_obj_inst *inst;     /*!< Object instance. */
+    int status;                     /*!< Either 0 or a combination of `UPDATED`,
+                                     *   `RELEASED_LOCALLY` and `RELEASED_REMOTELY`. */
+} mpr_obj_id_pair_t, *mpr_obj_id_pair;
+
 typedef struct _mpr_obj
 {
     struct _mpr_graph *graph;       /*!< Pointer back to the graph. */
