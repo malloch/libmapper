@@ -49,7 +49,7 @@ mpr_slot mpr_slot_new(mpr_map map, mpr_sig sig, mpr_dir dir,
 {
     size_t size = is_local ? sizeof(struct _mpr_local_slot) : sizeof(struct _mpr_slot);
     int sig_is_local = mpr_obj_get_is_local((mpr_obj)sig);
-    int num_inst = mpr_sig_get_num_inst_internal(sig);
+    int num_inst = mpr_obj_get_num_inst_internal((mpr_obj)sig);
     mpr_slot slot = (mpr_slot)calloc(1, size);
     slot->map = map;
     slot->sig = sig;
@@ -248,7 +248,7 @@ int mpr_slot_alloc_values(mpr_local_slot slot, unsigned int num_inst, int hist_s
     }
 
     if (mpr_obj_get_is_local((mpr_obj)slot->sig)) {
-        num_inst = mpr_sig_get_num_inst_internal(slot->sig);
+        num_inst = mpr_obj_get_num_inst_internal((mpr_obj)slot->sig);
     }
     if (num_inst > 0 && num_inst != slot->num_inst) {
         trace("  updating slot num_inst %d -> %d\n", slot->num_inst, num_inst);

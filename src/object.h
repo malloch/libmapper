@@ -31,7 +31,9 @@ typedef struct _mpr_obj
     uint16_t status;
     mpr_type type;                  /*!< Object type. */
 
-    uint16_t num_inst;
+    int use_inst;                   /*!< 1 if object uses instances, 0 otherwise. */
+    int num_inst;                   /*!< Number of instances. */
+    int ephemeral;                  /*!< 1 if signal is ephemeral, 0 otherwise. */
 } mpr_obj_t;
 
 #include "graph.h"
@@ -83,5 +85,11 @@ MPR_INLINE static mpr_tbl mpr_obj_get_prop_tbl(mpr_obj obj)
 
 MPR_INLINE static void mpr_obj_add_props_to_msg(mpr_obj obj, lo_message msg)
     { mpr_tbl_add_to_msg(obj->is_local ? obj->props.synced : 0, obj->props.staged, msg); }
+
+/**** Instances ****/
+
+int mpr_obj_get_num_inst_internal(mpr_obj obj);
+
+int mpr_obj_get_use_inst(mpr_obj obj);
 
 #endif /* __MPR_OBJECT_H__ */

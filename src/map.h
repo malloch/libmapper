@@ -70,8 +70,6 @@ int mpr_local_map_get_is_one_src(mpr_local_map map);
 
 int mpr_map_get_locality(mpr_map map);
 
-int mpr_local_map_get_num_inst(mpr_local_map map);
-
 int mpr_map_get_num_src(mpr_map map);
 
 mpr_loc mpr_map_get_process_loc(mpr_map map);
@@ -89,8 +87,6 @@ mpr_slot mpr_map_get_src_slot_by_id(mpr_map map, int id);
 void mpr_local_map_set_updated(mpr_local_map map, int inst_idx);
 
 void mpr_map_status_decr(mpr_map map);
-
-int mpr_map_get_use_inst(mpr_map map);
 
 void mpr_map_remove_scope_internal(mpr_map map, mpr_dev dev);
 

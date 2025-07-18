@@ -795,3 +795,13 @@ void mpr_obj_print_tree(mpr_obj o, int indent)
         o = o->next;
     }
 }
+
+int mpr_obj_get_use_inst(mpr_obj obj)
+{
+    return obj->use_inst;
+}
+
+int mpr_obj_get_num_inst_internal(mpr_obj obj)
+{
+    return obj->num_inst;
+}

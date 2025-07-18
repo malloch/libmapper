@@ -41,9 +41,6 @@ static int initialize_instance(mpr_local_sig lsig, mpr_sig_inst si, mpr_id_pair 
     char *unit;                 /*!< The unit of this signal, or NULL for N/A. */       \
     int dir;                    /*!< `DIR_OUTGOING` / `DIR_INCOMING` / `DIR_BOTH` */    \
     int len;                    /*!< Length of the signal vector, or 1 for scalars. */  \
-    int use_inst;               /*!< 1 if signal uses instances, 0 otherwise. */        \
-    int num_inst;               /*!< Number of instances. */                            \
-    int ephemeral;              /*!< 1 if signal is ephemeral, 0 otherwise. */          \
     int num_maps_in;            /* TODO: use dynamic query instead? */                  \
     int num_maps_out;           /* TODO: use dynamic query instead? */                  \
     mpr_steal_type steal_mode;  /*!< Type of voice stealing to perform. */              \
@@ -114,11 +111,11 @@ static int _compare_inst_ids(const void *l, const void *r)
 static mpr_sig_inst _find_inst_by_id(mpr_local_sig lsig, mpr_id id)
 {
     mpr_sig_inst_t si, *sip, **sipp;
-    RETURN_ARG_UNLESS(lsig->num_inst, 0);
-    RETURN_ARG_UNLESS(lsig->use_inst, lsig->inst[0]);
+    RETURN_ARG_UNLESS(lsig->obj.num_inst, 0);
+    RETURN_ARG_UNLESS(mpr_obj_get_use_inst((mpr_obj)lsig), lsig->inst[0]);
     sip = &si;
     si.id = id;
-    sipp = bsearch(&sip, lsig->inst, lsig->num_inst, sizeof(mpr_sig_inst), _compare_inst_ids);
+    sipp = bsearch(&sip, lsig->inst, lsig->obj.num_inst, sizeof(mpr_sig_inst), _compare_inst_ids);
     return (sipp && *sipp) ? *sipp : 0;
 }
 
@@ -172,7 +169,7 @@ static void process_maps(mpr_local_sig sig, int id_map_idx)
      * removed; use bsearch for slot lookup since ids will be monotonic though not sequential */
 
     if (!mpr_value_get_num_samps(sig->value, inst_idx)) {
-        RETURN_UNLESS(sig->use_inst);
+        RETURN_UNLESS(mpr_obj_get_use_inst((mpr_obj)sig));
         *locked = 1;
         for (i = 0; i < sig->num_maps_in; i++) {
             mpr_local_slot dst_slot = sig->slots_in[i];
@@ -219,7 +216,7 @@ static void process_maps(mpr_local_sig sig, int id_map_idx)
             /* reset associated input memory */
             mpr_slot_set_value(src_slot, inst_idx, NULL, time);
 
-            if (mpr_map_get_use_inst((mpr_map)map)) {
+            if (mpr_obj_get_use_inst((mpr_obj)map)) {
                 /* send release to downstream */
                 if (MPR_LOC_SRC == mpr_map_get_process_loc((mpr_map)map)) {
                     /* need to build msg immediately since the ids won't be available later */
@@ -249,19 +246,19 @@ static void process_maps(mpr_local_sig sig, int id_map_idx)
             continue;
 
         /* TODO: should we continue for out-of-scope local destination updates? */
-        if (mpr_map_get_use_inst((mpr_map)map) && !(mpr_local_map_get_has_scope(map, ids->global)))
+        if (mpr_obj_get_use_inst((mpr_obj)map) && !(mpr_local_map_get_has_scope(map, ids->global)))
             continue;
 
         /* If this signal is non-instanced but the map has other instanced
          * sources we will need to update all of the active map instances. */
         all = (   mpr_map_get_num_src((mpr_map)map) > 1
-               && mpr_local_map_get_num_inst(map) > sig->num_inst);
+               && mpr_obj_get_num_inst_internal((mpr_obj)map) > sig->obj.num_inst);
 
         if (MPR_LOC_DST == mpr_map_get_process_loc((mpr_map)map)) {
             /* bypass map processing and bundle value without type coercion */
             mpr_slot_build_msg(src_slot, sig->value, inst_idx,
-                               (   mpr_map_get_use_inst((mpr_map)map)
-                                && mpr_sig_get_use_inst((mpr_sig)sig)) ? ids : 0);
+                               (   mpr_obj_get_use_inst((mpr_obj)map)
+                                && mpr_obj_get_use_inst((mpr_obj)sig)) ? ids : 0);
             continue;
         }
 
@@ -291,7 +288,7 @@ static void process_maps(mpr_local_sig sig, int id_map_idx)
         for (; id_map_idx < sig->id_map_size; id_map_idx++) {
             /* check if map instance is active */
             mpr_sig_inst si = _get_inst_by_id_map_idx(sig, id_map_idx);
-            if (!si && (all || mpr_sig_get_use_inst((mpr_sig)sig)))
+            if (!si && (all || mpr_obj_get_use_inst((mpr_obj)sig)))
                 continue;
             inst_idx = si->idx;
             mpr_local_map_set_updated(map, inst_idx);
@@ -349,7 +346,7 @@ int mpr_sig_osc_handler(const char *path, const char *types, lo_arg **argv, int 
     lo_message_pp(msg);
 #endif
 
-    TRACE_RETURN_UNLESS(sig->num_inst, 0, "signal '%s' has no instances.\n", sig->path);
+    TRACE_RETURN_UNLESS(sig->obj.num_inst, 0, "signal '%s' has no instances.\n", sig->path);
     RETURN_ARG_UNLESS(argc, 0);
 
     time = mpr_net_get_bundle_time(net);
@@ -420,8 +417,8 @@ again:
      *        return 0;
      */
 
-    /* TODO: should map_get_use_inst() call be part of map_manages_inst? */
-    if (map_manages_inst && slot_sig->use_inst && mpr_map_get_use_inst((mpr_map)map)) {
+    /* TODO: should _get_use_inst() call be part of map_manages_inst? */
+    if (map_manages_inst && slot_sig->obj.use_inst && mpr_obj_get_use_inst((mpr_obj)map)) {
         mpr_id_pair ids = mpr_local_map_get_ids(map);
         if (!ids->global) {
             if (!vals) {
@@ -485,11 +482,11 @@ again:
     }
     else {
         /* use the first available instance */
-        for (i = 0; i < sig->num_inst; i++) {
+        for (i = 0; i < sig->obj.num_inst; i++) {
             if (sig->inst[i]->status & MPR_STATUS_ACTIVE)
                 break;
         }
-        if (i >= sig->num_inst)
+        if (i >= sig->obj.num_inst)
             i = 0;
         id_map_idx = mpr_sig_get_inst(sig, &sig->inst[i]->id, NULL, time, RELEASED_REMOTELY, 1, 1);
         if (id_map_idx < 0) {
@@ -503,7 +500,7 @@ again:
 
     if (vals == 0) {
         if (global_id) {
-            if (sig->ephemeral)
+            if (sig->obj.ephemeral)
                 sig->id_map[id_map_idx].status |= RELEASED_REMOTELY;
             if (sig->dir == MPR_DIR_IN)
                 sig->id_map[id_map_idx].inst->status |= MPR_STATUS_REL_UPSTRM;
@@ -517,7 +514,7 @@ again:
         }
         /* if user-code has registered callback for release events we will proceed even if the
          * signal is non-ephemeral. Conceptually this matches setting the "released" bitflag. */
-        if (map && !mpr_map_get_use_inst((mpr_map)map)) {
+        if (map && !mpr_obj_get_use_inst((mpr_obj)map)) {
             goto done;
         }
 
@@ -666,7 +663,7 @@ void mpr_sig_init(mpr_sig sig, mpr_dev dev, mpr_dir dir, int len, mpr_type type,
     sig->type = type;
     sig->dir = dir ? dir : MPR_DIR_OUT;
     sig->unit = unit ? strdup(unit) : strdup("unknown");
-    sig->ephemeral = 0;
+    sig->obj.ephemeral = 0;
     sig->steal_mode = MPR_STEAL_NONE;
 
     // TODO: move to obj
@@ -675,16 +672,16 @@ void mpr_sig_init(mpr_sig sig, mpr_dev dev, mpr_dir dir, int len, mpr_type type,
 
     if (sig->obj.is_local) {
         mpr_local_sig lsig = (mpr_local_sig)sig;
-        sig->num_inst = 0;
+        sig->obj.num_inst = 0;
         lsig->updated_inst = 0;
         if (num_inst) {
             mpr_sig_reserve_inst((mpr_sig)lsig, *num_inst, 0, 0);
             /* default to ephemeral */
-            lsig->ephemeral = 1;
+            lsig->obj.ephemeral = 1;
         }
         else {
             mpr_sig_reserve_inst((mpr_sig)lsig, 1, 0, 0);
-            lsig->use_inst = 0;
+            lsig->obj.use_inst = 0;
         }
 
         /* Reserve one instance id map */
@@ -692,8 +689,8 @@ void mpr_sig_init(mpr_sig sig, mpr_dev dev, mpr_dir dir, int len, mpr_type type,
         lsig->id_map = calloc(1, sizeof(struct _mpr_sig_id_pair));
     }
     else {
-        sig->num_inst = 1;
-        sig->use_inst = 0;
+        sig->obj.num_inst = 1;
+        sig->obj.use_inst = 0;
         sig->obj.props.staged = mpr_tbl_new();
         sig->obj.status = MPR_STATUS_NEW;
     }
@@ -706,18 +703,18 @@ void mpr_sig_init(mpr_sig sig, mpr_dev dev, mpr_dir dir, int len, mpr_type type,
     link(DATA,         MPR_PTR,   &sig->obj.data,     MOD_LOCAL | INDIRECT | LOCAL_ACCESS);
     link(DEV,          MPR_DEV,   &sig->dev,          MOD_NONE | INDIRECT | LOCAL_ACCESS);
     link(DIR,          MPR_INT32, &sig->dir,          MOD_ANY);
-    link(EPHEM,        MPR_BOOL,  &sig->ephemeral,    mod);
+    link(EPHEM,        MPR_BOOL,  &sig->obj.ephemeral,mod);
     link(ID,           MPR_INT64, &sig->obj.id,       MOD_NONE);
     link(LEN,          MPR_INT32, &sig->len,          MOD_NONE);
     link(NAME,         MPR_STR,   &sig->obj.name, 	  MOD_NONE | INDIRECT);
-    link(NUM_INST,     MPR_INT32, &sig->num_inst,     MOD_NONE);
+    link(NUM_INST,     MPR_INT32, &sig->obj.num_inst, MOD_NONE);
     link(NUM_MAPS_IN,  MPR_INT32, &sig->num_maps_in,  MOD_NONE);
     link(NUM_MAPS_OUT, MPR_INT32, &sig->num_maps_out, MOD_NONE);
     link(STATUS,       MPR_INT32, &sig->obj.status,   MOD_NONE | LOCAL_ACCESS);
     link(STEAL_MODE,   MPR_INT32, &sig->steal_mode,   MOD_ANY);
     link(TYPE,         MPR_TYPE,  &sig->type,         MOD_NONE);
     link(UNIT,         MPR_STR,   &sig->unit,         mod | INDIRECT);
-    link(USE_INST,     MPR_BOOL,  &sig->use_inst,     MOD_NONE);
+    link(USE_INST,     MPR_BOOL,  &sig->obj.use_inst, MOD_NONE);
     link(VERSION,      MPR_INT32, &sig->obj.version,  MOD_NONE);
 #undef link
 
@@ -773,7 +770,7 @@ void mpr_sig_free_internal(mpr_sig sig)
     if (sig->obj.is_local) {
         mpr_local_sig lsig = (mpr_local_sig)sig;
         free(lsig->id_map);
-        for (i = 0; i < lsig->num_inst; i++) {
+        for (i = 0; i < lsig->obj.num_inst; i++) {
             free(lsig->inst[i]);
         }
         free(lsig->inst);
@@ -812,13 +809,13 @@ void mpr_sig_call_handler(mpr_local_sig lsig, int evt, mpr_id id, unsigned int i
     value = mpr_value_get_value(lsig->value, inst_idx, 0);
 
     /* Non-ephemeral signals cannot have a null value */
-    RETURN_UNLESS(value || lsig->ephemeral);
+    RETURN_UNLESS(value || lsig->obj.ephemeral);
 
     evt &= lsig->event_flags;
     RETURN_UNLESS(evt && (h = (mpr_sig_handler*)lsig->handler));
     time = mpr_value_get_time(lsig->value, inst_idx, 0);
 
-    h((mpr_sig)lsig, evt, lsig->use_inst ? id : 0, value ? lsig->len : 0, lsig->type, value, time);
+    h((mpr_sig)lsig, evt, lsig->obj.use_inst ? id : 0, value ? lsig->len : 0, lsig->type, value, time);
 }
 
 /**** Instances ****/
@@ -876,7 +873,7 @@ static int activate_instance(mpr_local_sig lsig, mpr_id *local_id, mpr_id *globa
             }
             else {
                 ids = mpr_dev_get_ids_local(lsig->dev, si->id);
-                if (ids && (lsig->ephemeral || ids->refcount.global > 0))
+                if (ids && (lsig->obj.ephemeral || ids->refcount.global > 0))
                     continue;
             }
             trace("    found released instance at id_map[%d]\n", i);
@@ -886,9 +883,9 @@ static int activate_instance(mpr_local_sig lsig, mpr_id *local_id, mpr_id *globa
 
     trace("  checking inactive instances...\n");
     /* Next we will try to find an inactive instance */
-    for (i = 0; i < lsig->num_inst; i++) {
+    for (i = 0; i < lsig->obj.num_inst; i++) {
         si = lsig->inst[i];
-        if (   (!lsig->ephemeral || !(si->status & MPR_STATUS_ACTIVE))
+        if (   (!lsig->obj.ephemeral || !(si->status & MPR_STATUS_ACTIVE))
             && (local_id || !mpr_dev_get_ids_local(lsig->dev, si->id))) {
             trace("    found inactive instance at inst[%d] idx %d\n", i, si->idx);
             goto done;
@@ -896,7 +893,7 @@ static int activate_instance(mpr_local_sig lsig, mpr_id *local_id, mpr_id *globa
     }
 
     /* Otherwise if the signal is not ephemeral we will choose instances without an upstream src */
-    RETURN_ARG_UNLESS(lsig->dir == MPR_DIR_IN && !lsig->ephemeral, -1);
+    RETURN_ARG_UNLESS(lsig->dir == MPR_DIR_IN && !lsig->obj.ephemeral, -1);
 
     trace("  checking instances with no upstream...\n");
     for (i = 0; i < lsig->id_map_size; i++) {
@@ -952,7 +949,7 @@ done:
         /* TODO: we don't really need to use qsort here since the list is already sorted
          * just need to insert new inst at correct position */
         /* also we're calling qsort in return */
-        qsort(lsig->inst, lsig->num_inst, sizeof(mpr_sig_inst), _compare_inst_ids);
+        qsort(lsig->inst, lsig->obj.num_inst, sizeof(mpr_sig_inst), _compare_inst_ids);
     }
     if (!ids) {
         /* Claim id map locally */
@@ -1001,7 +998,7 @@ mpr_id mpr_sig_get_oldest_inst_id(mpr_sig sig)
     mpr_local_sig lsig = (mpr_local_sig)sig;
     RETURN_ARG_UNLESS(sig && sig->obj.is_local, 0);
     /* for non-ephemeral signals all instances are the same age */
-    RETURN_ARG_UNLESS(sig->ephemeral, lsig->id_map[0].ids->local);
+    RETURN_ARG_UNLESS(sig->obj.ephemeral, lsig->id_map[0].ids->local);
     idx = _oldest_inst((mpr_local_sig)sig);
     return (idx >= 0) ? lsig->id_map[idx].ids->local : 0;
 }
@@ -1036,7 +1033,7 @@ mpr_id mpr_sig_get_newest_inst_id(mpr_sig sig)
     mpr_local_sig lsig = (mpr_local_sig)sig;
     RETURN_ARG_UNLESS(sig && sig->obj.is_local, 0);
     /* for non-ephemeral signals all instances are the same age */
-    RETURN_ARG_UNLESS(sig->ephemeral, lsig->id_map[0].ids->local);
+    RETURN_ARG_UNLESS(sig->obj.ephemeral, lsig->id_map[0].ids->local);
     idx = _newest_inst((mpr_local_sig)sig);
     return (idx >= 0) ? lsig->id_map[idx].ids->local : 0;
 }
@@ -1075,7 +1072,7 @@ static int mpr_sig_get_inst(mpr_local_sig lsig, mpr_id *local_id, mpr_id *global
      * create new id map if necessary. */
     i = activate_instance(lsig, local_id, global_id);
     if (i >= 0 && lsig->id_map[i].inst) {
-        if (call_handler && h && lsig->ephemeral && (lsig->event_flags & MPR_STATUS_NEW))
+        if (call_handler && h && lsig->obj.ephemeral && (lsig->event_flags & MPR_STATUS_NEW))
             h((mpr_sig)lsig, MPR_STATUS_NEW, lsig->id_map[i].inst->id, 0, lsig->type, NULL, time);
         return i;
     }
@@ -1111,7 +1108,7 @@ static int mpr_sig_get_inst(mpr_local_sig lsig, mpr_id *local_id, mpr_id *global
     if (i >= 0) {
         si = lsig->id_map[i].inst;
         RETURN_ARG_UNLESS(si, -1);
-        if (call_handler && h && lsig->ephemeral && (lsig->event_flags & MPR_STATUS_NEW))
+        if (call_handler && h && lsig->obj.ephemeral && (lsig->event_flags & MPR_STATUS_NEW))
             h((mpr_sig)lsig, MPR_STATUS_NEW, si->id, 0, lsig->type, NULL, time);
     }
     return i;
@@ -1141,16 +1138,16 @@ static int _reserve_inst(mpr_local_sig lsig, mpr_id *id, void *data)
 {
     int i, cont;
     mpr_sig_inst si;
-    RETURN_ARG_UNLESS(lsig->num_inst < MAX_INST, -1);
+    RETURN_ARG_UNLESS(lsig->obj.num_inst < MAX_INST, -1);
 
     /* check if instance with this id already exists! If so, stop here. */
     if (id && _find_inst_by_id(lsig, *id))
         return -1;
 
     /* reallocate array of instances */
-    lsig->inst = realloc(lsig->inst, sizeof(mpr_sig_inst) * (lsig->num_inst + 1));
-    lsig->inst[lsig->num_inst] = (mpr_sig_inst) calloc(1, sizeof(struct _mpr_sig_inst));
-    si = lsig->inst[lsig->num_inst];
+    lsig->inst = realloc(lsig->inst, sizeof(mpr_sig_inst) * (lsig->obj.num_inst + 1));
+    lsig->inst[lsig->obj.num_inst] = (mpr_sig_inst) calloc(1, sizeof(struct _mpr_sig_inst));
+    si = lsig->inst[lsig->obj.num_inst];
     si->status = MPR_STATUS_STAGED;
 
     if (id)
@@ -1161,7 +1158,7 @@ static int _reserve_inst(mpr_local_sig lsig, mpr_id *id, void *data)
         cont = 1;
         while (cont) {
             cont = 0;
-            for (i = 0; i < lsig->num_inst; i++) {
+            for (i = 0; i < lsig->obj.num_inst; i++) {
                 if (lsig->inst[i]->id == lowest_id) {
                     cont = 1;
                     break;
@@ -1171,13 +1168,13 @@ static int _reserve_inst(mpr_local_sig lsig, mpr_id *id, void *data)
         }
         si->id = lowest_id;
     }
-    si->idx = lsig->num_inst;
+    si->idx = lsig->obj.num_inst;
     si->data = data;
 
-    ++lsig->num_inst;
+    ++lsig->obj.num_inst;
     /* TODO: move this qsort out to call with multiple ids */
-    qsort(lsig->inst, lsig->num_inst, sizeof(mpr_sig_inst), _compare_inst_ids);
-    return lsig->num_inst - 1;
+    qsort(lsig->inst, lsig->obj.num_inst, sizeof(mpr_sig_inst), _compare_inst_ids);
+    return lsig->obj.num_inst - 1;
 }
 
 static void realloc_maps(mpr_local_sig sig, int size)
@@ -1197,11 +1194,11 @@ static void realloc_maps(mpr_local_sig sig, int size)
 
 int mpr_sig_reserve_inst(mpr_sig sig, int num, mpr_id *ids, void **data)
 {
-    int i = 0, count = 0, highest = -1, result, old_num = sig->num_inst;
+    int i = 0, count = 0, highest = -1, result, old_num = sig->obj.num_inst;
     mpr_local_sig lsig = (mpr_local_sig)sig;
     RETURN_ARG_UNLESS(sig && sig->obj.is_local && num, 0);
 
-    if (!sig->use_inst && lsig->num_inst == 1 && !lsig->inst[0]->id && !lsig->inst[0]->data) {
+    if (!sig->obj.use_inst && lsig->obj.num_inst == 1 && !lsig->inst[0]->id && !lsig->inst[0]->data) {
         /* we will overwrite the default instance first */
         if (ids)
             lsig->inst[0]->id = ids[0];
@@ -1210,7 +1207,7 @@ int mpr_sig_reserve_inst(mpr_sig sig, int num, mpr_id *ids, void **data)
         ++i;
         ++count;
     }
-    sig->use_inst = 1;
+    sig->obj.use_inst = 1;
     for (; i < num; i++) {
         result = _reserve_inst(lsig, ids ? &ids[i] : 0, data ? data[i] : 0);
         if (result == -1)
@@ -1222,20 +1219,20 @@ int mpr_sig_reserve_inst(mpr_sig sig, int num, mpr_id *ids, void **data)
         realloc_maps(lsig, highest + 1);
 
     if (!lsig->value)
-        lsig->value = mpr_value_new(lsig->len, lsig->type, 1, lsig->num_inst);
+        lsig->value = mpr_value_new(lsig->len, lsig->type, 1, lsig->obj.num_inst);
     else
-        mpr_value_realloc(lsig->value, lsig->len, lsig->type, 1, lsig->num_inst, 0);
+        mpr_value_realloc(lsig->value, lsig->len, lsig->type, 1, lsig->obj.num_inst, 0);
 
     mpr_obj_incr_version((mpr_obj)lsig);
 
-    if (old_num > 0 && (lsig->num_inst / 8) == (old_num / 8))
+    if (old_num > 0 && (lsig->obj.num_inst / 8) == (old_num / 8))
         return count;
 
     /* reallocate instance update bitflags */
     if (!lsig->updated_inst)
-        lsig->updated_inst = mpr_bitflags_new(lsig->num_inst);
+        lsig->updated_inst = mpr_bitflags_new(lsig->obj.num_inst);
     else {
-        lsig->updated_inst = mpr_bitflags_realloc(lsig->updated_inst, lsig->num_inst);
+        lsig->updated_inst = mpr_bitflags_realloc(lsig->updated_inst, lsig->obj.num_inst);
     }
     return count;
 }
@@ -1355,7 +1352,7 @@ void mpr_sig_set_value(mpr_sig sig, mpr_id id, int len, mpr_type type, const voi
 void mpr_sig_release_inst(mpr_sig sig, mpr_id id)
 {
     mpr_sig_inst si;
-    RETURN_UNLESS(sig && sig->obj.is_local && sig->ephemeral);
+    RETURN_UNLESS(sig && sig->obj.is_local && sig->obj.ephemeral);
     si = _find_inst_by_id((mpr_local_sig)sig, id);
     if (si) {
         int id_map_idx = _get_id_map_idx_by_inst_idx((mpr_local_sig)sig, si->idx);
@@ -1403,7 +1400,7 @@ void mpr_local_sig_release_inst_by_origin(mpr_local_sig lsig, mpr_dev origin)
     mpr_id id;
     mpr_time time;
 
-    RETURN_UNLESS(lsig->ephemeral);
+    RETURN_UNLESS(lsig->obj.ephemeral);
 
     mpr_time_set(&time, MPR_NOW);
     id = mpr_obj_get_id((mpr_obj)origin);
@@ -1424,12 +1421,12 @@ void mpr_sig_remove_inst(mpr_sig sig, mpr_id id)
 {
     int i, remove_idx;
     mpr_local_sig lsig = (mpr_local_sig)sig;
-    RETURN_UNLESS(sig && sig->obj.is_local && sig->use_inst);
-    for (i = 0; i < lsig->num_inst; i++) {
+    RETURN_UNLESS(sig && sig->obj.is_local && sig->obj.use_inst);
+    for (i = 0; i < lsig->obj.num_inst; i++) {
         if (lsig->inst[i]->id == id)
             break;
     }
-    RETURN_UNLESS(i < lsig->num_inst);
+    RETURN_UNLESS(i < lsig->obj.num_inst);
 
     if (lsig->inst[i]->status & MPR_STATUS_ACTIVE) {
        /* First release instance */
@@ -1442,10 +1439,10 @@ void mpr_sig_remove_inst(mpr_sig sig, mpr_id id)
     mpr_value_remove_inst(lsig->value, i);
     free(lsig->inst[i]);
 
-    for (++i; i < lsig->num_inst; i++)
+    for (++i; i < lsig->obj.num_inst; i++)
     lsig->inst[i-1] = lsig->inst[i];
-    --lsig->num_inst;
-    lsig->inst = realloc(lsig->inst, sizeof(mpr_sig_inst) * lsig->num_inst);
+    --lsig->obj.num_inst;
+    lsig->inst = realloc(lsig->inst, sizeof(mpr_sig_inst) * lsig->obj.num_inst);
 
     /* Remove instance memory held by map slots */
     for (i = 0; i < lsig->num_maps_out; i++)
@@ -1454,7 +1451,7 @@ void mpr_sig_remove_inst(mpr_sig sig, mpr_id id)
         mpr_slot_remove_inst(lsig->slots_in[i], remove_idx);
 
     /* Renumber instance indexes */
-    for (i = 0; i < lsig->num_inst; i++) {
+    for (i = 0; i < lsig->obj.num_inst; i++) {
         if (lsig->inst[i]->idx > remove_idx)
             --lsig->inst[i]->idx;
     }
@@ -1468,7 +1465,7 @@ const void *mpr_sig_get_value(mpr_sig sig, mpr_id id, mpr_time *time)
     mpr_time now;
     RETURN_ARG_UNLESS(sig && sig->obj.is_local, 0);
 
-    if (!lsig->use_inst)
+    if (!lsig->obj.use_inst)
         si = _get_inst_by_id_map_idx(lsig, 0);
     else {
         int id_map_idx = mpr_sig_get_inst(lsig, &id, NULL, MPR_NOW, RELEASED_REMOTELY, 0, 0);
@@ -1485,19 +1482,14 @@ const void *mpr_sig_get_value(mpr_sig sig, mpr_id id, mpr_time *time)
     return mpr_value_get_value(lsig->value, si->idx, 0);
 }
 
-int mpr_sig_get_num_inst_internal(mpr_sig sig)
-{
-    return sig->num_inst;
-}
-
 int mpr_sig_get_num_inst(mpr_sig sig, mpr_status status)
 {
     int i, j;
     RETURN_ARG_UNLESS(sig, 0);
-    RETURN_ARG_UNLESS(sig->obj.is_local, sig->num_inst);
+    RETURN_ARG_UNLESS(sig->obj.is_local, sig->obj.num_inst);
     if (status == MPR_STATUS_ANY)
-        return sig->num_inst;
-    for (i = 0, j = 0; i < sig->num_inst; i++) {
+        return sig->obj.num_inst;
+    for (i = 0, j = 0; i < sig->obj.num_inst; i++) {
         if (((mpr_local_sig)sig)->inst[i]->status & status)
             ++j;
     }
@@ -1508,10 +1500,10 @@ mpr_status mpr_sig_get_inst_id(mpr_sig sig, int idx, mpr_status status, mpr_id *
 {
     int i, j;
     mpr_local_sig lsig = (mpr_local_sig)sig;
-    RETURN_ARG_UNLESS(sig && sig->obj.is_local && idx >= 0 && idx < sig->num_inst,
+    RETURN_ARG_UNLESS(sig && sig->obj.is_local && idx >= 0 && idx < sig->obj.num_inst,
                       MPR_STATUS_UNDEFINED);
     if (status != MPR_STATUS_ANY) {
-        for (i = 0, j = -1; i < lsig->num_inst; i++) {
+        for (i = 0, j = -1; i < lsig->obj.num_inst; i++) {
             if (!(lsig->inst[i]->status & status))
                 continue;
             if (++j == idx) {
@@ -1519,7 +1511,7 @@ mpr_status mpr_sig_get_inst_id(mpr_sig sig, int idx, mpr_status status, mpr_id *
                 break;
             }
         }
-        if (i == lsig->num_inst)
+        if (i == lsig->obj.num_inst)
             return MPR_STATUS_UNDEFINED;
     }
     if (lsig->inst[idx]->status & status) {
@@ -1534,7 +1526,7 @@ int mpr_sig_activate_inst(mpr_sig sig, mpr_id id)
 {
     int id_map_idx;
     mpr_time time;
-    RETURN_ARG_UNLESS(sig && sig->obj.is_local && sig->use_inst, 0);
+    RETURN_ARG_UNLESS(sig && sig->obj.is_local && sig->obj.use_inst, 0);
     time = mpr_dev_get_time(sig->dev);
     id_map_idx = mpr_sig_get_inst((mpr_local_sig)sig, &id, NULL, time, 0, 1, 0);
     return id_map_idx >= 0;
@@ -1543,7 +1535,7 @@ int mpr_sig_activate_inst(mpr_sig sig, mpr_id id)
 void mpr_sig_set_inst_data(mpr_sig sig, mpr_id id, const void *data)
 {
     mpr_sig_inst si;
-    RETURN_UNLESS(sig && sig->obj.is_local && sig->use_inst);
+    RETURN_UNLESS(sig && sig->obj.is_local && sig->obj.use_inst);
     si = _find_inst_by_id((mpr_local_sig)sig, id);
     if (si)
         si->data = (void*)data;
@@ -1552,7 +1544,7 @@ void mpr_sig_set_inst_data(mpr_sig sig, mpr_id id, const void *data)
 void *mpr_sig_get_inst_data(mpr_sig sig, mpr_id id)
 {
     mpr_sig_inst si;
-    RETURN_ARG_UNLESS(sig && sig->obj.is_local && sig->use_inst, 0);
+    RETURN_ARG_UNLESS(sig && sig->obj.is_local && sig->obj.use_inst, 0);
     si = _find_inst_by_id((mpr_local_sig)sig, id);
     return si ? si->data : 0;
 }
@@ -1637,7 +1629,7 @@ static int initialize_instance(mpr_local_sig lsig, mpr_sig_inst si, mpr_id_pair 
 
     si->id = ids->local;
     /* same comment wrt qsort here */
-    qsort(lsig->inst, lsig->num_inst, sizeof(mpr_sig_inst), _compare_inst_ids);
+    qsort(lsig->inst, lsig->obj.num_inst, sizeof(mpr_sig_inst), _compare_inst_ids);
 
     /* return id_pair index */
     return i;
@@ -1771,11 +1763,6 @@ mpr_type mpr_sig_get_type(mpr_sig sig)
     return sig->type;
 }
 
-int mpr_sig_get_use_inst(mpr_sig sig)
-{
-    return sig->use_inst;
-}
-
 int mpr_sig_compare_names(mpr_sig l, mpr_sig r)
 {
     int res = strcmp(mpr_dev_get_name(l->dev), mpr_dev_get_name(r->dev));
@@ -1809,10 +1796,10 @@ void mpr_local_sig_set_inst_value(mpr_local_sig sig, const void *value, int inst
         all = 1;
         inst_idx = 0;
     }
-    if (!sig->use_inst)
+    if (!sig->obj.use_inst)
         inst_idx = 0;
 
-    for (; inst_idx < sig->num_inst; inst_idx++) {
+    for (; inst_idx < sig->obj.num_inst; inst_idx++) {
         id_map_idx = _get_id_map_idx_by_inst_idx(sig, inst_idx);
         if (id_map_idx == -1) {
             if (eval_status & EXPR_UPDATE)
