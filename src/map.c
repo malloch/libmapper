@@ -482,7 +482,7 @@ void mpr_map_free(mpr_map map)
             mpr_dev dst_dev = mpr_sig_get_dev(mpr_slot_get_sig(map->dst));
             for (i = 0; i < map->num_src; i++) {
                 mpr_dev src_dev = mpr_sig_get_dev(mpr_slot_get_sig(map->src[i]));
-                mpr_link link = mpr_dev_get_link_by_remote(src_dev, dst_dev);
+                mpr_link link = mpr_graph_get_link(lmap->obj.graph, src_dev, dst_dev);
                 if (link)
                     mpr_link_remove_map(link, map);
                 if (lmap->one_src)

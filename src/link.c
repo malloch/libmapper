@@ -148,7 +148,6 @@ void mpr_link_connect(mpr_link link, const char *host, int admin_port, int data_
                   mpr_dev_get_name(link->devs[LINK_REMOTE_DEV]));
     }
     memset(link->bundles, 0, sizeof(mpr_bundle_t) * NUM_BUNDLES);
-    mpr_dev_add_link(link->devs[LINK_LOCAL_DEV], link->devs[LINK_REMOTE_DEV]);
 }
 
 void mpr_link_free(mpr_link link)
@@ -162,7 +161,6 @@ void mpr_link_free(mpr_link link)
         FUNC_IF(lo_bundle_free_recursive, link->bundles[i].udp);
         FUNC_IF(lo_bundle_free_recursive, link->bundles[i].tcp);
     }
-    mpr_dev_remove_link(link->devs[LINK_LOCAL_DEV], link->devs[LINK_REMOTE_DEV]);
     FUNC_IF(free, link->maps);
 }
 
@@ -279,6 +277,11 @@ int mpr_link_get_has_maps(mpr_link link, mpr_dir dir)
 mpr_dev mpr_link_get_dev(mpr_link link, int idx)
 {
     return link->devs[idx];
+}
+
+int mpr_link_has_dev(mpr_link link, mpr_dev dev)
+{
+    return dev == link->devs[0] || dev == link->devs[1];
 }
 
 static void send_ping(mpr_link link, mpr_time now)

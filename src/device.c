@@ -26,7 +26,6 @@ extern const char* net_msg_strings[NUM_MSG_STRINGS];
 
 #define MPR_DEV_STRUCT_ITEMS                                            \
     mpr_obj_t obj;      /* always first for type punning */             \
-    mpr_dev *linked;                                                    \
     mpr_time synced;    /*!< Timestamp of last sync. */                 \
     int prefix_len;     /*!< Length of the prefix string. */            \
     int ordinal;                                                        \
@@ -34,7 +33,6 @@ extern const char* net_msg_strings[NUM_MSG_STRINGS];
     int num_outputs;    /*!< Number of associated output signals. */    \
     int num_maps_in;    /*!< Number of associated incoming maps. */     \
     int num_maps_out;   /*!< Number of associated outgoing maps. */     \
-    int num_linked;     /*!< Number of linked devices. */               \
     uint8_t subscribed;
 
 /*! A record that keeps information about a device. */
@@ -89,17 +87,6 @@ size_t mpr_dev_get_struct_size(int is_local)
     return is_local ? sizeof(mpr_local_dev_t) : sizeof(mpr_dev_t);
 }
 
-static int cmp_qry_linked(const void *ctx, mpr_dev dev)
-{
-    int i;
-    mpr_dev self = *(mpr_dev*)ctx;
-    for (i = 0; i < self->num_linked; i++) {
-        if (!self->linked[i] || self->linked[i]->obj.id == dev->obj.id)
-            return 1;
-    }
-    return 0;
-}
-
 static int cmp_qry_sigs(const void *context_data, mpr_sig sig)
 {
     mpr_id dev_id = *(mpr_id*)context_data;
@@ -129,8 +116,6 @@ void mpr_dev_init(mpr_dev dev, mpr_id id)
     mpr_tbl_link_value(tbl, MPR_PROP_##PROP, 1, TYPE, DATA, FLAGS | PROP_SET);
     link(DATA,         MPR_PTR,   &dev->obj.data,     MOD_LOCAL | INDIRECT | LOCAL_ACCESS);
     link(ID,           MPR_INT64, &dev->obj.id,       MOD_NONE);
-    qry = mpr_graph_new_query(dev->obj.graph, 0, MPR_DEV, (void*)cmp_qry_linked, "v", &dev);
-    link(LINKED,       MPR_LIST,  qry,                MOD_NONE | PROP_OWNED);
     link(NAME,         MPR_STR,   &dev->obj.name,     MOD_NONE | INDIRECT | LOCAL_ACCESS);
     link(NUM_MAPS_IN,  MPR_INT32, &dev->num_maps_in,  MOD_NONE);
     link(NUM_MAPS_OUT, MPR_INT32, &dev->num_maps_out, MOD_NONE);
@@ -263,7 +248,7 @@ void mpr_dev_free(mpr_dev dev)
 
 void mpr_dev_free_mem(mpr_dev dev)
 {
-    FUNC_IF(free, dev->linked);
+    ;
 }
 
 static void on_registered(mpr_local_dev dev)
@@ -763,101 +748,6 @@ void mpr_dev_send_state(mpr_dev dev, net_msg_t cmd)
     mpr_tbl_set_is_dirty(dev->obj.props.synced, 0);
 }
 
-int mpr_dev_add_link(mpr_dev dev1, mpr_dev dev2)
-{
-    int i, found = 0;
-    for (i = 0; i < dev1->num_linked; i++) {
-        if (dev1->linked[i] && dev1->linked[i]->obj.id == dev2->obj.id) {
-            found = 0x01;
-            break;
-        }
-    }
-    if (!found) {
-        i = ++dev1->num_linked;
-        dev1->linked = realloc(dev1->linked, i * sizeof(mpr_dev));
-        dev1->linked[i-1] = dev2;
-    }
-
-    for (i = 0; i < dev2->num_linked; i++) {
-        if (dev2->linked[i] && dev2->linked[i]->obj.id == dev1->obj.id) {
-            found |= 0x10;
-            break;
-        }
-    }
-    if (!(found & 0x10)) {
-        i = ++dev2->num_linked;
-        dev2->linked = realloc(dev2->linked, i * sizeof(mpr_dev));
-        dev2->linked[i-1] = dev1;
-    }
-    return !found;
-}
-
-void mpr_dev_remove_link(mpr_dev dev1, mpr_dev dev2)
-{
-    int i, j;
-    for (i = 0; i < dev1->num_linked; i++) {
-        if (!dev1->linked[i] || dev1->linked[i]->obj.id != dev2->obj.id)
-            continue;
-        for (j = i+1; j < dev1->num_linked; j++)
-            dev1->linked[j-1] = dev1->linked[j];
-        --dev1->num_linked;
-        dev1->linked = realloc(dev1->linked, dev1->num_linked * sizeof(mpr_dev));
-        mpr_tbl_set_is_dirty(dev1->obj.props.synced, 1);
-        break;
-    }
-    for (i = 0; i < dev2->num_linked; i++) {
-        if (!dev2->linked[i] || dev2->linked[i]->obj.id != dev1->obj.id)
-            continue;
-        for (j = i+1; j < dev2->num_linked; j++)
-            dev2->linked[j-1] = dev2->linked[j];
-        --dev2->num_linked;
-        dev2->linked = realloc(dev2->linked, dev2->num_linked * sizeof(mpr_dev));
-        mpr_tbl_set_is_dirty(dev2->obj.props.synced, 1);
-        break;
-    }
-}
-
-static int mpr_dev_update_linked(mpr_dev dev, mpr_msg_atom a)
-{
-    int i, j, updated = 0, num = mpr_msg_atom_get_len(a);
-    lo_arg **link_list = mpr_msg_atom_get_values(a);
-    if (link_list && *link_list) {
-        const char *name;
-        if (num == 1 && strcmp(&link_list[0]->s, "none")==0)
-            num = 0;
-
-        /* Remove any old links that are missing */
-        for (i = 0; ; i++) {
-            int found = 0;
-            if (i >= dev->num_linked)
-                break;
-            for (j = 0; j < num; j++) {
-                name = &link_list[j]->s;
-                name = name[0] == '/' ? name + 1 : name;
-                if (0 == strcmp(name, dev->linked[i]->obj.name)) {
-                    found = 1;
-                    break;
-                }
-            }
-            if (!found) {
-                for (j = i+1; j < dev->num_linked; j++)
-                    dev->linked[j-1] = dev->linked[j];
-                --dev->num_linked;
-                ++updated;
-            }
-        }
-        if (updated)
-            dev->linked = realloc(dev->linked, dev->num_linked * sizeof(mpr_dev));
-        /* Add any new links */
-        for (i = 0; i < num; i++) {
-            mpr_dev rem;
-            if ((rem = mpr_graph_add_dev(dev->obj.graph, &link_list[i]->s, 0, 1)))
-                updated += mpr_dev_add_link(dev, rem);
-        }
-    }
-    return updated;
-}
-
 /*! Update information about a device record based on message properties. */
 int mpr_dev_set_from_msg(mpr_dev dev, mpr_msg m)
 {
@@ -866,16 +756,7 @@ int mpr_dev_set_from_msg(mpr_dev dev, mpr_msg m)
     num = mpr_msg_get_num_atoms(m);
     for (i = 0; i < num; i++) {
         mpr_msg_atom a = mpr_msg_get_atom(m, i);
-        switch (MASK_PROP_BITFLAGS(mpr_msg_atom_get_prop(a))) {
-            case MPR_PROP_LINKED: {
-                if (!dev->obj.is_local)
-                    updated += mpr_dev_update_linked(dev, a);
-                break;
-            }
-            default:
-                updated += mpr_tbl_add_record_from_msg_atom(dev->obj.props.synced, a, MOD_REMOTE);
-                break;
-        }
+        updated += mpr_tbl_add_record_from_msg_atom(dev->obj.props.synced, a, MOD_REMOTE);
     }
     if (updated) {
         dev->obj.status |= MPR_STATUS_MODIFIED;
@@ -1010,16 +891,6 @@ int mpr_dev_check_synced(mpr_dev dev, mpr_time time)
 void mpr_dev_set_synced(mpr_dev dev, mpr_time time)
 {
     mpr_time_set(&dev->synced, time);
-}
-
-int mpr_dev_has_local_link(mpr_dev dev)
-{
-    int i;
-    for (i = 0; i < dev->num_linked; i++) {
-        if (dev->linked[i] && dev->linked[i]->obj.is_local)
-            return 1;
-    }
-    return 0;
 }
 
 void mpr_local_dev_set_sending(mpr_local_dev dev)

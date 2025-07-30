@@ -2272,7 +2272,7 @@ static int handler_ping(const char *path, const char *types, lo_arg **av,
     RETURN_ARG_UNLESS(remote_dev, 0);
     for (i = 0; i < net->num_devs; i++) {
         mpr_local_dev dev = net->devs[i];
-        mpr_link link = mpr_dev_get_link_by_remote((mpr_dev)dev, remote_dev);
+        mpr_link link = mpr_graph_get_link(graph, (mpr_dev)dev, remote_dev);
         if (!link)
             continue;
         trace_dev(dev, "ping received from device '%s'\n", mpr_dev_get_name(remote_dev));

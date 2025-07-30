@@ -61,10 +61,6 @@ mpr_list mpr_dev_get_links(mpr_dev dev, mpr_dir dir);
 
 mpr_list mpr_dev_get_maps(mpr_dev dev, mpr_dir dir);
 
-int mpr_dev_add_link(mpr_dev dev1, mpr_dev dev2);
-
-void mpr_dev_remove_link(mpr_dev dev1, mpr_dev dev2);
-
 int mpr_dev_ids_decref_local(mpr_local_dev dev, mpr_id_pair ids);
 
 int mpr_dev_ids_decref_global(mpr_local_dev dev, mpr_id_pair ids);
@@ -81,15 +77,7 @@ const char *mpr_dev_get_name(mpr_dev dev);
 
 void mpr_dev_send_state(mpr_dev dev, net_msg_t cmd);
 
-/*! Find information for a registered link.
- *  \param dev          Device record to query.
- *  \param remote       Remote device.
- *  \return             Information about the link, or zero if not found. */
-mpr_link mpr_dev_get_link_by_remote(mpr_dev dev, mpr_dev remote);
-
 void mpr_dev_set_synced(mpr_dev dev, mpr_time time);
-
-int mpr_dev_has_local_link(mpr_dev dev);
 
 int mpr_dev_check_synced(mpr_dev dev, mpr_time time);
 

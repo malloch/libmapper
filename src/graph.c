@@ -546,14 +546,6 @@ void mpr_graph_remove_dev(mpr_graph g, mpr_dev d, mpr_graph_evt e)
     RETURN_UNLESS(d);
     remove_by_qry(g, mpr_dev_get_maps(d, MPR_DIR_ANY), e);
 
-    /* remove matching device links (linked property) */
-    list = mpr_graph_get_list(g, MPR_DEV);
-    while (list) {
-        if ((mpr_dev)*list != d)
-            mpr_dev_remove_link((mpr_dev)*list, d);
-        list = mpr_list_get_next(list);
-    }
-
     /* remove matching map scopes */
     list = mpr_graph_get_list(g, MPR_MAP);
     while (list) {
@@ -659,11 +651,27 @@ void mpr_graph_remove_sig(mpr_graph g, mpr_sig s, mpr_graph_evt e)
 
 /**** Link records ****/
 
+mpr_link mpr_graph_get_link(mpr_graph g, mpr_dev dev1, mpr_dev dev2)
+{
+    mpr_list links;
+    RETURN_ARG_UNLESS(dev1 && dev2, 0);
+    links = mpr_graph_get_list(g, MPR_LINK);
+    while (links) {
+        mpr_link link = (mpr_link)*links;
+        if (mpr_link_get_dev(link, 0) == dev1 && mpr_link_get_dev(link, 1) == dev2)
+            return link;
+        if (mpr_link_get_dev(link, 1) == dev1 && mpr_link_get_dev(link, 0) == dev2)
+            return link;
+        links = mpr_list_get_next(links);
+    }
+    return 0;
+}
+
 mpr_link mpr_graph_add_link(mpr_graph g, mpr_dev dev1, mpr_dev dev2)
 {
     mpr_link link;
     RETURN_ARG_UNLESS(dev1 && dev2, 0);
-    link = mpr_dev_get_link_by_remote(dev1, dev2);
+    link = mpr_graph_get_link(g, dev1, dev2);
     if (link)
         return link;
 
@@ -902,7 +910,16 @@ void mpr_graph_housekeeping(mpr_graph g)
         if (!dev->is_local) {
             if (!mpr_dev_check_synced((mpr_dev)dev, t)) {
                 /* do nothing if device is linked to local device; will be handled in network.c */
-                if (!mpr_dev_has_local_link((mpr_dev)dev)) {
+                int found = 0;
+                mpr_list links = mpr_list_from_data(g->links);
+                while (links) {
+                    mpr_link link = (mpr_link)*links;
+                    if (mpr_obj_get_is_local((mpr_obj)link) && mpr_link_has_dev(link, (mpr_dev)dev)) {
+                        found = 1;
+                        break;
+                    }
+                }
+                if (!found) {
                     /* remove subscription */
                     mpr_graph_subscribe(g, (mpr_dev)dev, 0, 0);
                     mpr_graph_remove_dev(g, (mpr_dev)dev, MPR_STATUS_EXPIRED);
