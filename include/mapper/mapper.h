@@ -216,6 +216,28 @@ void mpr_obj_push(mpr_obj object);
  *  \param properties   `1` to print the object's properties, `0` otherwise. */
 void mpr_obj_print(mpr_obj object, int include_props);
 
+/*! A handler function can be called whenever an object event occurs.
+ *  \param object       The object that has changed.
+ *  \param event        The type of event that has occurred, e.g. `MPR_STATUS_NEW_VAL` when the
+ *                      value has changed. Event types are listed in the enum `mpr_status` found in
+ *                      `mapper_constants.h`
+ *  \param instance     The identifier of the instance that has been changed, if applicable.
+ *  \param length       The array length of the current value in the case of value-related
+ *                      events, or `0` for other events.
+ *  \param type         The data type of the object.
+ *  \param value        A pointer to the current value in the case of value-related events, or
+ *                      `NULL` for other events.
+ *  \param time         The timetag associated with this event. */
+typedef void mpr_evt_handler(mpr_obj object, mpr_status event, mpr_id instance, int length,
+                             mpr_type type, const void *value, mpr_time time);
+
+/*! Set or unset the message handler for an object.
+ *  \param object       The object to operate on.
+ *  \param handler      A pointer to a `mpr_obj_handler` function for processing incoming messages.
+ *  \param events       Bitflags for types of events we are interested in. Event types are listed
+ *                      in the enum `mpr_status` found in `mapper_constants.h` */
+void mpr_obj_set_cb(mpr_obj object, mpr_evt_handler *handler, int events);
+
 /*** Devices ***/
 
 /*! @defgroup devices Devices
@@ -313,21 +335,6 @@ void mpr_dev_update_maps(mpr_dev device);
        Signals can be dynamically connected together in a dataflow graph by creating Maps using the
        libmapper API or an external session manager. */
 
-/*! A signal handler function can be called whenever a signal value changes.
- *  \param signal       The signal that has changed.
- *  \param event        The type of event that has occurred, e.g. `MPR_SIG_UPDATE` when the value has
- *                      changed. Event types are listed in the enum `mpr_status` found in
- *                      `mapper_constants.h`
- *  \param instance     The identifier of the instance that has been changed, if applicable.
- *  \param length       The array length of the current value in the case of `MPR_SIG_UPDATE`
- *                      events, or `0` for other events.
- *  \param type         The data type of the signal.
- *  \param value        A pointer to the current value in the case of `MPR_SIG_UPDATE` events, or
- *                      `NULL` for other events.
- *  \param time         The timetag associated with this event. */
-typedef void mpr_sig_handler(mpr_sig signal, mpr_status event, mpr_id instance, int length,
-                             mpr_type type, const void *value, mpr_time time);
-
 /*! Allocate and initialize a signal.  Values and strings pointed to by this call will be copied.
  *  For minimum and maximum values, type must match 'type' (if `type=MPR_INT32`, then `int*`, etc)
  *  and length must match 'length' (i.e. a scalar if `length=1`, or an array with `length` elements).
@@ -347,7 +354,7 @@ typedef void mpr_sig_handler(mpr_sig signal, mpr_status event, mpr_id instance, 
  *  \return                 The new signal. */
 mpr_sig mpr_sig_new(mpr_obj parent, mpr_dir direction, const char *name, int length, mpr_type type,
                     const char *unit, const void *minimum, const void *maximum, int *num_instances,
-                    mpr_sig_handler *handler, int events);
+                    mpr_evt_handler *handler, int events);
 
 /* Free resources used by a signal.
  * \param signal        The signal to free. */
@@ -386,13 +393,6 @@ mpr_list mpr_sig_get_maps(mpr_sig signal, mpr_dir direction);
  *  \param signal       The signal to check.
  *  \return             The signal's parent device. */
 mpr_dev mpr_sig_get_dev(mpr_sig signal);
-
-/*! Set or unset the message handler for a signal.
- *  \param signal       The signal to operate on.
- *  \param handler      A pointer to a `mpr_sig_handler` function for processing incoming messages.
- *  \param events       Bitflags for types of events we are interested in. Event types are listed
- *                      in the enum `mpr_status` found in `mapper_constants.h` */
-void mpr_sig_set_cb(mpr_sig signal, mpr_sig_handler *handler, int events);
 
 /**** Signal Instances ****/
 

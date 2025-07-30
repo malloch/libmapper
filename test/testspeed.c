@@ -104,7 +104,7 @@ void cleanup_src(void)
     }
 }
 
-void handler(mpr_sig sig, mpr_status event, mpr_id inst, int length,
+void handler(mpr_obj obj, mpr_status event, mpr_id inst, int length,
              mpr_type type, const void *value, mpr_time t)
 {
     if (done)
@@ -131,9 +131,9 @@ void handler(mpr_sig sig, mpr_status event, mpr_id inst, int length,
         mpr_dev_update_maps(mpr_sig_get_dev(sendsig));
     }
     else {
-        const char *name = mpr_obj_get_prop_as_str((mpr_obj)sig, MPR_PROP_NAME, NULL);
+        const char *name = mpr_obj_get_prop_as_str(obj, MPR_PROP_NAME, NULL);
         eprintf("--> destination %s instance %ld got NULL\n", name, (long)inst);
-        mpr_sig_release_inst(sig, inst);
+        mpr_sig_release_inst((mpr_sig)obj, inst);
     }
 }
 

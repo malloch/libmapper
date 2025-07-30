@@ -75,12 +75,11 @@ void cleanup_src(void)
     }
 }
 
-void handler(mpr_sig sig, mpr_status event, mpr_id instance, int length,
+void handler(mpr_obj obj, mpr_status event, mpr_id instance, int length,
              mpr_type type, const void *value, mpr_time t)
 {
     if (value) {
-        eprintf("handler: %s.%d got %f\n",
-                mpr_obj_get_prop_as_str((mpr_obj)sig, MPR_PROP_NAME, NULL),
+        eprintf("handler: %s.%d got %f\n", mpr_obj_get_prop_as_str(obj, MPR_PROP_NAME, NULL),
                 instance, (*(float*)value));
     }
 }
@@ -297,7 +296,7 @@ int main(int argc, char **argv)
     loop();
 
     /* test 2: no handler */
-    mpr_sig_set_cb(recvsig, NULL, 0);
+    mpr_obj_set_cb(recvsig, NULL, 0);
     loop();
 
     if (autoconnect && (sent != received || local_updates != sent * 4)) {

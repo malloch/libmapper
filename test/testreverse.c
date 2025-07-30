@@ -37,10 +37,10 @@ static void eprintf(const char *format, ...)
     va_end(args);
 }
 
-void handler(mpr_sig sig, mpr_status event, mpr_id inst, int length,
+void handler(mpr_obj obj, mpr_status event, mpr_id inst, int length,
              mpr_type type, const void *val, mpr_time t)
 {
-    const char *name = mpr_obj_get_prop_as_str(sig, MPR_PROP_NAME, NULL);
+    const char *name = mpr_obj_get_prop_as_str(obj, MPR_PROP_NAME, NULL);
     int i;
     eprintf("--> %s got ", name);
     if (val) {
@@ -79,7 +79,7 @@ int setup_src(mpr_graph g, const char *iface)
 
     sendsig = mpr_sig_new((mpr_obj)src, MPR_DIR_OUT, "outsig", 2, MPR_FLT, NULL,
                           mn, mx, NULL, NULL, 0);
-    mpr_sig_set_cb(sendsig, handler, MPR_STATUS_UPDATE_REM);
+    mpr_obj_set_cb((mpr_obj)sendsig, handler, MPR_STATUS_UPDATE_REM);
 
     eprintf("Output signals registered.\n");
     l = mpr_dev_get_sigs(src, MPR_DIR_OUT);

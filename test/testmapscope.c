@@ -38,7 +38,7 @@ static void eprintf(const char *format, ...)
     va_end(args);
 }
 
-void handler(mpr_sig sig, mpr_status event, mpr_id instance, int length,
+void handler(mpr_obj obj, mpr_status event, mpr_id instance, int length,
              mpr_type type, const void *value, mpr_time t)
 {
     int i;
@@ -46,7 +46,7 @@ void handler(mpr_sig sig, mpr_status event, mpr_id instance, int length,
         return;
 
     for (i = 0; i < 3; i++) {
-        if (sig == recvsigs[i])
+        if (obj == recvsigs[i])
             break;
     }
     if (i >= 3)

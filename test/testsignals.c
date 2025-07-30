@@ -35,7 +35,7 @@ static void eprintf(const char *format, ...)
     va_end(args);
 }
 
-void handler(mpr_sig sig, mpr_status event, mpr_id inst, int len,
+void handler(mpr_obj obj, mpr_status event, mpr_id inst, int len,
              mpr_type type, const void *val, mpr_time t)
 {
     const char *name;
@@ -45,7 +45,7 @@ void handler(mpr_sig sig, mpr_status event, mpr_id inst, int len,
     if (!val)
         return;
 
-    name = mpr_obj_get_prop_as_str((mpr_obj)sig, MPR_PROP_NAME, NULL);
+    name = mpr_obj_get_prop_as_str(obj, MPR_PROP_NAME, NULL);
     eprintf("--> destination got %s", name);
     fval = (float*)val;
     for (i = 0; i < len; i++) {

@@ -76,7 +76,7 @@ void cleanup_src(void)
     }
 }
 
-void handler(mpr_sig sig, mpr_status event, mpr_id instance, int len,
+void handler(mpr_obj obj, mpr_status event, mpr_id instance, int len,
              mpr_type type, const void *val, mpr_time t)
 {
     const char *name;
@@ -84,10 +84,10 @@ void handler(mpr_sig sig, mpr_status event, mpr_id instance, int len,
     if (!val)
         return;
 
-    name = mpr_obj_get_prop_as_str((mpr_obj)sig, MPR_PROP_NAME, NULL);
+    name = mpr_obj_get_prop_as_str(obj, MPR_PROP_NAME, NULL);
     if (verbose) {
-        float recv_period = mpr_obj_get_prop_as_flt((mpr_obj)sig, MPR_PROP_PERIOD, NULL);
-        float recv_jitter = mpr_obj_get_prop_as_flt((mpr_obj)sig, MPR_PROP_JITTER, NULL);
+        float recv_period = mpr_obj_get_prop_as_flt(obj, MPR_PROP_PERIOD, NULL);
+        float recv_jitter = mpr_obj_get_prop_as_flt(obj, MPR_PROP_JITTER, NULL);
         printf("%s rec'ved %f (period: %f, jitter: %f, diff: %f)\n", name, *(float*)val,
                recv_period, recv_jitter, send_period - recv_period);
     }

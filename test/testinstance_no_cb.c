@@ -101,9 +101,8 @@ test_config test_configs[] = {
     {  7, SNGL, INST, INST, MPR_LOC_SRC, NONE, NULL,  1.0,  1.0,  1.0,  1.0,  0.01,  0 },
     {  8, SNGL, INST, INST, MPR_LOC_DST, NONE, NULL,  1.0,  1.0,  1.0,  1.0,  0.01,  0 },
 
-    /* instanced ––> singleton; any source instance updates destination */
+    /* instanced ––> singleton; any source instance updates destination but overwrites previous */
     {  9, INST, SNGL, SNGL, MPR_LOC_SRC, NONE, NULL,  1.0,  1.0,  1.0,  1.0,  0.01,  0 },
-    /* ... but when processing @dst only the last instance update will trigger handler */
     { 10, INST, SNGL, SNGL, MPR_LOC_DST, NONE, NULL,  1.0,  1.0,  1.0,  1.0,  0.01,  0 },
 
     /* instanced ==> singleton; one src instance updates dst (default) */

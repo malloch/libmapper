@@ -35,12 +35,12 @@ static void eprintf(const char *format, ...)
     va_end(args);
 }
 
-void handler(mpr_sig sig, mpr_status event, mpr_id instance, int length,
+void handler(mpr_obj obj, mpr_status event, mpr_id instance, int length,
              mpr_type type, const void *value, mpr_time t)
 {
     if (value) {
         int i;
-        const char *name = mpr_obj_get_prop_as_str((mpr_obj)sig, MPR_PROP_NAME, NULL);
+        const char *name = mpr_obj_get_prop_as_str(obj, MPR_PROP_NAME, NULL);
         eprintf("--> received %s", name);
 
         if (type == MPR_FLT) {

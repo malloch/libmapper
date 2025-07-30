@@ -34,6 +34,9 @@ typedef struct _mpr_obj
     int use_inst;                   /*!< 1 if object uses instances, 0 otherwise. */
     int num_inst;                   /*!< Number of instances. */
     int ephemeral;                  /*!< 1 if signal is ephemeral, 0 otherwise. */
+
+    void *handler;                  /*!< An optional function to be called when events occur. */
+    int event_flags;                /*!< Flags for deciding when to call the event handler. */
 } mpr_obj_t;
 
 #include "graph.h"

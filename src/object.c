@@ -805,3 +805,10 @@ int mpr_obj_get_num_inst_internal(mpr_obj obj)
 {
     return obj->num_inst;
 }
+
+void mpr_obj_set_cb(mpr_obj obj, mpr_evt_handler *h, int events)
+{
+    RETURN_UNLESS(obj && obj->is_local);
+    obj->handler = (void*)h;
+    obj->event_flags = events;
+}

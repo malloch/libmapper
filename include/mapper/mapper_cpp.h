@@ -1244,11 +1244,11 @@ namespace mapper {
             if (events > Signal::Event::NONE) {
                 hd = (handler_data)malloc(sizeof(struct _handler_data));
                 _set_callback(hd, h);
-                mpr_sig_set_cb(_obj, _generic_handler, static_cast<int>(events));
+                mpr_obj_set_cb(_obj, _generic_handler, static_cast<int>(events));
                 od->handler_data = hd;
             }
             else {
-                mpr_sig_set_cb(_obj, NULL, 0);
+                mpr_obj_set_cb(_obj, NULL, 0);
                 od->handler_data = NULL;
             }
             RETURN_SELF;
@@ -1258,7 +1258,7 @@ namespace mapper {
          *  \return         Self. */
         Signal& remove_callback()
         {
-            mpr_sig_set_cb(_obj, NULL, 0);
+            mpr_obj_set_cb(_obj, NULL, 0);
             object_data od = (object_data)mpr_obj_get_prop_as_ptr(_obj, MPR_PROP_DATA, NULL);
             if (!od)
                 RETURN_SELF;

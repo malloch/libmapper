@@ -86,17 +86,17 @@ void cleanup_src(void)
     }
 }
 
-void handler(mpr_sig sig, mpr_status evt, mpr_id id, int len, mpr_type type,
+void handler(mpr_obj obj, mpr_status evt, mpr_id id, int len, mpr_type type,
              const void *val, mpr_time t)
 {
     if (evt == MPR_STATUS_REL_UPSTRM) {
         eprintf("%s.%"PR_MPR_ID" got release\n",
-                mpr_obj_get_prop_as_str((mpr_obj)sig, MPR_PROP_NAME, NULL), id);
-        mpr_sig_release_inst(sig, id);
+                mpr_obj_get_prop_as_str(obj, MPR_PROP_NAME, NULL), id);
+        mpr_sig_release_inst((mpr_sig)obj, id);
     }
     else if (val) {
         eprintf("%s.%"PR_MPR_ID" got %f\n",
-                mpr_obj_get_prop_as_str((mpr_obj)sig, MPR_PROP_NAME, NULL), id, *(float*)val);
+                mpr_obj_get_prop_as_str(obj, MPR_PROP_NAME, NULL), id, *(float*)val);
         received++;
     }
 }

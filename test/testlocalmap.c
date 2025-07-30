@@ -37,13 +37,13 @@ static void eprintf(const char *format, ...)
     va_end(args);
 }
 
-void handler(mpr_sig sig, mpr_status event, mpr_id instance, int length,
+void handler(mpr_obj obj, mpr_status event, mpr_id instance, int length,
              mpr_type type, const void *value, mpr_time t)
 {
     if (!value)
         return;
     eprintf("handler: signal %s got value %f, time %f\n",
-            mpr_obj_get_prop_as_str(sig, MPR_PROP_NAME, 0),
+            mpr_obj_get_prop_as_str(obj, MPR_PROP_NAME, 0),
             (*(float*)value), mpr_time_as_dbl(t));
     if (fabs(*(float*)value - expected) < 0.0001)
         received++;

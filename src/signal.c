@@ -85,12 +85,6 @@ typedef struct _mpr_local_sig
     mpr_sig_inst *inst;             /*!< Array of pointers to the signal insts. */
     mpr_bitflags updated_inst;      /*!< Bitflags to indicate updated instances. */
 
-    /*! An optional function to be called when the signal value changes or when
-     *  signal instance management events occur.. */
-    void *handler;
-    int event_flags;                /*! Flags for deciding when to call the
-                                     *  instance event handler. */
-
     mpr_local_slot *slots_in;
     mpr_local_slot *slots_out;
 
@@ -615,7 +609,7 @@ done:
 /* Add a signal to a parent object. */
 mpr_sig mpr_sig_new(mpr_obj parent, mpr_dir dir, const char *name, int len,
                     mpr_type type, const char *unit, const void *min,
-                    const void *max, int *num_inst, mpr_sig_handler *h,
+                    const void *max, int *num_inst, mpr_evt_handler *h,
                     int events)
 {
     mpr_graph g;
@@ -637,8 +631,8 @@ mpr_sig mpr_sig_new(mpr_obj parent, mpr_dir dir, const char *name, int len,
     lsig = (mpr_local_sig) mpr_graph_add_obj(g, name, MPR_SIG, 1);
     mpr_obj_build_tree_temp(parent, (mpr_obj)lsig);
     lsig->obj.id = mpr_dev_generate_unique_id(parent->root);
-    lsig->handler = (void*)h;
-    lsig->event_flags = events;
+    lsig->obj.handler = (void*)h;
+    lsig->obj.event_flags = events;
     mpr_sig_init((mpr_sig)lsig, parent->root, dir, len, type, unit, min, max, num_inst);
     mpr_local_dev_add_sig((mpr_local_dev) parent->root, lsig, dir);
     return (mpr_sig)lsig;
@@ -796,7 +790,7 @@ void mpr_sig_free_internal(mpr_sig sig)
  */
 void mpr_sig_call_handler(mpr_local_sig lsig, int evt, mpr_id id, unsigned int inst_idx)
 {
-    mpr_sig_handler *h;
+    mpr_evt_handler *h;
     void *value = NULL;
     mpr_time time;
 
@@ -811,11 +805,11 @@ void mpr_sig_call_handler(mpr_local_sig lsig, int evt, mpr_id id, unsigned int i
     /* Non-ephemeral signals cannot have a null value */
     RETURN_UNLESS(value || lsig->obj.ephemeral);
 
-    evt &= lsig->event_flags;
-    RETURN_UNLESS(evt && (h = (mpr_sig_handler*)lsig->handler));
+    evt &= lsig->obj.event_flags;
+    RETURN_UNLESS(evt && (h = (mpr_evt_handler*)lsig->obj.handler));
     time = mpr_value_get_time(lsig->value, inst_idx, 0);
 
-    h((mpr_sig)lsig, evt, lsig->obj.use_inst ? id : 0, value ? lsig->len : 0, lsig->type, value, time);
+    h((mpr_obj)lsig, evt, lsig->obj.use_inst ? id : 0, value ? lsig->len : 0, lsig->type, value, time);
 }
 
 /**** Instances ****/
@@ -1052,7 +1046,7 @@ mpr_id mpr_sig_get_newest_inst_id(mpr_sig sig)
  *                      the selected allocation strategy. */
 static int mpr_sig_get_inst(mpr_local_sig lsig, mpr_id *local_id, mpr_id *global_id, mpr_time time, int flags, uint8_t activate, uint8_t call_handler)
 {
-    mpr_sig_handler *h = (mpr_sig_handler*)lsig->handler;
+    mpr_evt_handler *h = (mpr_evt_handler*)lsig->obj.handler;
     mpr_sig_inst si;
     int i;
 
@@ -1072,22 +1066,22 @@ static int mpr_sig_get_inst(mpr_local_sig lsig, mpr_id *local_id, mpr_id *global
      * create new id map if necessary. */
     i = activate_instance(lsig, local_id, global_id);
     if (i >= 0 && lsig->id_map[i].inst) {
-        if (call_handler && h && lsig->obj.ephemeral && (lsig->event_flags & MPR_STATUS_NEW))
-            h((mpr_sig)lsig, MPR_STATUS_NEW, lsig->id_map[i].inst->id, 0, lsig->type, NULL, time);
+        if (call_handler && h && lsig->obj.ephemeral && (lsig->obj.event_flags & MPR_STATUS_NEW))
+            h((mpr_obj)lsig, MPR_STATUS_NEW, lsig->id_map[i].inst->id, 0, lsig->type, NULL, time);
         return i;
     }
 
     /* try releasing instance in use */
-    if (h && lsig->event_flags & MPR_STATUS_OVERFLOW) {
+    if (h && lsig->obj.event_flags & MPR_STATUS_OVERFLOW) {
         /* call instance event handler */
-        h((mpr_sig)lsig, MPR_STATUS_OVERFLOW, 0, 0, lsig->type, NULL, time);
+        h((mpr_obj)lsig, MPR_STATUS_OVERFLOW, 0, 0, lsig->type, NULL, time);
     }
     else if (lsig->steal_mode == MPR_STEAL_OLDEST) {
         i = _oldest_inst(lsig);
         if (i < 0)
             return -1;
         if (h)
-            h((mpr_sig)lsig, MPR_STATUS_REL_UPSTRM & lsig->event_flags ? MPR_STATUS_REL_UPSTRM : MPR_STATUS_UPDATE_REM,
+            h((mpr_obj)lsig, MPR_STATUS_REL_UPSTRM & lsig->obj.event_flags ? MPR_STATUS_REL_UPSTRM : MPR_STATUS_UPDATE_REM,
               lsig->id_map[i].ids->local, 0, lsig->type, 0, time);
     }
     else if (lsig->steal_mode == MPR_STEAL_NEWEST) {
@@ -1095,7 +1089,7 @@ static int mpr_sig_get_inst(mpr_local_sig lsig, mpr_id *local_id, mpr_id *global
         if (i < 0)
             return -1;
         if (h)
-            h((mpr_sig)lsig, MPR_STATUS_REL_UPSTRM & lsig->event_flags ? MPR_STATUS_REL_UPSTRM : MPR_STATUS_UPDATE_REM,
+            h((mpr_obj)lsig, MPR_STATUS_REL_UPSTRM & lsig->obj.event_flags ? MPR_STATUS_REL_UPSTRM : MPR_STATUS_UPDATE_REM,
               lsig->id_map[i].ids->local, 0, lsig->type, 0, time);
     }
     else {
@@ -1108,8 +1102,8 @@ static int mpr_sig_get_inst(mpr_local_sig lsig, mpr_id *local_id, mpr_id *global
     if (i >= 0) {
         si = lsig->id_map[i].inst;
         RETURN_ARG_UNLESS(si, -1);
-        if (call_handler && h && lsig->obj.ephemeral && (lsig->event_flags & MPR_STATUS_NEW))
-            h((mpr_sig)lsig, MPR_STATUS_NEW, si->id, 0, lsig->type, NULL, time);
+        if (call_handler && h && lsig->obj.ephemeral && (lsig->obj.event_flags & MPR_STATUS_NEW))
+            h((mpr_obj)lsig, MPR_STATUS_NEW, si->id, 0, lsig->type, NULL, time);
     }
     return i;
 }
@@ -1565,16 +1559,6 @@ int mpr_sig_get_inst_status(mpr_sig sig, mpr_id id)
             status = MPR_STATUS_STAGED;
     }
     return status;
-}
-
-/**** Queries ****/
-
-void mpr_sig_set_cb(mpr_sig sig, mpr_sig_handler *h, int events)
-{
-    mpr_local_sig lsig = (mpr_local_sig)sig;
-    RETURN_UNLESS(sig && sig->obj.is_local);
-    lsig->handler = (void*)h;
-    lsig->event_flags = events;
 }
 
 /**** Signal Properties ****/

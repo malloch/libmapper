@@ -198,10 +198,10 @@ void cleanup_src(void)
     }
 }
 
-void insig_handler(mpr_sig sig, mpr_status event, mpr_id instance, int length,
+void insig_handler(mpr_obj obj, mpr_status event, mpr_id instance, int length,
                    mpr_type type, const void *value, mpr_time t)
 {
-    const char *name = mpr_obj_get_prop_as_str((mpr_obj)sig, MPR_PROP_NAME, NULL);
+    const char *name = mpr_obj_get_prop_as_str(obj, MPR_PROP_NAME, NULL);
     if (value) {
         int i;
         float *v = (float*)value;

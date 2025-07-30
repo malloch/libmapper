@@ -94,12 +94,12 @@ void cleanup_src(void)
     }
 }
 
-void handler(mpr_sig sig, mpr_status evt, mpr_id id, int len, mpr_type type,
+void handler(mpr_obj obj, mpr_status evt, mpr_id id, int len, mpr_type type,
              const void *val, mpr_time t)
 {
     if (val) {
         int i;
-        const char *name = mpr_obj_get_prop_as_str(sig, MPR_PROP_NAME, NULL);
+        const char *name = mpr_obj_get_prop_as_str(obj, MPR_PROP_NAME, NULL);
         eprintf("--> destination got %s", name);
 
         switch (type) {

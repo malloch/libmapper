@@ -77,7 +77,7 @@ void cleanup_src(void)
     }
 }
 
-void handler(mpr_sig sig, mpr_status evt, mpr_id instance, int len,
+void handler(mpr_obj obj, mpr_status evt, mpr_id instance, int len,
              mpr_type type, const void *val, mpr_time t)
 {
     if (val) {

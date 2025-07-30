@@ -77,7 +77,7 @@ void cleanup_src(void)
     }
 }
 
-void handler(mpr_sig sig, mpr_status event, mpr_id instance, int length,
+void handler(mpr_obj obj, mpr_status event, mpr_id instance, int length,
              mpr_type type, const void *value, mpr_time t)
 {
     float *fvalue;

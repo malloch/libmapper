@@ -248,18 +248,18 @@ void cleanup_src(void)
     }
 }
 
-void handler(mpr_sig sig, mpr_status e, mpr_id inst, int len, mpr_type type,
+void handler(mpr_obj obj, mpr_status e, mpr_id inst, int len, mpr_type type,
              const void *val, mpr_time t)
 {
-    const char *name = mpr_obj_get_prop_as_str((mpr_obj)sig, MPR_PROP_NAME, NULL);
+    const char *name = mpr_obj_get_prop_as_str(obj, MPR_PROP_NAME, NULL);
 
     if (e & MPR_STATUS_OVERFLOW) {
         eprintf("OVERFLOW!! ALLOCATING ANOTHER INSTANCE.\n");
-        mpr_sig_reserve_inst(sig, 1, 0, 0);
+        mpr_sig_reserve_inst((mpr_sig)obj, 1, 0, 0);
     }
     else if (e & MPR_STATUS_REL_UPSTRM) {
         eprintf("--> destination %s instance %i got upstream release\n", name, (int)inst);
-        mpr_sig_release_inst(sig, inst);
+        mpr_sig_release_inst((mpr_sig)obj, inst);
     }
     else if (val) {
         eprintf("--> destination %s instance %i got %f\n", name, (int)inst, (*(float*)val));
@@ -267,7 +267,7 @@ void handler(mpr_sig sig, mpr_status e, mpr_id inst, int len, mpr_type type,
     }
     else {
         eprintf("--> destination %s instance %i got NULL\n", name, (int)inst);
-        mpr_sig_release_inst(sig, inst);
+        mpr_sig_release_inst((mpr_sig)obj, inst);
     }
 }
 
@@ -580,7 +580,7 @@ int run_test(test_config *config)
             stl = MPR_STEAL_NONE;
     }
     mpr_obj_set_prop((mpr_obj)multirecv, MPR_PROP_STEAL_MODE, NULL, 1, MPR_INT32, &stl, 1);
-    mpr_sig_set_cb(multirecv, handler, evt);
+    mpr_obj_set_cb((mpr_obj)multirecv, handler, evt);
 
     map = mpr_map_new(num_src, src_ptr, 1, dst_ptr);
     mpr_obj_set_prop((mpr_obj)map, MPR_PROP_PROCESS_LOC, NULL, 1, MPR_INT32, &config->process_loc, 1);
