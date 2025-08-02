@@ -53,8 +53,7 @@ int setup_src(mpr_graph g, const char *iface)
     eprintf("source created using interface %s.\n",
             mpr_graph_get_interface(mpr_obj_get_graph(src)));
 
-    sendsig = mpr_sig_new(src, MPR_DIR_OUT, "outsig", 1, MPR_INT32, NULL,
-                          &mn, &mx, NULL, NULL, 0);
+    sendsig = mpr_sig_new(src, MPR_DIR_OUT, "outsig", 1, MPR_INT32, NULL, &mn, &mx, NULL);
 
     eprintf("Output signal 'outsig' registered.\n");
     l = mpr_dev_get_sigs(src, MPR_DIR_OUT);
@@ -76,9 +75,9 @@ void cleanup_src(void)
     }
 }
 
-void handler(mpr_obj obj, mpr_status event, mpr_id instance, int length,
-             mpr_type type, const void *value, mpr_time t)
+void handler(mpr_obj obj, mpr_status event, mpr_id instance, const void *data)
 {
+    const void *value = mpr_sig_get_value((mpr_sig)obj, instance, NULL);
     if (value) {
         eprintf("handler: Got %f (expected", (*(float*)value));
         if (fabs(*(float*)value - expected) < 0.0001)
@@ -102,8 +101,8 @@ int setup_dst(mpr_graph g, const char *iface)
     eprintf("destination created using interface %s.\n",
             mpr_graph_get_interface(mpr_obj_get_graph(dst)));
 
-    recvsig = mpr_sig_new(dst, MPR_DIR_IN, "insig", 1, MPR_FLT, NULL,
-                          &mn, &mx, NULL, handler, MPR_STATUS_UPDATE_REM);
+    recvsig = mpr_sig_new(dst, MPR_DIR_IN, "insig", 1, MPR_FLT, NULL, &mn, &mx, NULL);
+    mpr_obj_add_cb((mpr_obj)recvsig, handler, MPR_STATUS_UPDATE_REM, NULL, 0);
 
     eprintf("Input signal 'insig' registered.\n");
     l = mpr_dev_get_sigs(dst, MPR_DIR_IN);

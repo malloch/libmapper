@@ -35,21 +35,19 @@ static void eprintf(const char *format, ...)
     va_end(args);
 }
 
-void handler(mpr_obj obj, mpr_status event, mpr_id inst, int len,
-             mpr_type type, const void *val, mpr_time t)
+void handler(mpr_obj obj, mpr_status event, mpr_id instance, const void *data)
 {
     const char *name;
-    float *fval;
-    int i;
+    float *value = (float*) mpr_sig_get_value((mpr_sig)obj, instance, NULL);
+    int i, length = mpr_obj_get_prop_as_int32(obj, MPR_PROP_LEN, NULL);
 
-    if (!val)
+    if (!value)
         return;
 
     name = mpr_obj_get_prop_as_str(obj, MPR_PROP_NAME, NULL);
     eprintf("--> destination got %s", name);
-    fval = (float*)val;
-    for (i = 0; i < len; i++) {
-        eprintf(" %f", fval[i]);
+    for (i = 0; i < length; i++) {
+        eprintf(" %f", value[i]);
     }
     eprintf("\n");
 }
@@ -143,17 +141,19 @@ int main(int argc, char ** argv)
         mpr_dev_poll(dev, 100);
         if (i < num_inputs) {
             snprintf(signame, 32, "in%i", i);
-            if (!(inputs[i] = mpr_sig_new((mpr_obj)dev, MPR_DIR_IN, signame, 1, MPR_FLT,
-                                          NULL, NULL, NULL, NULL, handler,
-                                          MPR_STATUS_UPDATE_REM))) {
+            inputs[i] = mpr_sig_new((mpr_obj)dev, MPR_DIR_IN, signame,
+                                    1, MPR_FLT, NULL, NULL, NULL, NULL);
+            mpr_obj_add_cb((mpr_obj)inputs[i], handler, MPR_STATUS_UPDATE_REM, NULL, 0);
+            if (!inputs[i]) {
                 result = 1;
                 goto done;
             }
         }
         if (i < num_outputs) {
             snprintf(signame, 32, "out%i", i);
-            if (!(outputs[i] = mpr_sig_new((mpr_obj)dev, MPR_DIR_OUT, signame, 1, MPR_FLT,
-                                           NULL, NULL, NULL, NULL, NULL, 0))) {
+            outputs[i] = mpr_sig_new((mpr_obj)dev, MPR_DIR_OUT, signame,
+                                     1, MPR_FLT, NULL, NULL, NULL, NULL);
+            if (!outputs[i]) {
                 result = 1;
                 goto done;
             }

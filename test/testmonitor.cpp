@@ -26,21 +26,23 @@ void monitor_pause(void)
     // sleep(1);
 }
 
-void on_object(Graph&& g, Object&& o, Graph::Event e)
+void on_object(Object&& o, Object::Status e, Object::Id instance)
 {
     switch (e) {
-        case Graph::Event::OBJ_NEW:
+        case Object::Status::NEW:
             eprintf("Added: ");
             break;
-        case Graph::Event::OBJ_MOD:
+        case Object::Status::MODIFIED:
             eprintf("Modified: ");
             break;
-        case Graph::Event::OBJ_REM:
+        case Object::Status::REMOVED:
             eprintf("Removed: ");
             break;
-        case Graph::Event::OBJ_EXP:
+        case Object::Status::EXPIRED:
             eprintf("Unresponsive: ");
             break;
+        default:
+            return;
     }
     if (verbose)
         o.print();
@@ -102,7 +104,7 @@ int main(int argc, char **argv)
     }
     if (iface)
         graph.set_iface(iface);
-    graph.add_callback(on_object, Type::OBJECT);
+    graph.add_callback(on_object, Object::Status::ANY);
 
     i = 0;
     while ((!terminate || i++ < 250) && !done) {

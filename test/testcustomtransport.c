@@ -57,7 +57,7 @@ static void eprintf(const char *format, ...)
     va_end(args);
 }
 
-void on_map(mpr_graph g, mpr_obj o, mpr_graph_evt e, const void *user)
+void on_map(mpr_obj o, mpr_status e, mpr_id id, const void *user)
 {
     mpr_map map;
     mpr_list l;
@@ -71,7 +71,6 @@ void on_map(mpr_graph g, mpr_obj o, mpr_graph_evt e, const void *user)
     struct sockaddr_in addr;
 
     if (MPR_MAP != mpr_obj_get_type(o)) {
-        printf("Error in map handler!\n");
         return;
     }
 
@@ -176,9 +175,9 @@ int setup_src(const char *iface)
     eprintf("source created using interface %s.\n",
             mpr_graph_get_interface(mpr_obj_get_graph((mpr_obj)src)));
 
-    mpr_graph_add_cb(mpr_obj_get_graph((mpr_obj)src), on_map, MPR_MAP, NULL);
+    mpr_obj_add_cb(mpr_obj_get_graph((mpr_obj)src), on_map, MPR_STATUS_NEW, NULL, 0);
 
-    sendsig = mpr_sig_new(src, MPR_DIR_OUT, "outsig", 1, MPR_FLT, "Hz", &mn, &mx, NULL, NULL, 0);
+    sendsig = mpr_sig_new(src, MPR_DIR_OUT, "outsig", 1, MPR_FLT, "Hz", &mn, &mx, NULL);
 
     eprintf("Output signal 'outsig' registered.\n");
 
@@ -198,10 +197,11 @@ void cleanup_src(void)
     }
 }
 
-void insig_handler(mpr_obj obj, mpr_status event, mpr_id instance, int length,
-                   mpr_type type, const void *value, mpr_time t)
+void handler(mpr_obj obj, mpr_status event, mpr_id instance, const void *data)
 {
     const char *name = mpr_obj_get_prop_as_str(obj, MPR_PROP_NAME, NULL);
+    const void *value = mpr_sig_get_value((mpr_sig)obj, instance, NULL);
+    int length = mpr_obj_get_prop_as_int32(obj, MPR_PROP_LEN, NULL);
     if (value) {
         int i;
         float *v = (float*)value;
@@ -227,8 +227,8 @@ int setup_dst(const char *iface)
     eprintf("destination created using interface %s.\n",
             mpr_graph_get_interface(mpr_obj_get_graph((mpr_obj)dst)));
 
-    recvsig = mpr_sig_new(dst, MPR_DIR_IN, "insig", 1, MPR_FLT, NULL, &mn, &mx,
-                          NULL, insig_handler, MPR_STATUS_UPDATE_REM);
+    recvsig = mpr_sig_new(dst, MPR_DIR_IN, "insig", 1, MPR_FLT, NULL, &mn, &mx, NULL);
+    mpr_obj_add_cb((mpr_obj)recvsig, handler, MPR_STATUS_UPDATE_REM, NULL, 0);
 
     eprintf("Input signal 'insig' registered.\n");
 

@@ -109,12 +109,12 @@ int setup_devs(const char *iface)
             mx = fmod(rand() * 0.01, 21.f) - 10.f;
             generate_name(name, 20);
             obj = mpr_obj_new(devices[i], name);
-			mpr_sig_new(obj, MPR_DIR_IN, "signal", 1, MPR_FLT, NULL, &mn, &mx, NULL, NULL, 0);
+			mpr_sig_new(obj, MPR_DIR_IN, "signal", 1, MPR_FLT, NULL, &mn, &mx, NULL);
             mn = fmod(rand() * 0.01, 21.f) - 10.f;
             mx = fmod(rand() * 0.01, 21.f) - 10.f;
             generate_name(name, 20);
             obj = mpr_obj_new(devices[i], name);
-            mpr_sig_new(obj, MPR_DIR_OUT, "signal", 1, MPR_FLT, NULL, &mn, &mx, NULL, NULL, 0);
+            mpr_sig_new(obj, MPR_DIR_OUT, "signal", 1, MPR_FLT, NULL, &mn, &mx, NULL);
 		}
 	}
     return 0;

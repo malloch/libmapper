@@ -55,7 +55,7 @@ int setup_src(mpr_graph g, const char *iface)
     eprintf("source created using interface %s.\n",
             mpr_graph_get_interface(mpr_obj_get_graph(src)));
 
-    sendsig = mpr_sig_new(src, MPR_DIR_OUT, "outsig", 1, MPR_FLT, NULL, &mn, &mx, NULL, NULL, 0);
+    sendsig = mpr_sig_new(src, MPR_DIR_OUT, "outsig", 1, MPR_FLT, NULL, &mn, &mx, NULL);
 
     eprintf("Output signal 'outsig' registered.\n");
     l = mpr_dev_get_sigs(src, MPR_DIR_OUT);
@@ -77,15 +77,15 @@ void cleanup_src(void)
     }
 }
 
-void handler(mpr_obj obj, mpr_status event, mpr_id instance, int length,
-             mpr_type type, const void *value, mpr_time t)
+void handler(mpr_obj obj, mpr_status event, mpr_id instance, const void *data)
 {
-    float *fvalue;
+    mpr_time time;
+    float *value = (float*) mpr_sig_get_value((mpr_sig)obj, instance, &time);
+    int length = mpr_obj_get_prop_as_int32(obj, MPR_PROP_LEN, NULL);
     if (!value || length != 2)
         return;
-    fvalue = (float*)value;
-    eprintf("handler: Got value [%f, %f], time %f\n", fvalue[0], fvalue[1], mpr_time_as_dbl(t));
-    if (fvalue[0] != expected_val[0] || fvalue[1] != expected_val[1])
+    eprintf("handler: Got value [%f, %f], time %f\n", value[0], value[1], mpr_time_as_dbl(time));
+    if (value[0] != expected_val[0] || value[1] != expected_val[1])
         eprintf("  error: expected value [%f, %f]\n", expected_val[0], expected_val[1]);
     else
         ++matched;
@@ -105,8 +105,8 @@ int setup_dst(mpr_graph g, const char *iface)
     eprintf("destination created using interface %s.\n",
             mpr_graph_get_interface(mpr_obj_get_graph(dst)));
 
-    recvsig = mpr_sig_new(dst, MPR_DIR_IN, "insig", 2, MPR_FLT, NULL,
-                          NULL, NULL, NULL, handler, MPR_STATUS_UPDATE_REM);
+    recvsig = mpr_sig_new(dst, MPR_DIR_IN, "insig", 2, MPR_FLT, NULL, NULL, NULL, NULL);
+    mpr_obj_add_cb((mpr_obj)recvsig, handler, MPR_STATUS_UPDATE_REM, NULL, 0);
     mpr_obj_set_prop((mpr_obj)recvsig, MPR_PROP_MIN, NULL, 1, MPR_FLT, &mn, 0);
     mpr_obj_set_prop((mpr_obj)recvsig, MPR_PROP_MAX, NULL, 1, MPR_FLT, &mx, 0);
 

@@ -38,13 +38,13 @@ static void eprintf(const char *format, ...)
     va_end(args);
 }
 
-void on_sig(mpr_graph g, mpr_obj o, mpr_graph_evt e, const void *user)
+void on_sig(mpr_obj o, mpr_status e, mpr_id instance, const void *user)
 {
     /* Check if this signal matches recvsig */
     mpr_id id = mpr_obj_get_prop_as_int64(o, MPR_PROP_ID, NULL);
     mpr_id recvsig_id = mpr_obj_get_prop_as_int64((mpr_obj)recvsig, MPR_PROP_ID, NULL);
 
-    if (id != recvsig_id)
+    if (MPR_SIG != mpr_obj_get_type(o) || id != recvsig_id)
         return;
 
     switch (e) {
@@ -69,7 +69,7 @@ int setup_graph(const char *iface)
     if (iface)
         mpr_graph_set_interface(graph, iface);
 
-    mpr_graph_add_cb(graph, on_sig, MPR_SIG, NULL);
+    mpr_obj_add_cb((mpr_obj)graph, on_sig, MPR_STATUS_ANY, NULL, 0);
 
     eprintf("graph created using interface %s.\n", mpr_graph_get_interface(graph));
     return 0;
@@ -88,11 +88,11 @@ void cleanup_graph(void)
     }
 }
 
-void handler(mpr_obj obj, mpr_status event, mpr_id instance, int length,
-             mpr_type type, const void *value, mpr_time t)
+void handler(mpr_obj obj, mpr_status event, mpr_id instance, const void *data)
 {
+    float *value = (float*) mpr_sig_get_value((mpr_sig)obj, instance, NULL);
     if (value) {
-        eprintf("handler: Got %f\n", (*(float*)value));
+        eprintf("handler: Got %f\n", (*value));
         if (fabs(*(float*)value - expected) < 0.0001)
             received++;
         else
@@ -113,8 +113,8 @@ int setup_device(const char *iface)
     eprintf("destination created using interface %s.\n",
             mpr_graph_get_interface(mpr_obj_get_graph(dev)));
 
-    recvsig = mpr_sig_new((mpr_obj)dev, MPR_DIR_IN, "insig", 1, MPR_FLT, NULL,
-                          &mn, &mx, NULL, handler, MPR_STATUS_UPDATE_REM);
+    recvsig = mpr_sig_new((mpr_obj)dev, MPR_DIR_IN, "insig", 1, MPR_FLT, NULL, &mn, &mx, NULL);
+    mpr_obj_add_cb((mpr_obj)recvsig, handler, MPR_STATUS_UPDATE_REM, NULL, 0);
 
     eprintf("Input signal 'insig' registered.\n");
     l = mpr_dev_get_sigs(dev, MPR_DIR_IN);

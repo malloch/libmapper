@@ -51,9 +51,14 @@ public:
     const char* extra;
 };
 
-void simple_handler(Signal&& sig, int length, Type type, const void *value, Time&& t)
+void simple_handler(Object&& obj, Object::Status event)
 {
+    Signal sig(obj);
     ++received;
+    const void *value = sig.value();
+    int length = sig[Property::LENGTH];
+    mapper::Type type = sig[Property::TYPE];
+
     if (verbose) {
         std::cout << "\t\t\t\t     | --> simple handler: " << sig[Property::NAME] << " got";
     }
@@ -95,9 +100,13 @@ void simple_handler(Signal&& sig, int length, Type type, const void *value, Time
     std::cout << std::endl;
 }
 
-void standard_handler(Signal&& sig, Signal::Event event, Id instance, int length,
-                      Type type, const void *value, Time&& t)
+void standard_handler(Object&& obj, Object::Status event, Object::Id instance)
 {
+    Signal sig(obj);
+    const void *value = sig.value();
+    int length = sig[Property::LENGTH];
+    mapper::Type type = sig[Property::TYPE];
+
     ++received;
     if (verbose) {
         std::cout << "\t\t\t\t     | --> standard handler: " << sig[Property::NAME] << "." << instance
@@ -149,52 +158,55 @@ void standard_handler(Signal&& sig, Signal::Event event, Id instance, int length
     }
 }
 
-void instance_handler(Signal::Instance&& si, Signal::Event event, int length,
-                      Type type, const void *value, Time&& t)
-{
-    ++received;
-    if (verbose) {
-        std::cout << "\t\t\t\t     | --> instance handler: " << si.signal()[Property::NAME] << "."
-                  << si.id() << " got " << event;
-    }
-
-    if (event == Signal::Event::REL_UPSTRM) {
-        if (verbose)
-            std::cout << " release" << std::endl;
-        si.release();
-        return;
-    }
-    else if (!verbose || !value) {
-        return;
-    }
-
-    switch (type) {
-        case Type::INT32: {
-            int *v = (int*)value;
-            for (int i = 0; i < length; i++) {
-                std::cout << " " << v[i];
-            }
-            break;
-        }
-        case Type::FLOAT: {
-            float *v = (float*)value;
-            for (int i = 0; i < length; i++) {
-                std::cout << " " << v[i];
-            }
-            break;
-        }
-        case Type::DOUBLE: {
-            double *v = (double*)value;
-            for (int i = 0; i < length; i++) {
-                std::cout << " " << v[i];
-            }
-            break;
-        }
-        default:
-            break;
-    }
-    std::cout << std::endl;
-}
+//void instance_handler(Object::Instance&& si, Object::Status event)
+//{
+//    const void *value = si.value();
+//    int length = si[Property::LENGTH];
+//    mapper::Type type = si[Property::TYPE];
+//
+//    ++received;
+//    if (verbose) {
+//        std::cout << "\t\t\t\t     | --> instance handler: " << si.signal()[Property::NAME] << "."
+//                  << si.id() << " got " << event;
+//    }
+//
+//    if (event == Object::Status::REL_UPSTRM) {
+//        if (verbose)
+//            std::cout << " release" << std::endl;
+//        si.release();
+//        return;
+//    }
+//    else if (!verbose || !value) {
+//        return;
+//    }
+//
+//    switch (type) {
+//        case Type::INT32: {
+//            int *v = (int*)value;
+//            for (int i = 0; i < length; i++) {
+//                std::cout << " " << v[i];
+//            }
+//            break;
+//        }
+//        case Type::FLOAT: {
+//            float *v = (float*)value;
+//            for (int i = 0; i < length; i++) {
+//                std::cout << " " << v[i];
+//            }
+//            break;
+//        }
+//        case Type::DOUBLE: {
+//            double *v = (double*)value;
+//            for (int i = 0; i < length; i++) {
+//                std::cout << " " << v[i];
+//            }
+//            break;
+//        }
+//        default:
+//            break;
+//    }
+//    std::cout << std::endl;
+//}
 
 void ctrlc(int sig)
 {
@@ -256,12 +268,11 @@ int main(int argc, char ** argv)
     // make a copy of the device to check reference counting
     Device devcopy(dev);
 
-    Signal sig = dev.add_signal(Direction::INCOMING, "in1", 1, Type::FLOAT, "meters")
-                    .set_callback(standard_handler);
+    Signal sig = dev.add_signal(Direction::INCOMING, "in1", 1, Type::FLOAT, "meters");
     dev.remove_signal(sig);
-    dev.add_signal(Direction::INCOMING, "in2", 2, Type::INT32).set_callback(standard_handler);
-    dev.add_signal(Direction::INCOMING, "in3", 2, Type::INT32).set_callback(standard_handler);
-    dev.add_signal(Direction::INCOMING, "in4", 2, Type::INT32).set_callback(simple_handler);
+    dev.add_signal(Direction::INCOMING, "in2", 2, Type::INT32).add_callback(standard_handler);
+    dev.add_signal(Direction::INCOMING, "in3", 2, Type::INT32).add_callback(standard_handler);
+    dev.add_signal(Direction::INCOMING, "in4", 2, Type::INT32).add_callback(simple_handler);
 
     sig = dev.add_signal(Direction::OUTGOING, "out1", 1, Type::FLOAT, "na");
     dev.remove_signal(sig);
@@ -398,7 +409,7 @@ int main(int argc, char ** argv)
         v[i%3] = i;
         if (i == 50) {
             Signal s = *dev.signals().filter(Property::NAME, "in4");
-            s.set_callback(standard_handler);
+            s.add_callback(standard_handler);
         }
         if (verbose)
             std::cout << "    Updating " << sig[Property::NAME]
@@ -447,8 +458,9 @@ int main(int argc, char ** argv)
                                               0, 0, 0, &num_inst);
     mapper::Signal multirecv = dev.add_signal(Direction::INCOMING, "multirecv", 1, Type::FLOAT,
                                               0, 0, 0, &num_inst)
-                                  .reserve_instance()
-                                  .set_callback(instance_handler, Signal::Event::ALL);
+                                  .reserve_instance();
+//                                  .add_callback(instance_handler, Object::Status::ANY);
+    multirecv.add_callback(standard_handler, Object::Status::ANY);
     mapper::Map map2(multisend, multirecv);
     map2.push();
     while (!map2.ready() && !done) {

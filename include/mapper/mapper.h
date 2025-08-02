@@ -216,27 +216,35 @@ void mpr_obj_push(mpr_obj object);
  *  \param properties   `1` to print the object's properties, `0` otherwise. */
 void mpr_obj_print(mpr_obj object, int include_props);
 
-/*! A handler function can be called whenever an object event occurs.
- *  \param object       The object that has changed.
- *  \param event        The type of event that has occurred, e.g. `MPR_STATUS_NEW_VAL` when the
- *                      value has changed. Event types are listed in the enum `mpr_status` found in
- *                      `mapper_constants.h`
- *  \param instance     The identifier of the instance that has been changed, if applicable.
- *  \param length       The array length of the current value in the case of value-related
- *                      events, or `0` for other events.
- *  \param type         The data type of the object.
- *  \param value        A pointer to the current value in the case of value-related events, or
- *                      `NULL` for other events.
- *  \param time         The timetag associated with this event. */
-typedef void mpr_evt_handler(mpr_obj object, mpr_status event, mpr_id instance, int length,
-                             mpr_type type, const void *value, mpr_time time);
+// TODO: SHOULD WE SUPPORT OSCPATH HERE?
+// mpr_obj_add_cb(obj, "//[@type='sig']");
 
-/*! Set or unset the message handler for an object.
+/*! A callback function prototype for when an object is modified.
+ *  Such a function is passed in to `mpr_obj_add_cb()`.
+ *  \param object       The object that has changed.
+ *  \param event        The events that have occurred.
+ *  \param instance     The identifier of the instance that has been changed, if applicable.
+ *  \param data         The user context pointer registered with this callback. */
+typedef void mpr_evt_handler(mpr_obj object, mpr_status event, mpr_id instance, const void *data);
+
+/*! Register a callback for when an object record is added or updated in the graph.
  *  \param object       The object to operate on.
- *  \param handler      A pointer to a `mpr_obj_handler` function for processing incoming messages.
- *  \param events       Bitflags for types of events we are interested in. Event types are listed
- *                      in the enum `mpr_status` found in `mapper_constants.h` */
-void mpr_obj_set_cb(mpr_obj object, mpr_evt_handler *handler, int events);
+ *  \param handler      Callback function.
+ *  \param events       Bitflags setting the type of information of interest.
+ *                      Can be a combination of `mpr_status` values.
+ *  \param data         A user-defined pointer to be passed to the callback for context.
+ *  \param manage       Set to 1 if the object should manage the memory pointed to by `data`.
+ *  \return             One if a callback was added, otherwise zero. */
+int mpr_obj_add_cb(mpr_obj obj, mpr_evt_handler *handler, int events, const void *data, int manage);
+
+/*! Remove an object record callback from the graph service. If NULLs are provided for both
+ * `hander` and `data` arguments the first callback will be removed.
+ *  \param object       The object to operate on.
+ *  \param handler      Callback function, or NULL to ignore this argument when matching.
+ *  \param data         The user context pointer that was originally specified when adding the
+ *                      callback, or NULL to ignore this argument when matching.
+ *  \return             User data pointer associated with this callback (if any). */
+void *mpr_obj_remove_cb(mpr_obj object, mpr_evt_handler *handler, const void *data);
 
 /*** Devices ***/
 
@@ -353,8 +361,7 @@ void mpr_dev_update_maps(mpr_dev device);
  *                          types are listed in the enum `mpr_status` found in `mapper_constants.h`
  *  \return                 The new signal. */
 mpr_sig mpr_sig_new(mpr_obj parent, mpr_dir direction, const char *name, int length, mpr_type type,
-                    const char *unit, const void *minimum, const void *maximum, int *num_instances,
-                    mpr_evt_handler *handler, int events);
+                    const char *unit, const void *minimum, const void *maximum, int *num_instances);
 
 /* Free resources used by a signal.
  * \param signal        The signal to free. */
@@ -733,32 +740,6 @@ void mpr_graph_subscribe(mpr_graph graph, mpr_dev device, int types, int timeout
  *  \param device       The device of interest. If NULL the graph will
  *                      unsubscribe from all devices. */
 void mpr_graph_unsubscribe(mpr_graph graph, mpr_dev device);
-
-/*! A callback function prototype for when an object record is added or updated.
- *  Such a function is passed in to `mpr_graph_add_cb()`.
- *  \param graph        The graph that registered this callback.
- *  \param object       The object record.
- *  \param event        A value of `mpr_graph_evt` indicating what is happening to the object record.
- *  \param data         The user context pointer registered with this callback. */
-typedef void mpr_graph_handler(mpr_graph graph, mpr_obj object, const mpr_graph_evt event,
-                               const void *data);
-
-/*! Register a callback for when an object record is added or updated in the graph.
- *  \param graph        The graph to query.
- *  \param handler      Callback function.
- *  \param types        Bitflags setting the type of information of interest.
- *                      Can be a combination of `mpr_type` values.
- *  \param data         A user-defined pointer to be passed to the callback for context.
- *  \return             One if a callback was added, otherwise zero. */
-int mpr_graph_add_cb(mpr_graph graph, mpr_graph_handler *handler, int types, const void *data);
-
-/*! Remove an object record callback from the graph service.
- *  \param graph        The graph to query.
- *  \param handler      Callback function.
- *  \param data         The user context pointer that was originally specified
- *                      when adding the callback.
- *  \return             User data pointer associated with this callback (if any). */
-void *mpr_graph_remove_cb(mpr_graph graph, mpr_graph_handler *handler, const void *data);
 
 /*! Return a list of objects.
  *  \param graph        The graph to query.

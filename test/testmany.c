@@ -67,12 +67,11 @@ int setup_devs(const char *iface)
             mn = fmod(rand() * 0.01, 21.f) - 10.f;
             mx = fmod(rand() * 0.01, 21.f) - 10.f;
 			sprintf(str, "in%d", j);
-			mpr_sig_new((mpr_obj)devices[i], MPR_DIR_IN, str, 1, MPR_FLT, NULL, &mn, &mx, NULL, NULL, 0);
+			mpr_sig_new((mpr_obj)devices[i], MPR_DIR_IN, str, 1, MPR_FLT, NULL, &mn, &mx, NULL);
             mn = fmod(rand() * 0.01, 21.f) - 10.f;
             mx = fmod(rand() * 0.01, 21.f) - 10.f;
             sprintf(str, "out%d", j);
-            mpr_sig_new((mpr_obj)devices[i], MPR_DIR_OUT, str, 1, MPR_FLT, NULL,
-                        &mn, &mx, NULL, NULL, 0);
+            mpr_sig_new((mpr_obj)devices[i], MPR_DIR_OUT, str, 1, MPR_FLT, NULL, &mn, &mx, NULL);
 		}
 	}
     return 0;

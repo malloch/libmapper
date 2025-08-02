@@ -60,6 +60,8 @@ void mpr_local_sig_remove_slot(mpr_local_sig sig, mpr_local_slot slot, mpr_dir d
 
 /**** Instances ****/
 
+void mpr_sig_reset_inst_statuses(mpr_sig sig);
+
 void mpr_local_sig_set_inst_value(mpr_local_sig sig, const void *value, int inst_idx,
                                   mpr_id_pair id_pair, int status, int map_manages_inst,
                                   mpr_time time);

@@ -221,10 +221,10 @@ int setup_src(mpr_graph g, const char *iface)
     eprintf("source created using interface %s.\n",
             mpr_graph_get_interface(mpr_obj_get_graph((mpr_obj)src)));
 
-    multisend = mpr_sig_new((mpr_obj)src, MPR_DIR_OUT, "multisend", 1, MPR_FLT, NULL,
-                            &mn, &mx, &num_inst, NULL, 0);
-    monosend = mpr_sig_new((mpr_obj)src, MPR_DIR_OUT, "monosend", 1, MPR_FLT, NULL,
-                           &mn, &mx, NULL, NULL, 0);
+    multisend = mpr_sig_new((mpr_obj)src, MPR_DIR_OUT, "multisend",
+                            1, MPR_FLT, NULL, &mn, &mx, &num_inst);
+    monosend = mpr_sig_new((mpr_obj)src, MPR_DIR_OUT, "monosend",
+                           1, MPR_FLT, NULL, &mn, &mx, NULL);
     if (!multisend || !monosend)
         goto error;
     mpr_obj_set_prop((mpr_obj)multisend, MPR_PROP_STEAL_MODE, NULL, 1, MPR_INT32, &stl, 1);
@@ -248,8 +248,7 @@ void cleanup_src(void)
     }
 }
 
-void handler(mpr_obj obj, mpr_status e, mpr_id inst, int len, mpr_type type,
-             const void *val, mpr_time t)
+void handler(mpr_obj obj, mpr_status e, mpr_id inst, const void *data)
 {
     const char *name = mpr_obj_get_prop_as_str(obj, MPR_PROP_NAME, NULL);
 
@@ -261,13 +260,16 @@ void handler(mpr_obj obj, mpr_status e, mpr_id inst, int len, mpr_type type,
         eprintf("--> destination %s instance %i got upstream release\n", name, (int)inst);
         mpr_sig_release_inst((mpr_sig)obj, inst);
     }
-    else if (val) {
-        eprintf("--> destination %s instance %i got %f\n", name, (int)inst, (*(float*)val));
-        ++received;
-    }
     else {
-        eprintf("--> destination %s instance %i got NULL\n", name, (int)inst);
-        mpr_sig_release_inst((mpr_sig)obj, inst);
+        float *value = (float*) mpr_sig_get_value((mpr_sig)obj, inst, NULL);
+        if (value) {
+            eprintf("--> destination %s instance %i got %f\n", name, (int)inst, (*(float*)value));
+            ++received;
+        }
+//        else {
+//            eprintf("--> destination %s instance %i got NULL\n", name, (int)inst);
+//            mpr_sig_release_inst((mpr_sig)obj, inst);
+//        }
     }
 }
 
@@ -287,11 +289,13 @@ int setup_dst(mpr_graph g, const char *iface)
 
     /* Specify 0 instances since we wish to use specific ids */
     num_inst = 0;
-    multirecv = mpr_sig_new((mpr_obj)dst, MPR_DIR_IN, "multirecv", 1, MPR_FLT, NULL,
-                            &mn, NULL, &num_inst, handler, MPR_STATUS_ANY);
+    multirecv = mpr_sig_new((mpr_obj)dst, MPR_DIR_IN, "multirecv",
+                            1, MPR_FLT, NULL, &mn, NULL, &num_inst);
     mpr_obj_set_prop((mpr_obj)multirecv, MPR_PROP_EPHEM, NULL, 1, MPR_INT32, &ephemeral, 1);
-    monorecv = mpr_sig_new((mpr_obj)dst, MPR_DIR_IN, "monorecv", 1, MPR_FLT, NULL,
-                           &mn, NULL, 0, handler, MPR_STATUS_UPDATE_REM);
+    /* handler will be set later */
+
+    monorecv = mpr_sig_new((mpr_obj)dst, MPR_DIR_IN, "monorecv", 1, MPR_FLT, NULL, &mn, NULL, NULL);
+    mpr_obj_add_cb((mpr_obj)monorecv, handler, MPR_STATUS_UPDATE_REM, NULL, 0);
     if (!multirecv || !monorecv)
         goto error;
 
@@ -580,7 +584,10 @@ int run_test(test_config *config)
             stl = MPR_STEAL_NONE;
     }
     mpr_obj_set_prop((mpr_obj)multirecv, MPR_PROP_STEAL_MODE, NULL, 1, MPR_INT32, &stl, 1);
-    mpr_obj_set_cb((mpr_obj)multirecv, handler, evt);
+
+    /* replace multirecv handler */
+    mpr_obj_remove_cb((mpr_obj)multirecv, NULL, 0);
+    mpr_obj_add_cb((mpr_obj)multirecv, handler, evt, NULL, 0);
 
     map = mpr_map_new(num_src, src_ptr, 1, dst_ptr);
     mpr_obj_set_prop((mpr_obj)map, MPR_PROP_PROCESS_LOC, NULL, 1, MPR_INT32, &config->process_loc, 1);

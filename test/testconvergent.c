@@ -64,8 +64,7 @@ int setup_srcs(mpr_graph g, const char *iface)
         eprintf("sources[%d] created using interface %s.\n", i,
                 mpr_graph_get_interface(mpr_obj_get_graph(srcs[i])));
         snprintf(tmpname, 16, "sendsig%d", i);
-        sendsigs[i] = mpr_sig_new(srcs[i], MPR_DIR_OUT, tmpname, 1, MPR_INT32,
-                                  NULL, &min, &max, NULL, NULL, 0);
+        sendsigs[i] = mpr_sig_new(srcs[i], MPR_DIR_OUT, tmpname, 1, MPR_INT32, NULL, &min, &max, NULL);
         if (!sendsigs[i])
             goto error;
         eprintf("source %d created.\n", i);
@@ -95,13 +94,13 @@ void cleanup_src(void)
     free(sendsigs);
 }
 
-void handler(mpr_obj obj, mpr_status evt, mpr_id instance, int length,
-             mpr_type type, const void *value, mpr_time t)
+void handler(mpr_obj obj, mpr_status evt, mpr_id instance, const void *data)
 {
+    const void *value = mpr_sig_get_value((mpr_sig)obj, instance, NULL);
     if (value) {
         float *fvalue = (float*)value;
         int i, ok = 1;
-        assert(3 == length);
+        assert(3 == mpr_obj_get_prop_as_int32(obj, MPR_PROP_LEN, NULL));
         for (i = 0; i < 3; i++) {
             if (fvalue[i] != expected[i])
                 ok = 0;
@@ -131,8 +130,8 @@ int setup_dst(mpr_graph g, const char *iface)
     eprintf("destination created using interface %s.\n",
             mpr_graph_get_interface(mpr_obj_get_graph(dst)));
 
-    recvsig = mpr_sig_new(dst, MPR_DIR_IN, "recvsig", 3, MPR_FLT, NULL,
-                          NULL, NULL, NULL, handler, MPR_STATUS_UPDATE_REM);
+    recvsig = mpr_sig_new(dst, MPR_DIR_IN, "recvsig", 3, MPR_FLT, NULL, NULL, NULL, NULL);
+    mpr_obj_add_cb((mpr_obj)recvsig, handler, MPR_STATUS_UPDATE_REM, NULL, 0);
     mpr_obj_set_prop((mpr_obj)recvsig, MPR_PROP_MIN, NULL, 1, MPR_FLT, &mn, 1);
     mpr_obj_set_prop((mpr_obj)recvsig, MPR_PROP_MAX, NULL, 1, MPR_FLT, &mx, 1);
 

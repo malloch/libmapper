@@ -145,8 +145,6 @@ namespace mapper {
         VERSION             = MPR_PROP_VERSION,     /*!< Object version. */
     };
 
-    typedef mpr_id Id;
-
     // Helper class to allow polymorphism on "const char *" and "std::string".
     class str_type {
     public:
@@ -155,12 +153,6 @@ namespace mapper {
         operator const char*() const { return _s; }
         const char *_s;
     };
-
-    // Struct for coordinating C++ object class instances with libmapper
-    typedef struct _object_data {
-        const void *user_data;
-        const void *handler_data;
-    } *object_data;
 
     /*! libmapper uses NTP timetags for communication and synchronization. */
     class Time
@@ -497,15 +489,6 @@ namespace mapper {
             { return _refcount_ptr ? ++(*_refcount_ptr) : 0; }
         int decr_refcount()
             { return _refcount_ptr ? --(*_refcount_ptr) : 0; }
-        void free_data()
-        {
-            object_data od = (object_data)mpr_obj_get_prop_as_ptr(_obj, MPR_PROP_DATA, NULL);
-            if (!od)
-                return;
-            if (od->handler_data)
-                free((void*)od->handler_data);
-            free(od);
-        }
         bool _owned;
 
         Object(mpr_obj obj) { _obj = obj; _owned = 0; _refcount_ptr = 0; }
@@ -517,6 +500,7 @@ namespace mapper {
 
         mpr_obj _obj;
     public:
+        typedef mpr_id Id;
         /*! The set of possible statuses for an Object. */
         enum class Status
         {
@@ -585,13 +569,7 @@ namespace mapper {
          *  \return        Self. */
         virtual Object& remove_property(Property prop)
         {
-            if (MPR_PROP_DATA != static_cast<mpr_prop>(prop))
-                mpr_obj_remove_prop(_obj, static_cast<mpr_prop>(prop), NULL);
-            else {
-                object_data od = (object_data)mpr_obj_get_prop_as_ptr(_obj, MPR_PROP_DATA, NULL);
-                if (od)
-                    od->user_data = NULL;
-            }
+            mpr_obj_remove_prop(_obj, static_cast<mpr_prop>(prop), NULL);
             RETURN_SELF;
         }
 
@@ -602,13 +580,7 @@ namespace mapper {
         {
             if (!key)
                 RETURN_SELF;
-            if (strcmp(key, "data"))
-                mpr_obj_remove_prop(_obj, MPR_PROP_UNKNOWN, key);
-            else {
-                object_data od = (object_data)mpr_obj_get_prop_as_ptr(_obj, MPR_PROP_DATA, NULL);
-                if (od)
-                    od->user_data = NULL;
-            }
+            mpr_obj_remove_prop(_obj, MPR_PROP_UNKNOWN, key);
             RETURN_SELF;
         }
 
@@ -644,6 +616,145 @@ namespace mapper {
 
         template <typename T>
         PropVal operator [] (T prop) const;
+
+//        /*! Object Instances can be used to describe the multiplicity and/or ephemerality of
+//         *  phenomena. An Object's signals describe the phenomena, e.g. the position of a 'blob' in
+//         *  computer vision, and the object's instances will represent actual detected blobs. */
+//        class Instance {
+//        private:
+//            Instance(Object& obj, Id id) : _outer_ref(obj)
+//                { _id = id; }
+//        public:
+////            Instance(mpr_obj obj, Id id)
+////                { _obj = obj; _id = id; }
+//            bool operator == (Instance i) const
+//                { return (_id == i._id); }
+//
+//            /*! Get the Id for this Instance.
+//             *  \return         The Id. */
+//            operator Id() const
+//                { return _id; }
+//
+//            /*! Get the Id associated with this Instance.
+//             *  \return         The Instance Id. */
+//            Id id() const
+//                { return _id; }
+//
+//            /*! Return the current status for this Instance.
+//             *  \return         The status of the Object instance returned as bitflags. Test the
+//             *                  return value against the constants defined in the `Object::Status`
+//             *                  enum class. Each time this function is called it will reset the
+//             *                  bitflags for `NEW`, `SET_*`, and `REL_*`. */
+//            int status() const
+//                { return mpr_obj_get_inst_status(_outer_ref._obj, _id); }
+//
+//            /*! Get the status bitflags for this Instance.
+//             *  \return         Status bitflags. */
+//            int get_status()
+//                { return mpr_obj_get_inst_status(_outer_ref._obj, _id); }
+//
+//            /*! Release this Instance.
+//             *  \return         Self. */
+//            Instance& release()
+//                { mpr_obj_release_inst(_outer_ref._obj, _id); RETURN_SELF }
+//
+//            /*! Set the `user_data` pointer associated with this Instance.
+//             *  \param data     A `user_data` pointer to store.
+//             *  \return         Self. */
+//            Instance& set_data(void *data)
+//                { mpr_obj_set_inst_data(_outer_ref._obj, _id, data); RETURN_SELF }
+//
+//            /*! Get the `user_data` pointer associated with this Instance.
+//             *  \return         The `user_data` pointer. */
+//            void *data() const
+//                { return mpr_sig_get_inst_data(_outer_ref._obj, _id); }
+//
+//            /*! Retrieve the parent Object.
+//             *  \return         The Object parent of this Instance. */
+//            Object& object() const
+//                { return _outer_ref; }
+//        protected:
+//            friend class Object;
+//        private:
+//            mpr_id _id;
+//            Object& _outer_ref;
+////            mpr_obj _obj;
+//        };
+
+    private:
+        enum handler_type {
+            SIMPLE,
+            WITH_ID,
+//            INSTANCE
+        };
+        typedef struct _handler_data {
+            union {
+                void (*simple)(Object&&, Status);
+                void (*with_id)(Object&&, Status, Id);
+//                void (*instance)(Object::Instance&&, Status);
+            } handler;
+            enum handler_type type;
+        } *handler_data;
+        static void _generic_handler(mpr_obj obj, mpr_status evt, mpr_id inst, const void *data)
+        {
+            handler_data hd = (handler_data)data;
+            switch (hd->type) {
+                case SIMPLE:
+                    hd->handler.simple(Object(obj), Status(evt));
+                    break;
+                case WITH_ID:
+                    hd->handler.with_id(Object(obj), Status(evt), Id(inst));
+                    break;
+//                case INSTANCE:
+//                    hd->handler.instance(Object::Instance(obj, inst), Status(evt));
+//                    break;
+            }
+        }
+        void _set_callback(handler_data data, void (*h)(Object&&, Status))
+        {
+            data->handler.simple = h;
+            data->type = SIMPLE;
+            return;
+        }
+        void _set_callback(handler_data data, void (*h)(Object&&, Status, Id))
+        {
+            data->handler.with_id = h;
+            data->type = WITH_ID;
+            return;
+        }
+//        void _set_callback(handler_data data, void (*h)(Object::Instance&&, Status))
+//        {
+//            data->handler.instance = h;
+//            data->type = INSTANCE;
+//            return;
+//        }
+
+    public:
+        /*! Add a Status event callback to an Object.
+         *  \param h        Callback function.
+         *  \param types    Bitflags setting the type of information of interest.
+         *                  Can be a combination of Event values.
+         *  \return         Self. */
+        template <typename H>
+        const Object& add_callback(H& h, Status events = Status::ANY)
+        {
+            handler_data data = (handler_data)malloc(sizeof(struct _handler_data));
+            _set_callback(data, h);
+            mpr_obj_add_cb(_obj, _generic_handler, static_cast<mpr_status>(events), data, 1);
+            RETURN_SELF
+        }
+
+        /*! Remove an Object Status callback.
+         *  \param h        Callback function.
+         *  \return         Self. */
+        const Object& remove_callback(void (*h)(Object&&, Status)=NULL)
+        {
+            // need to recover and free data
+            void *data = mpr_obj_remove_cb(_obj, _generic_handler, reinterpret_cast<void*>(h));
+            if (data)
+                free(data);
+            RETURN_SELF
+        }
 
         friend std::ostream& operator<<(std::ostream& os, const mapper::Object& o);
     };
@@ -861,22 +972,10 @@ namespace mapper {
         Signal(mpr_dev dev, mpr_dir dir, const str_type &name, int len, mpr_type type,
                const str_type &unit=0, void *min=0, void *max=0, int *num_inst=0)
         {
-            _obj = mpr_sig_new(dev, dir, name, len, type, unit, min, max, num_inst, NULL, 0);
+            _obj = mpr_sig_new(dev, dir, name, len, type, unit, min, max, num_inst);
         }
 
     public:
-        /*! The set of possible signal events, used to register and inform callbacks. */
-        enum class Event
-        {
-            NONE        = 0,
-            INST_NEW    = MPR_STATUS_NEW,           /*!< New instance has been created. */
-            UPDATE      = MPR_STATUS_UPDATE_REM,    /*!< Instance value has been set remotely. */
-            REL_UPSTRM  = MPR_STATUS_REL_UPSTRM,    /*!< Instance was released upstream. */
-            REL_DNSTRM  = MPR_STATUS_REL_DNSTRM,    /*!< Instance was released downstream. */
-            INST_OFLW   = MPR_STATUS_OVERFLOW,      /*!< No local instances left. */
-            ALL         = MPR_STATUS_ANY
-        };
-
         /*! The set of possible voice-stealing modes for instances. */
         enum class Stealing
         {
@@ -1043,232 +1142,7 @@ namespace mapper {
             mpr_sig _sig;
         };
         friend std::ostream& operator<<(std::ostream& os, const mapper::Signal& sig);
-    private:
-        enum handler_type {
-            NONE = -1,
-            STANDARD,
-            SIMPLE,
-            INST,
-            SIG_INT,
-            SIG_FLT,
-            SIG_DBL,
-            INST_INT,
-            INST_FLT,
-            INST_DBL,
-            INST_EVT
-        };
-        typedef struct _handler_data {
-            union {
-                void (*standard)(Signal&&, Signal::Event, Id, int, Type, const void*, Time&&);
-                void (*simple)(Signal&&, int, Type, const void*, Time&&);
-                void (*inst)(Signal::Instance&&, Signal::Event, int, Type, const void*, Time&&);
-                void (*sig_int)(Signal&&, int, Time&&);
-                void (*sig_flt)(Signal&&, float, Time&&);
-                void (*sig_dbl)(Signal&&, double, Time&&);
-                void (*inst_int)(Signal::Instance&&, Signal::Event, int, Time&&);
-                void (*inst_flt)(Signal::Instance&&, Signal::Event, float, Time&&);
-                void (*inst_dbl)(Signal::Instance&&, Signal::Event, double, Time&&);
-                void (*inst_evt)(Signal::Instance&&, Signal::Event, Time&&);
-            } handler;
-            enum handler_type type;
-        } *handler_data;
-        static void _generic_handler(mpr_sig sig, mpr_status evt, mpr_id inst, int len,
-                                     mpr_type type, const void *val, mpr_time time)
-        {
-            // recover signal user_data
-            object_data od = (object_data)mpr_obj_get_prop_as_ptr(sig, MPR_PROP_DATA, NULL);
-            if (!od || !od->handler_data)
-                return;
-            handler_data hd = (handler_data)od->handler_data;
-            switch (hd->type) {
-                case STANDARD:
-                    hd->handler.standard(Signal(sig), Signal::Event(evt), inst, len,
-                                         Type(type), val, Time(time));
-                    break;
-                case SIMPLE:
-                    hd->handler.simple(Signal(sig), len, Type(type), val, Time(time));
-                    break;
-                case INST:
-                    hd->handler.inst(Instance(sig, inst), Signal::Event(evt), len,
-                                     Type(type), val, Time(time));
-                    break;
-                case SIG_INT:
-                    if (val)
-                        hd->handler.sig_int(Signal(sig), *(int*)val, Time(time));
-                    break;
-                case SIG_FLT:
-                    if (val)
-                        hd->handler.sig_flt(Signal(sig), *(float*)val, Time(time));
-                    break;
-                case SIG_DBL:
-                    if (val)
-                        hd->handler.sig_dbl(Signal(sig), *(double*)val, Time(time));
-                    break;
-                case INST_INT:
-                    hd->handler.inst_int(Instance(sig, inst), Signal::Event(evt),
-                                         val ? *(int*)val : 0, Time(time));
-                    break;
-                case INST_FLT:
-                    hd->handler.inst_flt(Instance(sig, inst), Signal::Event(evt),
-                                         val ? *(float*)val : 0, Time(time));
-                    break;
-                case INST_DBL:
-                    hd->handler.inst_dbl(Instance(sig, inst), Signal::Event(evt),
-                                         val ? *(double*)val : 0, Time(time));
-                case INST_EVT:
-                    hd->handler.inst_evt(Instance(sig, inst), Signal::Event(evt), Time(time));
-                    break;
-                default:
-                    return;
-            }
-        }
-        void _set_callback(handler_data data,
-                           void (*h)(Signal&&, Signal::Event, Id, int, Type, const void*, Time&&))
-        {
-            data->type = STANDARD;
-            data->handler.standard = h;
-        }
-        void _set_callback(handler_data data, void (*h)(Signal&&, int, Type, const void*, Time&&))
-        {
-            data->type = SIMPLE;
-            data->handler.simple = h;
-        }
-        void _set_callback(handler_data data,
-                           void (*h)(Signal::Instance&&, Signal::Event, int, Type, const void*, Time&&))
-        {
-            data->type = INST;
-            data->handler.inst = h;
-        }
-        void _set_callback(handler_data data, void (*h)(Signal&&, int, Time&&))
-        {
-            if (mpr_obj_get_prop_as_int32(_obj, MPR_PROP_TYPE, NULL) != MPR_INT32
-                || mpr_obj_get_prop_as_int32(_obj, MPR_PROP_LEN, NULL) != 1) {
-                printf("wrong type 'int' in handler definition\n");
-                data->type = NONE;
-                return;
-            }
-            data->type = SIG_INT;
-            data->handler.sig_int = h;
-        }
-        void _set_callback(handler_data data, void (*h)(Signal&&, float, Time&&))
-        {
-            if (mpr_obj_get_prop_as_int32(_obj, MPR_PROP_TYPE, NULL) != MPR_FLT
-                || mpr_obj_get_prop_as_int32(_obj, MPR_PROP_LEN, NULL) != 1) {
-                printf("wrong type 'float' in handler definition\n");
-                data->type = NONE;
-                return;
-            }
-            data->type = SIG_FLT;
-            data->handler.sig_flt = h;
-        }
-        void _set_callback(handler_data data, void (*h)(Signal&&, double, Time&&))
-        {
-            if (mpr_obj_get_prop_as_int32(_obj, MPR_PROP_TYPE, NULL) != MPR_DBL
-                || mpr_obj_get_prop_as_int32(_obj, MPR_PROP_LEN, NULL) != 1) {
-                printf("wrong type 'double' in handler definition\n");
-                data->type = NONE;
-                return;
-            }
-            data->type = SIG_DBL;
-            data->handler.sig_dbl = h;
-        }
-        void _set_callback(handler_data data,
-                           void (*h)(Signal::Instance&&, Signal::Event, int, Time&&))
-        {
-            if (mpr_obj_get_prop_as_int32(_obj, MPR_PROP_TYPE, NULL) != MPR_INT32
-                || mpr_obj_get_prop_as_int32(_obj, MPR_PROP_LEN, NULL) != 1) {
-                printf("wrong type 'int' in handler definition\n");
-                data->type = NONE;
-                return;
-            }
-            data->type = INST_INT;
-            data->handler.inst_int = h;
-        }
-        void _set_callback(handler_data data,
-                           void (*h)(Signal::Instance&&, Signal::Event, float, Time&&))
-        {
-            if (mpr_obj_get_prop_as_int32(_obj, MPR_PROP_TYPE, NULL) != MPR_FLT
-                || mpr_obj_get_prop_as_int32(_obj, MPR_PROP_LEN, NULL) != 1) {
-                printf("wrong type 'float' in handler definition\n");
-                data->type = NONE;
-                return;
-            }
-            data->type = INST_FLT;
-            data->handler.inst_flt = h;
-        }
-        void _set_callback(handler_data data,
-                           void (*h)(Signal::Instance&&, Signal::Event, double, Time&&))
-        {
-            if (mpr_obj_get_prop_as_int32(_obj, MPR_PROP_TYPE, NULL) != MPR_DBL
-                || mpr_obj_get_prop_as_int32(_obj, MPR_PROP_LEN, NULL) != 1) {
-                printf("wrong type 'double' in handler definition\n");
-                data->type = NONE;
-                return;
-            }
-            data->type = INST_DBL;
-            data->handler.inst_dbl = h;
-        }
-        void _set_callback(handler_data data,
-                           void (*h)(Signal::Instance&&, Signal::Event, Time&&))
-        {
-            data->type = INST_EVT;
-            data->handler.inst_evt = h;
-        }
     public:
-        /*! Add an Event Callback to a signal.
-         *  \param h    Callback function to call on Signal Events.
-         *              Function signature can be any of the following:
-         *              * void (Signal&& sig, Signal::Event evt, Id id, unsigned int len, Type type, const void* val, Time&& time);
-         *              * void (Signal&& sig, unsigned int len, Type type, const void* val, Time&& time);
-         *              * void (Signal::Instance&& inst, Signal::Event evt, unsigned int len, Type type, const void* val, Time&& time);
-         *              * void (Signal&& sig, int val, Time&& time);
-         *              * void (Signal&& sig, float val, Time&& time);
-         *              * void (Signal&& sig, double val, Time&& time);
-         *              * void (Signal::Instance&& inst, Signal::Event evt, int val, Time&& time);
-         *              * void (Signal::Instance&& inst, Signal::Event evt, float val, Time&& time);
-         *              * void (Signal::Instance&& inst, Signal::Event evt, double val, Time&& time);
-         *              * void (Signal::Instance&& inst, Signal::Event evt, Time&& time);
-         *  \param events   Types of Events to listen for.
-         *  \return         Self. */
-        template <typename H>
-        Signal& set_callback(H& h, Signal::Event events = Signal::Event::UPDATE)
-        {
-            object_data od = (object_data)mpr_obj_get_prop_as_ptr(_obj, MPR_PROP_DATA, NULL);
-            if (!od) {
-                od = (object_data)calloc(1, sizeof(struct _object_data));
-                mpr_obj_set_prop(_obj, MPR_PROP_DATA, NULL, 1, MPR_PTR, od, 0);
-            }
-            handler_data hd = (handler_data)od->handler_data;
-            if (hd)
-                free(hd);
-            if (events > Signal::Event::NONE) {
-                hd = (handler_data)malloc(sizeof(struct _handler_data));
-                _set_callback(hd, h);
-                mpr_obj_set_cb(_obj, _generic_handler, static_cast<int>(events));
-                od->handler_data = hd;
-            }
-            else {
-                mpr_obj_set_cb(_obj, NULL, 0);
-                od->handler_data = NULL;
-            }
-            RETURN_SELF;
-        }
-
-        /*! Remove the callback from a Signal.
-         *  \return         Self. */
-        Signal& remove_callback()
-        {
-            mpr_obj_set_cb(_obj, NULL, 0);
-            object_data od = (object_data)mpr_obj_get_prop_as_ptr(_obj, MPR_PROP_DATA, NULL);
-            if (!od)
-                RETURN_SELF;
-            handler_data hd = (handler_data)od->handler_data;
-            if (hd) {
-                od->handler_data = NULL;
-                free(hd);
-            }
-            RETURN_SELF
-        }
 
         /*! Activate and return a new Instance with an automatically-generated id.
          *  \return         The new Instance. */
@@ -1490,17 +1364,6 @@ namespace mapper {
     private:
         void maybe_free() {
             if (_owned && _obj && decr_refcount() <= 0) {
-                mpr_list sigs = mpr_dev_get_sigs(_obj, MPR_DIR_ANY);
-                while (sigs) {
-                    object_data od = (object_data)mpr_obj_get_prop_as_ptr((mpr_sig)*sigs, MPR_PROP_DATA, NULL);
-                    sigs = mpr_list_get_next(sigs);
-                    if (!od)
-                        continue;
-                    if (od->handler_data)
-                        free((void*)od->handler_data);
-                    free(od);
-                }
-                free_data();
                 mpr_dev_free(_obj);
                 free(_refcount_ptr);
             }
@@ -1596,8 +1459,6 @@ namespace mapper {
          *  \return         Self. */
         Device& remove_signal(Signal& sig)
         {
-            sig.remove_callback();
-            sig.free_data();
             mpr_sig_free(sig._obj);
             RETURN_SELF
         }
@@ -1680,90 +1541,9 @@ namespace mapper {
      *  Devices, Signals, and Maps, which can be queried. */
     class Graph : public Object
     {
-    public:
-        /*! The set of possible graph events, used to inform callbacks. */
-        enum class Event
-        {
-            OBJ_NEW = MPR_OBJ_NEW,  /*!< New record has been added to the graph. */
-            OBJ_MOD = MPR_OBJ_MOD,  /*!< The existing record has been modified. */
-            OBJ_REM = MPR_OBJ_REM,  /*!< The existing record has been removed. */
-            OBJ_EXP = MPR_OBJ_EXP   /*!< The graph has lost contact with the remote entity. */
-        };
     private:
-        enum handler_type {
-            OBJECT,
-            DEVICE,
-            SIGNAL,
-            MAP
-        };
-        typedef struct _handler_data {
-            union {
-                void (*object)(Graph&&, Object&&, Graph::Event);
-                void (*device)(Graph&&, Device&&, Graph::Event);
-                void (*signal)(Graph&&, Signal&&, Graph::Event);
-                void (*map)(Graph&&, Map&&, Graph::Event);
-            } handler;
-            enum handler_type type;
-        } *handler_data;
-        static void _generic_handler(mpr_graph g, mpr_obj o, mpr_graph_evt e, const void *user)
-        {
-            handler_data hd = (handler_data)user;
-            switch (hd->type) {
-                case OBJECT:
-                    switch (mpr_obj_get_type(o)) {
-                        case MPR_DEV:
-                            hd->handler.object(Graph(g), Device(o), Graph::Event(e));
-                            break;
-                        case MPR_SIG:
-                            hd->handler.object(Graph(g), Signal(o), Graph::Event(e));
-                            break;
-                        case MPR_MAP:
-                            hd->handler.object(Graph(g), Map(o), Graph::Event(e));
-                            break;
-                    }
-                    break;
-                case DEVICE:
-                    hd->handler.device(Graph(g), Device(o), Graph::Event(e));
-                    break;
-                case SIGNAL:
-                    hd->handler.signal(Graph(g), Signal(o), Graph::Event(e));
-                    break;
-                case MAP:
-                    hd->handler.map(Graph(g), Map(o), Graph::Event(e));
-                    break;
-            }
-        }
-        int _set_callback(handler_data data, mpr_type types,
-                          void (*h)(Graph&&, Object&&, Graph::Event))
-        {
-            data->type = OBJECT;
-            data->handler.object = h;
-            return types;
-        }
-        int _set_callback(handler_data data, mpr_type types,
-                          void (*h)(Graph&&, Device&&, Graph::Event))
-        {
-            data->type = DEVICE;
-            data->handler.device = h;
-            return MPR_DEV;
-        }
-        int _set_callback(handler_data data, mpr_type types,
-                          void (*h)(Graph&&, Signal&&, Graph::Event))
-        {
-            data->type = SIGNAL;
-            data->handler.signal = h;
-            return MPR_SIG;
-        }
-        int _set_callback(handler_data data, mpr_type types,
-                          void (*h)(Graph&&, Map&&, Graph::Event))
-        {
-            data->type = MAP;
-            data->handler.map = h;
-            return MPR_MAP;
-        }
         void maybe_free() {
             if (_owned && _obj && decr_refcount() <= 0) {
-                free_data();
                 mpr_graph_free(_obj);
                 free(_refcount_ptr);
             }
@@ -1899,33 +1679,6 @@ namespace mapper {
          *  \return         Self. */
         const Graph& unsubscribe()
             { mpr_graph_unsubscribe(_obj, 0); RETURN_SELF }
-
-        /*! Register a callback for when an Object record is added, updated, or removed.
-         *  \param h        Callback function.
-         *  \param types    Bitflags setting the type of information of interest.
-         *                  Can be a combination of Type values.
-         *  \return         Self. */
-        template <typename T>
-        const Graph& add_callback(void (*h)(Graph&&, T&&, Graph::Event),
-                                  Type types = Type::OBJECT)
-        {
-            handler_data data = (handler_data)malloc(sizeof(struct _handler_data));
-            int mtypes = _set_callback(data, static_cast<mpr_type>(types), h);
-            mpr_graph_add_cb(_obj, _generic_handler, mtypes, data);
-            RETURN_SELF
-        }
-
-        /*! Remove an Object record callback from the Graph service.
-         *  \param h        Callback function.
-         *  \return         Self. */
-        const Graph& remove_callback(void (*h)(Graph&&, Object&&, Graph::Event))
-        {
-            // need to recover and free data
-            void *data = mpr_graph_remove_cb(_obj, _generic_handler, reinterpret_cast<void*>(h));
-            if (data)
-                free(data);
-            RETURN_SELF
-        }
 
         /*! Return a List of all Devices.
          *  \return         A List of Devices. */
@@ -2225,16 +1978,7 @@ namespace mapper {
             const void *pval = ((len > 1) || (MPR_STR == type)) ? val.ptr : (void*)&val.int32;
             if (!parent)
                 return;
-            if (MPR_PROP_DATA != prop && (!key || strcmp(key, "data")))
-                mpr_obj_set_prop(parent, prop, key, len, type, pval, publish);
-            else {
-                object_data od = (object_data)mpr_obj_get_prop_as_ptr(parent, MPR_PROP_DATA, NULL);
-                if (!od) {
-                    od = (object_data)calloc(1, sizeof(struct _object_data));
-                    mpr_obj_set_prop(parent, MPR_PROP_DATA, NULL, 1, MPR_PTR, od, 0);
-                }
-                od->user_data = pval;
-            }
+            mpr_obj_set_prop(parent, prop, key, len, type, pval, publish);
         }
         void _set(unsigned int _len, mpr_type _type, const void *_val)
         {
@@ -2435,21 +2179,8 @@ namespace mapper {
     inline Object& Object::set_property(const Values... vals)
     {
         PropVal p(vals...);
-        if (p.prop == MPR_PROP_DATA || (p.key && 0 == strcmp(p.key, "data"))) {
-            if (p.type != MPR_PTR || p.len != 1) {
-                printf("DATA property must be a pointer type\n");
-                RETURN_SELF;
-            }
-            object_data od = (object_data)mpr_obj_get_prop_as_ptr(_obj, MPR_PROP_DATA, NULL);
-            if (!od) {
-                od = (object_data)calloc(1, sizeof(struct _object_data));
-                mpr_obj_set_prop(_obj, MPR_PROP_DATA, NULL, 1, MPR_PTR, od, 0);
-            }
-            od->user_data = p.val.ptr;
-        }
-        else
-            mpr_obj_set_prop(_obj, p.prop, p.key, p.len, p.type,
-                             (p.len > 1) || (MPR_STR == p.type) ? p.val.ptr : &p.val.int32, p.publish);
+        mpr_obj_set_prop(_obj, p.prop, p.key, p.len, p.type,
+                         (p.len > 1) || (MPR_STR == p.type) ? p.val.ptr : &p.val.int32, p.publish);
         RETURN_SELF;
     }
 
@@ -2458,21 +2189,8 @@ namespace mapper {
     {
         PropVal p(vals...);
         p.publish = false;
-        if (p.prop == MPR_PROP_DATA || (p.key && 0 == strcmp(p.key, "data"))) {
-            if (p.type != MPR_PTR || p.len != 1) {
-                printf("DATA property must be a pointer type\n");
-                RETURN_SELF;
-            }
-            object_data od = (object_data)mpr_obj_get_prop_as_ptr(_obj, MPR_PROP_DATA, NULL);
-            if (!od) {
-                od = (object_data)calloc(1, sizeof(struct _object_data));
-                mpr_obj_set_prop(_obj, MPR_PROP_DATA, NULL, 1, MPR_PTR, od, 0);
-            }
-            od->user_data = p.val.ptr;
-        }
-        else
-            mpr_obj_set_prop(_obj, p.prop, p.key, p.len, p.type,
-                             (p.len > 1) || (MPR_STR == p.type) ? p.val.ptr : &p.val.int32, 0);
+        mpr_obj_set_prop(_obj, p.prop, p.key, p.len, p.type,
+                         (p.len > 1) || (MPR_STR == p.type) ? p.val.ptr : &p.val.int32, 0);
         RETURN_SELF;
     }
 
@@ -2483,8 +2201,6 @@ namespace mapper {
         const void *val = 0;
         int len = 0, pub = 0;
         prop = mpr_obj_get_prop_by_key(_obj, key, &len, &type, &val, &pub);
-        if (0 == strcmp(key, "data") && val)
-            val = ((object_data)val)->user_data;
         PropVal p(prop, key, 0, type, NULL, pub);
         p.link_val(len, type, val, pub);
         p.parent = _obj;
@@ -2498,8 +2214,6 @@ namespace mapper {
         const void *val;
         int len, pub;
         mpr_prop mprop = mpr_obj_get_prop_by_idx(_obj, idx, &key, &len, &type, &val, &pub);
-        if (MPR_PROP_DATA == mprop && val)
-            val = ((object_data)val)->user_data;
         PropVal p(mprop, key, 0, type, NULL, pub);
         p.link_val(len, type, val, pub);
         p.parent = _obj;
@@ -2535,27 +2249,11 @@ namespace mapper {
         if (!p)
             RETURN_SELF;
         mpr_list cpy = mpr_list_get_cpy(_list);
-        if (p.prop == MPR_PROP_DATA || (p.key && !strcmp(p.key, "data"))) {
-            if (MPR_PTR != p.type || 1 != p.len) {
-                printf("DATA property must be a pointer type.\n");
-                RETURN_SELF;
-            }
-            while (cpy) {
-                object_data od = (object_data)mpr_obj_get_prop_as_ptr(*cpy, MPR_PROP_DATA, NULL);
-                if (!od) {
-                    od = (object_data)calloc(1, sizeof(struct _object_data));
-                    mpr_obj_set_prop(*cpy, MPR_PROP_DATA, NULL, 1, MPR_PTR, od, 0);
-                }
-                od->user_data = p.val.ptr;
-            }
-        }
-        else {
-            while (cpy) {
-                mpr_obj_set_prop(*cpy, p.prop, p.key, p.len, p.type,
-                                 (p.len > 1) || (MPR_STR == p.type) ? p.val.ptr : &p.val.int32,
-                                 p.publish);
-                cpy = mpr_list_get_next(cpy);
-            }
+        while (cpy) {
+            mpr_obj_set_prop(*cpy, p.prop, p.key, p.len, p.type,
+                             (p.len > 1) || (MPR_STR == p.type) ? p.val.ptr : &p.val.int32,
+                             p.publish);
+            cpy = mpr_list_get_next(cpy);
         }
         RETURN_SELF;
     }
@@ -2594,9 +2292,9 @@ namespace mapper {
         return static_cast<Type>(static_cast<mpr_type>(l) | static_cast<mpr_type>(r));
     }
 
-    inline constexpr Signal::Event operator|(Signal::Event l, Signal::Event r)
+    inline constexpr Object::Status operator|(Object::Status l, Object::Status r)
     {
-        return static_cast<Signal::Event>(static_cast<mpr_status>(l) | static_cast<mpr_status>(r));
+        return static_cast<Object::Status>(static_cast<mpr_status>(l) | static_cast<mpr_status>(r));
     }
 
     inline std::ostream& operator<<(std::ostream &os, const Direction& d)
@@ -2647,20 +2345,6 @@ namespace mapper {
             case Object::Status::REL_DNSTRM:    os << "REL_DNSTRM"; break;
             case Object::Status::INST_OFLW:     os << "INST_OFLW";  break;
             case Object::Status::ANY:           os << "ANY";        break;
-        }
-        return os;
-    }
-
-    inline std::ostream& operator<<(std::ostream &os, const Signal::Event& e)
-    {
-        switch (e) {
-            case Signal::Event::NONE:       os << "NONE";       break;
-            case Signal::Event::INST_NEW:   os << "INST_NEW";   break;
-            case Signal::Event::UPDATE:     os << "UPDATE";     break;
-            case Signal::Event::REL_UPSTRM: os << "REL_UPSTRM"; break;
-            case Signal::Event::REL_DNSTRM: os << "REL_DNSTRM"; break;
-            case Signal::Event::INST_OFLW:  os << "INST_OFLW";  break;
-            default:                        os << "unknown";    break;
         }
         return os;
     }

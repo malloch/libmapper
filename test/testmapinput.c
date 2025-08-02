@@ -35,11 +35,12 @@ static void eprintf(const char *format, ...)
     va_end(args);
 }
 
-void handler(mpr_obj obj, mpr_status event, mpr_id instance, int length,
-             mpr_type type, const void *value, mpr_time t)
+void handler(mpr_obj obj, mpr_status event, mpr_id instance, const void *data)
 {
+    const void *value = mpr_sig_get_value((mpr_sig)obj, instance, NULL);
     if (value) {
-        int i;
+        int i, length = mpr_obj_get_prop_as_int32(obj, MPR_PROP_LEN, NULL);
+        mpr_type type = mpr_obj_get_prop_as_int32(obj, MPR_PROP_TYPE, NULL);
         const char *name = mpr_obj_get_prop_as_str(obj, MPR_PROP_NAME, NULL);
         eprintf("--> received %s", name);
 
@@ -83,14 +84,21 @@ int setup_devs(const char *iface)
             mpr_graph_get_interface(mpr_obj_get_graph(devices[0])),
             mpr_graph_get_interface(mpr_obj_get_graph(devices[0])));
 
-    inputs[0] = mpr_sig_new((mpr_obj)devices[0], MPR_DIR_IN, "insig_1", 1, MPR_FLT,
-                            NULL, mnf1, mxf1, NULL, handler, MPR_STATUS_UPDATE_REM);
-    inputs[1] = mpr_sig_new((mpr_obj)devices[0], MPR_DIR_IN, "insig_2", 1, MPR_DBL,
-                            NULL, &mnd, &mxd, NULL, handler, MPR_STATUS_UPDATE_REM);
-    inputs[2] = mpr_sig_new((mpr_obj)devices[1], MPR_DIR_IN, "insig_3", 3, MPR_FLT,
-                            NULL, mnf1, mxf1, NULL, handler, MPR_STATUS_UPDATE_REM);
-    inputs[3] = mpr_sig_new((mpr_obj)devices[1], MPR_DIR_IN, "insig_4", 1, MPR_FLT,
-                            NULL, mnf2, mxf2, NULL, handler, MPR_STATUS_UPDATE_REM);
+    inputs[0] = mpr_sig_new((mpr_obj)devices[0], MPR_DIR_IN, "insig_1",
+                            1, MPR_FLT, NULL, mnf1, mxf1, NULL);
+    mpr_obj_add_cb((mpr_obj)inputs[0], handler, MPR_STATUS_UPDATE_REM, NULL, 0);
+
+    inputs[1] = mpr_sig_new((mpr_obj)devices[0], MPR_DIR_IN, "insig_2",
+                            1, MPR_DBL, NULL, &mnd, &mxd, NULL);
+    mpr_obj_add_cb((mpr_obj)inputs[1], handler, MPR_STATUS_UPDATE_REM, NULL, 0);
+
+    inputs[2] = mpr_sig_new((mpr_obj)devices[1], MPR_DIR_IN, "insig_3",
+                            3, MPR_FLT, NULL, mnf1, mxf1, NULL);
+    mpr_obj_add_cb((mpr_obj)inputs[2], handler, MPR_STATUS_UPDATE_REM, NULL, 0);
+
+    inputs[3] = mpr_sig_new((mpr_obj)devices[1], MPR_DIR_IN, "insig_4",
+                            1, MPR_FLT, NULL, mnf2, mxf2, NULL);
+    mpr_obj_add_cb((mpr_obj)inputs[3], handler, MPR_STATUS_UPDATE_REM, NULL, 0);
 
     /* In this test inputs[2] will never get its full vector value from
      * external updates – for the handler to be called we will need to

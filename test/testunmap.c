@@ -55,7 +55,7 @@ int setup_src(mpr_graph g, const char *iface)
         mpr_graph_set_interface(srcgraph, iface);
     eprintf("source created using interface %s.\n", mpr_graph_get_interface(srcgraph));
 
-    sendsig = mpr_sig_new((mpr_obj)src, MPR_DIR_OUT, "outsig", 1, MPR_INT32, NULL, &mn, &mx, &num_inst, NULL, 0);
+    sendsig = mpr_sig_new((mpr_obj)src, MPR_DIR_OUT, "outsig", 1, MPR_INT32, NULL, &mn, &mx, &num_inst);
     if (!sendsig)
         goto error;
 
@@ -80,18 +80,20 @@ void cleanup_src(void)
     }
 }
 
-void handler(mpr_obj obj, mpr_status evt, mpr_id id, int len, mpr_type type,
-             const void *val, mpr_time t)
+void handler(mpr_obj obj, mpr_status evt, mpr_id instance, const void *data)
 {
     if (evt == MPR_STATUS_REL_UPSTRM) {
         eprintf("%s.%"PR_MPR_ID" got release\n",
-                mpr_obj_get_prop_as_str(obj, MPR_PROP_NAME, NULL), id);
-        mpr_sig_release_inst((mpr_sig)obj, id);
+                mpr_obj_get_prop_as_str(obj, MPR_PROP_NAME, NULL), instance);
+        mpr_sig_release_inst((mpr_sig)obj, instance);
     }
-    else if (val) {
-        eprintf("%s.%"PR_MPR_ID" got %f\n",
-                mpr_obj_get_prop_as_str(obj, MPR_PROP_NAME, NULL), id, *(float*)val);
-        received++;
+    else {
+        float *value = (float*) mpr_sig_get_value((mpr_sig)obj, instance, NULL);
+        if (value) {
+            eprintf("%s.%"PR_MPR_ID" got %f\n",
+                    mpr_obj_get_prop_as_str(obj, MPR_PROP_NAME, NULL), instance, *value);
+            received++;
+        }
     }
 }
 
@@ -108,8 +110,8 @@ int setup_dst(mpr_graph g, const char *iface)
         mpr_graph_set_interface(dstgraph, iface);
     eprintf("destination created using interface %s.\n", mpr_graph_get_interface(dstgraph));
 
-    recvsig = mpr_sig_new((mpr_obj)dst, MPR_DIR_IN, "insig", 1, MPR_FLT, NULL,
-                          &mn, &mx, &num_inst, handler, MPR_STATUS_ANY);
+    recvsig = mpr_sig_new((mpr_obj)dst, MPR_DIR_IN, "insig", 1, MPR_FLT, NULL, &mn, &mx, &num_inst);
+    mpr_obj_add_cb((mpr_obj)recvsig, handler, MPR_STATUS_ANY, NULL, 0);
     if (!recvsig)
         goto error;
 

@@ -246,6 +246,8 @@ void mpr_obj_free(mpr_obj o)
     FUNC_IF(mpr_tbl_free, o->props.staged);
     FUNC_IF(mpr_tbl_free, o->props.synced);
 //    FUNC_IF(mpr_id_mapper_free, o->id_mapper);
+
+    mpr_obj_free_cbs(o);
 }
 
 const char *mpr_obj_get_full_name(mpr_obj o, int offset)
@@ -382,6 +384,9 @@ void mpr_obj_reset_status(mpr_obj obj)//, int recursive)
                     | 0xFFFF0000);
     if (MPR_GRAPH == obj->type)
         mpr_graph_reset_obj_statuses((mpr_graph)obj);
+    else if (MPR_SIG == obj->type) {
+        mpr_sig_reset_inst_statuses((mpr_sig)obj);
+    }
 //    if (recursive) {
 //        obj = obj->child;
 //        while (obj) {
@@ -806,9 +811,87 @@ int mpr_obj_get_num_inst_internal(mpr_obj obj)
     return obj->num_inst;
 }
 
-void mpr_obj_set_cb(mpr_obj obj, mpr_evt_handler *h, int events)
+int mpr_obj_add_cb(mpr_obj obj, mpr_evt_handler *h, int events, const void *user, int manage)
 {
-    RETURN_UNLESS(obj && obj->is_local);
-    obj->handler = (void*)h;
-    obj->event_flags = events;
+    fptr_list cb = obj->callbacks;
+    while (cb) {
+        if (cb->f == (void*)h && cb->ctx == user) {
+            cb->events |= events;
+            cb->manage = manage;
+            return 0;
+        }
+        cb = cb->next;
+    }
+
+    cb = (fptr_list)malloc(sizeof(struct _fptr_list));
+    cb->f = (void*)h;
+    cb->events = events;
+    cb->ctx = (void*)user;
+    cb->manage = manage;
+    cb->next = obj->callbacks;
+    obj->callbacks = cb;
+    return 1;
+}
+
+// graph version can be registered for different datatypes
+int mpr_obj_call_cbs(mpr_obj caller, mpr_obj topic, mpr_status event, mpr_id inst)
+{
+    fptr_list cb = caller->callbacks, temp;
+    int handled = 0;
+
+    /* add event to topic object */
+    topic->status |= event;
+    /* add event to caller status? */
+    caller->status |= event;
+
+    while (cb) {
+        int common_flags = cb->events & event;
+        temp = cb->next;
+        if (common_flags) {
+            ((mpr_evt_handler*)cb->f)(topic, common_flags, inst, cb->ctx);
+            handled = 1;
+        }
+        cb = temp;
+    }
+
+    if (handled)
+        topic->status &= ~(MPR_STATUS_NEW | MPR_STATUS_MODIFIED);
+    return handled;
+}
+
+void *mpr_obj_remove_cb(mpr_obj obj, mpr_evt_handler *h, const void *user)
+{
+    fptr_list cb;
+    fptr_list prevcb = 0;
+    void *ctx = 0;
+again:
+    cb = obj->callbacks;
+    while (cb) {
+        if ((!h || cb->f == (void*)h) && (!user || cb->ctx == user))
+            break;
+        prevcb = cb;
+        cb = cb->next;
+    }
+    RETURN_ARG_UNLESS(cb, 0);
+    if (prevcb)
+        prevcb->next = cb->next;
+    else
+        obj->callbacks = cb->next;
+    if (cb->manage && cb->ctx)
+        free(cb->ctx);
+    else
+        ctx = cb->ctx;
+    free(cb);
+    if (!ctx && !h && !user)
+        goto again;
+    return ctx;
+}
+
+void mpr_obj_free_cbs(mpr_obj obj)
+{
+    while (obj->callbacks) {
+        fptr_list cb = obj->callbacks;
+        obj->callbacks = obj->callbacks->next;
+        free(cb);
+    }
 }

@@ -48,18 +48,18 @@ int setup_dev(mpr_graph g, const char *iface)
     eprintf("Device created using interface %s.\n",
             mpr_graph_get_interface(mpr_obj_get_graph(dev)));
 
-    sig = mpr_sig_new((mpr_obj)dev, MPR_DIR_IN, "sig1", 1, MPR_DBL, "Hz", &mnd, &mxd, NULL, NULL, 0);
+    sig = mpr_sig_new((mpr_obj)dev, MPR_DIR_IN, "sig1", 1, MPR_DBL, "Hz", &mnd, &mxd, NULL);
 
-    sig = mpr_sig_new((mpr_obj)dev, MPR_DIR_OUT, "sig2", 1, MPR_DBL, "Hz", &mnd, &mxd, NULL, NULL, 0);
+    sig = mpr_sig_new((mpr_obj)dev, MPR_DIR_OUT, "sig2", 1, MPR_DBL, "Hz", &mnd, &mxd, NULL);
     mpr_obj_set_prop((mpr_obj)sig, MPR_PROP_EXTRA, "session", 1, MPR_STR, tags[0], 1);
 
-    sig = mpr_sig_new((mpr_obj)dev, MPR_DIR_IN, "sig3", 1, MPR_DBL, "Hz", &mnd, &mxd, NULL, NULL, 0);
+    sig = mpr_sig_new((mpr_obj)dev, MPR_DIR_IN, "sig3", 1, MPR_DBL, "Hz", &mnd, &mxd, NULL);
     mpr_obj_set_prop((mpr_obj)sig, MPR_PROP_EXTRA, "session", 1, MPR_STR, tags[1], 1);
 
-    sig = mpr_sig_new((mpr_obj)dev, MPR_DIR_OUT, "sig4", 1, MPR_DBL, "Hz", &mnd, &mxd, NULL, NULL, 0);
+    sig = mpr_sig_new((mpr_obj)dev, MPR_DIR_OUT, "sig4", 1, MPR_DBL, "Hz", &mnd, &mxd, NULL);
     mpr_obj_set_prop((mpr_obj)sig, MPR_PROP_EXTRA, "session", 2, MPR_STR, tags, 1);
 
-    sig = mpr_sig_new((mpr_obj)dev, MPR_DIR_IN, "sig5", 1, MPR_DBL, "Hz", &mnd, &mxd, NULL, NULL, 0);
+    sig = mpr_sig_new((mpr_obj)dev, MPR_DIR_IN, "sig5", 1, MPR_DBL, "Hz", &mnd, &mxd, NULL);
     mpr_obj_set_prop((mpr_obj)sig, MPR_PROP_EXTRA, "session", 3, MPR_STR, tags, 1);
 
     eprintf("Signals registered.\n");

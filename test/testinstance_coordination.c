@@ -57,10 +57,8 @@ int setup_src(mpr_graph g, const char *iface)
     eprintf("source created using interface %s.\n",
             mpr_graph_get_interface(mpr_obj_get_graph(src)));
 
-    sendsig1 = mpr_sig_new(src, MPR_DIR_OUT, "outsig1", 1, MPR_INT32, NULL,
-                           NULL, NULL, &num_inst, NULL, 0);
-    sendsig2 = mpr_sig_new(src, MPR_DIR_OUT, "outsig2", 1, MPR_INT32, NULL,
-                           NULL, NULL, &num_inst, NULL, 0);
+    sendsig1 = mpr_sig_new(src, MPR_DIR_OUT, "outsig1", 1, MPR_INT32, NULL, NULL, NULL, &num_inst);
+    sendsig2 = mpr_sig_new(src, MPR_DIR_OUT, "outsig2", 1, MPR_INT32, NULL, NULL, NULL, &num_inst);
 
     /* test retrieving value before it exists */
     eprintf("sendsig value is %p\n", mpr_sig_get_value(sendsig1, 0, &t));
@@ -98,11 +96,9 @@ int setup_dst(mpr_graph g, const char *iface)
     eprintf("destination created using interface %s.\n",
             mpr_graph_get_interface(mpr_obj_get_graph(dst)));
 
-    recvsig1 = mpr_sig_new(dst, MPR_DIR_IN, "insig1", 3, MPR_FLT, NULL,
-                           NULL, NULL, &num_inst, NULL, 0);
+    recvsig1 = mpr_sig_new(dst, MPR_DIR_IN, "insig1", 3, MPR_FLT, NULL, NULL, NULL, &num_inst);
     mpr_obj_set_prop((mpr_obj)recvsig1, MPR_PROP_EPHEM, NULL, 1, MPR_INT32, &ephemeral, 1);
-    recvsig2 = mpr_sig_new(dst, MPR_DIR_IN, "insig2", 1, MPR_FLT, NULL,
-                           NULL, NULL, &num_inst, NULL, 0);
+    recvsig2 = mpr_sig_new(dst, MPR_DIR_IN, "insig2", 1, MPR_FLT, NULL, NULL, NULL, &num_inst);
     mpr_obj_set_prop((mpr_obj)recvsig2, MPR_PROP_EPHEM, NULL, 1, MPR_INT32, &ephemeral, 1);
 
     /* test retrieving value before it exists */

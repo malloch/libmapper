@@ -59,20 +59,15 @@ int setup_src(mpr_graph g, const char *iface)
     eprintf("source created using interface %s.\n",
             mpr_graph_get_interface(mpr_obj_get_graph(src)));
 
-    sendsig_1 = mpr_sig_new(src, MPR_DIR_OUT, "outsig_1", 1, MPR_DBL, "Hz",
-                            &mnd, &mxd, NULL, NULL, 0);
-    sendsig_2 = mpr_sig_new(src, MPR_DIR_OUT, "outsig_2", 1, MPR_FLT, "mm",
-                            mnf, mxf, NULL, NULL, 0);
-    sendsig_3 = mpr_sig_new(src, MPR_DIR_OUT, "outsig_3", 3, MPR_FLT, NULL,
-                            mnf, mxf, NULL, NULL, 0);
-    sendsig_4 = mpr_sig_new(src, MPR_DIR_OUT, "outsig_4", 1, MPR_FLT, NULL,
-                            mnf, mxf, NULL, NULL, 0);
+    sendsig_1 = mpr_sig_new(src, MPR_DIR_OUT, "outsig_1", 1, MPR_DBL, "Hz", &mnd, &mxd, NULL);
+    sendsig_2 = mpr_sig_new(src, MPR_DIR_OUT, "outsig_2", 1, MPR_FLT, "mm", mnf, mxf, NULL);
+    sendsig_3 = mpr_sig_new(src, MPR_DIR_OUT, "outsig_3", 3, MPR_FLT, NULL, mnf, mxf, NULL);
+    sendsig_4 = mpr_sig_new(src, MPR_DIR_OUT, "outsig_4", 1, MPR_FLT, NULL, mnf, mxf, NULL);
 
     eprintf("Output signal 'outsig' registered.\n");
 
     /* Make sure we can add and remove outputs without crashing. */
-    mpr_sig_free(mpr_sig_new(src, MPR_DIR_OUT, "outsig_5", 1, MPR_FLT, NULL,
-                             &mnf, &mxf, NULL, NULL, 0));
+    mpr_sig_free(mpr_sig_new(src, MPR_DIR_OUT, "outsig_5", 1, MPR_FLT, NULL, &mnf, &mxf, NULL));
 
     l = mpr_dev_get_sigs(src, MPR_DIR_OUT);
     eprintf("Number of outputs: %d\n", mpr_list_get_size(l));
@@ -94,25 +89,26 @@ void cleanup_src(void)
     }
 }
 
-void handler(mpr_obj obj, mpr_status evt, mpr_id id, int len, mpr_type type,
-             const void *val, mpr_time t)
+void handler(mpr_obj obj, mpr_status evt, mpr_id instance, const void *data)
 {
-    if (val) {
-        int i;
+    const void *value = mpr_sig_get_value((mpr_sig)obj, instance, NULL);
+    if (value) {
+        int i, length = mpr_obj_get_prop_as_int32(obj, MPR_PROP_LEN, NULL);
+        mpr_type type = mpr_obj_get_prop_as_int32(obj, MPR_PROP_TYPE, NULL);
         const char *name = mpr_obj_get_prop_as_str(obj, MPR_PROP_NAME, NULL);
         eprintf("--> destination got %s", name);
 
         switch (type) {
             case MPR_FLT: {
-                float *v = (float*)val;
-                for (i = 0; i < len; i++) {
+                float *v = (float*)value;
+                for (i = 0; i < length; i++) {
                     eprintf(" %f", v[i]);
                 }
                 break;
             }
             case MPR_DBL: {
-                double *v = (double*)val;
-                for (i = 0; i < len; i++) {
+                double *v = (double*)value;
+                for (i = 0; i < length; i++) {
                     eprintf(" %f", v[i]);
                 }
                 break;
@@ -140,20 +136,22 @@ int setup_dst(mpr_graph g, const char *iface)
     eprintf("destination created using interface %s.\n",
             mpr_graph_get_interface(mpr_obj_get_graph(dst)));
 
-    recvsig_1 = mpr_sig_new(dst, MPR_DIR_IN, "insig_1", 1, MPR_FLT, NULL,
-                            mnf, mxf, NULL, handler, MPR_STATUS_UPDATE_REM);
-    recvsig_2 = mpr_sig_new(dst, MPR_DIR_IN, "insig_2", 1, MPR_DBL, NULL,
-                            &mnd, &mxd, NULL, handler, MPR_STATUS_UPDATE_REM);
-    recvsig_3 = mpr_sig_new(dst, MPR_DIR_IN, "insig_3", 3, MPR_FLT, NULL,
-                            mnf, mxf, NULL, handler, MPR_STATUS_UPDATE_REM);
-    recvsig_4 = mpr_sig_new(dst, MPR_DIR_IN, "insig_4", 1, MPR_FLT, NULL,
-                            mnf, mxf, NULL, handler, MPR_STATUS_UPDATE_REM);
+    recvsig_1 = mpr_sig_new(dst, MPR_DIR_IN, "insig_1", 1, MPR_FLT, NULL, mnf, mxf, NULL);
+    mpr_obj_add_cb((mpr_obj)recvsig_1, handler, MPR_STATUS_UPDATE_REM, NULL, 0);
+
+    recvsig_2 = mpr_sig_new(dst, MPR_DIR_IN, "insig_2", 1, MPR_DBL, NULL, &mnd, &mxd, NULL);
+    mpr_obj_add_cb((mpr_obj)recvsig_2, handler, MPR_STATUS_UPDATE_REM, NULL, 0);
+
+    recvsig_3 = mpr_sig_new(dst, MPR_DIR_IN, "insig_3", 3, MPR_FLT, NULL, mnf, mxf, NULL);
+    mpr_obj_add_cb((mpr_obj)recvsig_3, handler, MPR_STATUS_UPDATE_REM, NULL, 0);
+
+    recvsig_4 = mpr_sig_new(dst, MPR_DIR_IN, "insig_4", 1, MPR_FLT, NULL, mnf, mxf, NULL);
+    mpr_obj_add_cb((mpr_obj)recvsig_4, handler, MPR_STATUS_UPDATE_REM, NULL, 0);
 
     eprintf("Input signal 'insig' registered.\n");
 
     /* Make sure we can add and remove inputs and inputs within crashing. */
-    mpr_sig_free(mpr_sig_new(dst, MPR_DIR_IN, "insig_5", 1, MPR_FLT,
-                             NULL, &mnf, &mxf, NULL, NULL, MPR_STATUS_UPDATE_REM));
+    mpr_sig_free(mpr_sig_new(dst, MPR_DIR_IN, "insig_5", 1, MPR_FLT, NULL, &mnf, &mxf, NULL));
 
     l = mpr_dev_get_sigs(dst, MPR_DIR_IN);
     eprintf("Number of inputs: %d\n", mpr_list_get_size(l));

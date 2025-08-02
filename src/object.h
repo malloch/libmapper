@@ -14,6 +14,15 @@ typedef struct _mpr_dict {
 #include "mpr_type.h"
 #include "value.h"
 
+/*! A list of function and context pointers. */
+typedef struct _fptr_list {
+    void *f;
+    void *ctx;
+    struct _fptr_list *next;
+    int events;
+    int manage;
+} *fptr_list;
+
 typedef struct _mpr_obj
 {
     struct _mpr_graph *graph;       /*!< Pointer back to the graph. */
@@ -35,8 +44,7 @@ typedef struct _mpr_obj
     int num_inst;                   /*!< Number of instances. */
     int ephemeral;                  /*!< 1 if signal is ephemeral, 0 otherwise. */
 
-    void *handler;                  /*!< An optional function to be called when events occur. */
-    int event_flags;                /*!< Flags for deciding when to call the event handler. */
+    fptr_list callbacks;            /*!< List of object record callbacks. */
 } mpr_obj_t;
 
 #include "graph.h"
@@ -88,6 +96,15 @@ MPR_INLINE static mpr_tbl mpr_obj_get_prop_tbl(mpr_obj obj)
 
 MPR_INLINE static void mpr_obj_add_props_to_msg(mpr_obj obj, lo_message msg)
     { mpr_tbl_add_to_msg(obj->is_local ? obj->props.synced : 0, obj->props.staged, msg); }
+
+/*! Call registered graph callbacks for a given object type.
+ *  \param caller       The calling object.
+ *  \param topic        The object to pass to the callbacks.
+ *  \param event        Event to match before calling callback.
+ *  \param evt          The event type. */
+int mpr_obj_call_cbs(mpr_obj caller, mpr_obj topic, mpr_status event, mpr_id inst);
+
+void mpr_obj_free_cbs(mpr_obj obj);
 
 /**** Instances ****/
 

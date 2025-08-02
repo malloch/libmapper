@@ -183,7 +183,6 @@ typedef enum {
 #define MPR_OBJ_MOD MPR_STATUS_MODIFIED /*!< The existing record has been modified. */
 #define MPR_OBJ_REM MPR_STATUS_REMOVED  /*!< The existing record has been removed. */
 #define MPR_OBJ_EXP MPR_STATUS_EXPIRED  /*!< The graph has lost contact with the remote entity. */
-#define mpr_graph_evt mpr_status
 
 #ifdef __cplusplus
 }

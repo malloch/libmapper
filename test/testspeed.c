@@ -78,8 +78,7 @@ int setup_src(mpr_graph g, const char *iface)
     eprintf("source created using interface %s.\n",
             mpr_graph_get_interface(mpr_obj_get_graph((mpr_obj)src)));
 
-    sendsig = mpr_sig_new((mpr_obj)src, MPR_DIR_OUT, "outsig", 1, MPR_FLT, NULL,
-                          NULL, NULL, &num_inst, NULL, 0);
+    sendsig = mpr_sig_new((mpr_obj)src, MPR_DIR_OUT, "outsig", 1, MPR_FLT, NULL, NULL, NULL, &num_inst);
     if (!sendsig)
         goto error;
 
@@ -104,36 +103,35 @@ void cleanup_src(void)
     }
 }
 
-void handler(mpr_obj obj, mpr_status event, mpr_id inst, int length,
-             mpr_type type, const void *value, mpr_time t)
+void handler(mpr_obj obj, mpr_status event, mpr_id instance, const void *data)
 {
+    float *value = (float*) mpr_sig_get_value((mpr_sig)obj, instance, NULL);
     if (done)
         return;
     if (value) {
-        float fvalue = *(float*)value;
-        if (inst < 0 || inst > NUM_INST - 1)
+        if (instance < 0 || instance > NUM_INST - 1)
             printf("error: inst out of bounds!\n");
-        else if (fvalue != expected[inst])
-            printf("error: value[%d] %g != %g\n", (int)inst, *(float*)value, expected[inst]);
+        else if (*value != expected[instance])
+            printf("error: value[%d] %g != %g\n", (int)instance, *value, expected[instance]);
         else
             ++matched;
         if (++received >= iterations)
             switch_modes();
         if (use_inst) {
             counter = (counter + 1) % 10;
-            fvalue = ++expected[counter];
-            mpr_sig_set_value(sendsig, counter, length, type, &fvalue);
+            *value = ++expected[counter];
+            mpr_sig_set_value(sendsig, counter, 1, MPR_FLT, value);
         }
         else {
-            fvalue = ++expected[0];
-            mpr_sig_set_value(sendsig, 0, length, type, &fvalue);
+            *value = ++expected[0];
+            mpr_sig_set_value(sendsig, 0, 1, MPR_FLT, value);
         }
         mpr_dev_update_maps(mpr_sig_get_dev(sendsig));
     }
     else {
         const char *name = mpr_obj_get_prop_as_str(obj, MPR_PROP_NAME, NULL);
-        eprintf("--> destination %s instance %ld got NULL\n", name, (long)inst);
-        mpr_sig_release_inst((mpr_sig)obj, inst);
+        eprintf("--> destination %s instance %ld got NULL\n", name, (long)instance);
+        mpr_sig_release_inst((mpr_sig)obj, instance);
     }
 }
 
@@ -150,8 +148,8 @@ int setup_dst(mpr_graph g, const char *iface)
     eprintf("destination created using interface %s.\n",
             mpr_graph_get_interface(mpr_obj_get_graph((mpr_obj)dst)));
 
-    recvsig = mpr_sig_new((mpr_obj)dst, MPR_DIR_IN, "insig", 1, MPR_FLT, NULL,
-                          NULL, NULL, &num_inst, handler, MPR_STATUS_UPDATE_REM);
+    recvsig = mpr_sig_new((mpr_obj)dst, MPR_DIR_IN, "insig", 1, MPR_FLT, NULL, NULL, NULL, &num_inst);
+    mpr_obj_add_cb((mpr_obj)recvsig, handler, MPR_STATUS_UPDATE_REM, NULL, 0);
     if (!recvsig)
         goto error;
 

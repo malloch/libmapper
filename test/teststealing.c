@@ -52,8 +52,7 @@ int setup_src(mpr_graph g, const char *iface)
     eprintf("source created using interface %s.\n",
             mpr_graph_get_interface(mpr_obj_get_graph(src)));
 
-    sendsig = mpr_sig_new((mpr_obj)src, MPR_DIR_OUT, "outsig", 1, MPR_INT32, NULL,
-                          NULL, NULL, &num_inst, NULL, 0);
+    sendsig = mpr_sig_new((mpr_obj)src, MPR_DIR_OUT, "outsig", 1, MPR_INT32, NULL, NULL, NULL, &num_inst);
 
     eprintf("Output signal 'outsig' registered.\n");
     l = mpr_dev_get_sigs(src, MPR_DIR_OUT);
@@ -75,12 +74,12 @@ void cleanup_src(void)
     }
 }
 
-void handler(mpr_obj obj, mpr_status event, mpr_id instance, int length,
-             mpr_type type, const void *value, mpr_time t)
+void handler(mpr_obj obj, mpr_status event, mpr_id instance, const void *data)
 {
+    float *value = (float*) mpr_sig_get_value((mpr_sig)obj, instance, NULL);
     if (value) {
         eprintf("handler: %s.%d got %f\n", mpr_obj_get_prop_as_str(obj, MPR_PROP_NAME, NULL),
-                instance, (*(float*)value));
+                (int)instance, *value);
     }
 }
 
@@ -97,8 +96,8 @@ int setup_dst(mpr_graph g, const char *iface)
     eprintf("destination created using interface %s.\n",
             mpr_graph_get_interface(mpr_obj_get_graph(dst)));
 
-    recvsig = mpr_sig_new((mpr_obj)dst, MPR_DIR_IN, "insig", 1, MPR_FLT, NULL, NULL, NULL,
-                          &num_inst, handler, MPR_STATUS_UPDATE_REM);
+    recvsig = mpr_sig_new((mpr_obj)dst, MPR_DIR_IN, "insig", 1, MPR_FLT, NULL, NULL, NULL, &num_inst);
+    mpr_obj_add_cb((mpr_obj)recvsig, handler, MPR_STATUS_UPDATE_REM, NULL, 0);
     mpr_obj_set_prop((mpr_obj)recvsig, MPR_PROP_EPHEM, NULL, 1, MPR_INT32, &ephemeral, 1);
 
     eprintf("Input signal 'insig' registered.\n");
@@ -292,11 +291,13 @@ int main(int argc, char **argv)
 
     timetags = calloc(1, sizeof(mpr_time) * num_inst);
 
-    /* test 1: using handlers for instance release etc */
+    /* test 1: using handlers for instance release etc. */
+    eprintf("test 1:\n");
     loop();
 
     /* test 2: no handler */
-    mpr_obj_set_cb(recvsig, NULL, 0);
+    eprintf("test 2:\n");
+    mpr_obj_remove_cb(recvsig, NULL, 0);
     loop();
 
     if (autoconnect && (sent != received || local_updates != sent * 4)) {

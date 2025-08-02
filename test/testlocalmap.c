@@ -37,15 +37,16 @@ static void eprintf(const char *format, ...)
     va_end(args);
 }
 
-void handler(mpr_obj obj, mpr_status event, mpr_id instance, int length,
-             mpr_type type, const void *value, mpr_time t)
+void handler(mpr_obj obj, mpr_status event, mpr_id instance, const void *data)
 {
+    mpr_time time;
+    float *value = (float*) mpr_sig_get_value((mpr_sig)obj, instance, &time);
     if (!value)
         return;
     eprintf("handler: signal %s got value %f, time %f\n",
             mpr_obj_get_prop_as_str(obj, MPR_PROP_NAME, 0),
-            (*(float*)value), mpr_time_as_dbl(t));
-    if (fabs(*(float*)value - expected) < 0.0001)
+            (*value), mpr_time_as_dbl(time));
+    if (fabs(*value - expected) < 0.0001)
         received++;
     else
         eprintf(" expected %f\n", expected);
@@ -65,15 +66,14 @@ int setup(const char *iface)
     eprintf("device created using interface %s.\n",
             mpr_graph_get_interface(mpr_obj_get_graph(dev)));
 
-    sendsig = mpr_sig_new((mpr_obj)dev, MPR_DIR_IN, "outsig", 1, MPR_INT32, NULL,
-                          &mni, &mxi, NULL, NULL, 0);
+    sendsig = mpr_sig_new((mpr_obj)dev, MPR_DIR_IN, "outsig", 1, MPR_INT32, NULL, &mni, &mxi, NULL);
     eprintf("Output signal 'outsig' registered.\n");
     l = mpr_dev_get_sigs(dev, MPR_DIR_OUT);
     eprintf("Number of outputs: %d\n", mpr_list_get_size(l));
     mpr_list_free(l);
 
-    recvsig = mpr_sig_new((mpr_obj)dev, MPR_DIR_IN, "insig", 1, MPR_FLT, NULL,
-                          &mnf, &mxf, NULL, handler, MPR_STATUS_UPDATE_REM);
+    recvsig = mpr_sig_new((mpr_obj)dev, MPR_DIR_IN, "insig", 1, MPR_FLT, NULL, &mnf, &mxf, NULL);
+    mpr_obj_add_cb((mpr_obj)recvsig, handler, MPR_STATUS_UPDATE_REM, NULL, 0);
     eprintf("Input signal 'insig' registered.\n");
     l = mpr_dev_get_sigs(dev, MPR_DIR_IN);
     eprintf("Number of inputs: %d\n", mpr_list_get_size(l));
@@ -135,8 +135,8 @@ int setup_loop_test(void)
 
     /* libmapper provides rudimentary loop detection so we will need a 3rd
        signal to create a loop. */
-    sig3 = mpr_sig_new((mpr_obj)dev, MPR_DIR_IN, "sig3", 1, MPR_FLT, NULL, NULL, NULL,
-                       NULL, handler, MPR_STATUS_UPDATE_REM);
+    sig3 = mpr_sig_new((mpr_obj)dev, MPR_DIR_IN, "sig3", 1, MPR_FLT, NULL, NULL, NULL, NULL);
+    mpr_obj_add_cb((mpr_obj)sig3, handler, MPR_STATUS_UPDATE_REM, NULL, 0);
     eprintf("Input signal 'sig3' registered.\n");
 
     /* map from sendsig -> recvsig already exists */

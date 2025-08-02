@@ -38,10 +38,11 @@ static void eprintf(const char *format, ...)
     va_end(args);
 }
 
-void handler(mpr_obj obj, mpr_status event, mpr_id instance, int length,
-             mpr_type type, const void *value, mpr_time t)
+void handler(mpr_obj obj, mpr_status event, mpr_id instance, const void *data)
 {
-    int i;
+    int i, length = mpr_obj_get_prop_as_int32(obj, MPR_PROP_LEN, NULL);
+    mpr_type type = mpr_obj_get_prop_as_int32(obj, MPR_PROP_TYPE, NULL);
+    float *value = (float*) mpr_sig_get_value((mpr_sig)obj, instance, NULL);
     if (!value)
         return;
 
@@ -52,7 +53,7 @@ void handler(mpr_obj obj, mpr_status event, mpr_id instance, int length,
     if (i >= 3)
         eprintf("error: unknown signal in handler\n");
     else {
-        eprintf("handler: Instance %d got %f\n", instance,  (*(float*)value));
+        eprintf("handler: Instance %d got %f\n", instance, *value);
         ++received[i];
         mpr_sig_set_value(sendsigs[i], instance, length, type, value);
         ++sent[i];
@@ -73,10 +74,11 @@ int setup_devs(mpr_graph g, const char *iface)
         eprintf("device created using interface %s.\n",
                 mpr_graph_get_interface(mpr_obj_get_graph(dev)));
 
-        sendsigs[i] = mpr_sig_new((mpr_obj)dev, MPR_DIR_OUT, "outsig", 1, MPR_FLT, NULL,
-                                  &mn, &mx, &num_inst, NULL, 0);
-        recvsigs[i] = mpr_sig_new((mpr_obj)dev, MPR_DIR_IN, "insig", 1, MPR_FLT, NULL,
-                                  &mn, &mx, &num_inst, handler, MPR_STATUS_UPDATE_REM);
+        sendsigs[i] = mpr_sig_new((mpr_obj)dev, MPR_DIR_OUT, "outsig",
+                                  1, MPR_FLT, NULL, &mn, &mx, &num_inst);
+        recvsigs[i] = mpr_sig_new((mpr_obj)dev, MPR_DIR_IN, "insig",
+                                  1, MPR_FLT, NULL, &mn, &mx, &num_inst);
+        mpr_obj_add_cb((mpr_obj)recvsigs[i], handler, MPR_STATUS_UPDATE_REM, NULL, 0);
     }
     return 0;
 

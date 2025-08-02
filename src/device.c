@@ -195,8 +195,6 @@ void mpr_dev_free(mpr_dev dev)
     if (own_graph) {
         /* free any queued graph messages without sending */
         mpr_net_free_msgs(net);
-
-        mpr_graph_free_cbs(graph);
     }
 
     /* remove OSC handlers associated with this device */

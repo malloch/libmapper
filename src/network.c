@@ -2044,7 +2044,7 @@ static int handler_mapped(const char *path, const char *types, lo_arg **av,
                 }
             }
         }
-        mpr_graph_call_cbs(gph, (mpr_obj)map, MPR_MAP, rc ? MPR_STATUS_NEW : MPR_STATUS_MODIFIED);
+        mpr_obj_call_cbs((mpr_obj)gph, (mpr_obj)map, rc ? MPR_STATUS_NEW : MPR_STATUS_MODIFIED, 0);
     }
     mpr_obj_clear_empty_props((mpr_obj)map);
     return 0;

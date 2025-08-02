@@ -44,13 +44,12 @@ int mpr_expr_get_manages_inst(mpr_expr expr);
 void mpr_expr_set_var_updated(mpr_expr expr, int var_idx);
 
 /*! Evaluate the given inputs using the compiled expression.
- *  \param buff         A preallocated expression evaluation buffer.
  *  \param expr         The expression to use.
+ *  \param buff         A preallocated expression evaluation buffer.
  *  \param srcs         An array of `mpr_value` structures for sources.
  *  \param expr_vars    An array of `mpr_value` structures for user variables.
  *  \param result       A `mpr_value` structure for receiving the evaluation result.
  *  \param time         The timestamp to associate with this evaluation.
- *  \param types        An array of `mpr_type` for storing the output type per vector element
  *  \param inst_idx     Index of the instance being updated.
  *  \result             0 if the expression evaluation caused no change, or a bitflags consisting of
  *                      `EXPR_UPDATE` or `EXPR_MUTED_UPDATE` (if an update was generated),

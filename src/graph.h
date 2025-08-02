@@ -22,13 +22,6 @@ mpr_dev mpr_graph_get_dev_by_name(mpr_graph g, const char *name);
 
 mpr_map mpr_graph_get_map_by_names(mpr_graph g, int num_src, const char **srcs, const char *dst);
 
-/*! Call registered graph callbacks for a given object type.
- *  \param g            The graph to query.
- *  \param o            The object to pass to the callbacks.
- *  \param t            The object type.
- *  \param e            The graph event type. */
-void mpr_graph_call_cbs(mpr_graph g, mpr_obj o, mpr_type t, mpr_graph_evt e);
-
 void mpr_graph_cleanup(mpr_graph g);
 
 void mpr_graph_housekeeping(mpr_graph g);
@@ -65,24 +58,22 @@ mpr_map mpr_graph_add_map(mpr_graph g, mpr_id id, int num_src, const char **src_
 /* TODO: use mpr_graph_remove_obj() instead? */
 
 /*! Remove a device from the graph. */
-void mpr_graph_remove_dev(mpr_graph g, mpr_dev dev, mpr_graph_evt evt);
+void mpr_graph_remove_dev(mpr_graph g, mpr_dev dev, mpr_status evt);
 
 /*! Remove a signal from the graph. */
-void mpr_graph_remove_sig(mpr_graph g, mpr_sig sig, mpr_graph_evt evt);
+void mpr_graph_remove_sig(mpr_graph g, mpr_sig sig, mpr_status evt);
 
 /*! Remove a link from the graph. */
-void mpr_graph_remove_link(mpr_graph g, mpr_link link, mpr_graph_evt evt);
+void mpr_graph_remove_link(mpr_graph g, mpr_link link, mpr_status evt);
 
 /*! Remove a map from the graph. */
-void mpr_graph_remove_map(mpr_graph g, mpr_map map, mpr_graph_evt evt);
+void mpr_graph_remove_map(mpr_graph g, mpr_map map, mpr_status evt);
 
 /*! Print graph contents to the screen.  Useful for debugging, only works when
  *  compiled in debug mode. */
 void mpr_graph_print(mpr_graph g);
 
 int mpr_graph_subscribed_by_sig(mpr_graph g, const char *name);
-
-void mpr_graph_free_cbs(mpr_graph g);
 
 mpr_list mpr_graph_new_query(mpr_graph g, int allow_empty, int obj_type,
                              const void *func, const char *types, ...);

@@ -17,26 +17,33 @@ void ctrlc(int)
 }
 
 // use simple scalar handler
-void handler_freq(Signal&& sig, float value, Time&& time)
+void handler_freq(Object&& obj, Object::Status status)
 {
-    set_freq(value);
-}
-
-void handler_gain(Signal&& sig, int length, Type type, const void *value, Time&& time)
-{
+    Signal sig(obj);
+    const void *value = sig.value();
     if (value) {
-        float *pgain = (float*)value;
-        set_gain(*pgain);
+        set_freq(*(float*)value);
     }
-    else
-        set_gain(0);
 }
 
-void handler_duty(Signal&& sig, int length, Type type, const void *value, Time&& time)
+void handler_gain(Object&& obj, Object::Status status)
 {
+    Signal sig(obj);
+    const void *value = sig.value();
     if (value) {
-        float *pduty = (float*)value;
-        set_duty(*pduty);
+        set_gain(*(float*)value);
+    }
+    else {
+        set_gain(0);
+    }
+}
+
+void handler_duty(Object&& obj, Object::Status status)
+{
+    Signal sig(obj);
+    const void *value = sig.value();
+    if (value) {
+        set_duty(*(float*)value);
     }
 }
 
@@ -51,11 +58,11 @@ int main()
     float max1000 = 1000;
 
     dev.add_signal(Direction::INCOMING, "/freq", 1, Type::FLOAT, "Hz", &min0, &max1000, NULL)
-       .set_callback(handler_freq, Signal::Event::UPDATE);
+       .add_callback(handler_freq, Object::Status::UPDATE_REM);
     dev.add_signal(Direction::INCOMING, "/gain", 1, Type::FLOAT, "Hz", &min0, &max1, NULL)
-       .set_callback(handler_gain, Signal::Event::UPDATE);
+       .add_callback(handler_gain, Object::Status::UPDATE_REM);
     dev.add_signal(Direction::INCOMING, "/duty", 1, Type::FLOAT, "Hz", &min0, &max1, NULL)
-       .set_callback(handler_duty, Signal::Event::UPDATE);
+       .add_callback(handler_duty, Object::Status::UPDATE_REM);
 
     run_synth();
 

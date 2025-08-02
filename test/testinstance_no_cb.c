@@ -216,10 +216,10 @@ int setup_src(mpr_graph g, const char *iface)
     eprintf("source created using interface %s.\n",
             mpr_graph_get_interface(mpr_obj_get_graph((mpr_obj)src)));
 
-    multisend = mpr_sig_new((mpr_obj)src, MPR_DIR_OUT, "multisend", 1, MPR_FLT, NULL,
-                            &mn, &mx, &num_inst, NULL, 0);
-    monosend = mpr_sig_new((mpr_obj)src, MPR_DIR_OUT, "monosend", 1, MPR_FLT, NULL,
-                           &mn, &mx, NULL, NULL, 0);
+    multisend = mpr_sig_new((mpr_obj)src, MPR_DIR_OUT, "multisend",
+                            1, MPR_FLT, NULL, &mn, &mx, &num_inst);
+    monosend = mpr_sig_new((mpr_obj)src, MPR_DIR_OUT, "monosend",
+                           1, MPR_FLT, NULL, &mn, &mx, NULL);
     if (!multisend || !monosend)
         goto error;
 
@@ -258,12 +258,12 @@ int setup_dst(mpr_graph g, const char *iface)
 
     /* Specify 0 instances since we wish to use specific ids */
     num_inst = 0;
-    multirecv = mpr_sig_new((mpr_obj)dst, MPR_DIR_IN, "multirecv", 1, MPR_FLT, NULL,
-                            &mn, NULL, &num_inst, NULL, 0);
+    multirecv = mpr_sig_new((mpr_obj)dst, MPR_DIR_IN, "multirecv",
+                            1, MPR_FLT, NULL, &mn, NULL, &num_inst);
     mpr_obj_set_prop((mpr_obj)multirecv, MPR_PROP_EPHEM, NULL, 1, MPR_INT32, &ephemeral, 1);
 
-    monorecv = mpr_sig_new((mpr_obj)dst, MPR_DIR_IN, "monorecv", 1, MPR_FLT, NULL,
-                           &mn, NULL, 0, NULL, 0);
+    monorecv = mpr_sig_new((mpr_obj)dst, MPR_DIR_IN, "monorecv",
+                           1, MPR_FLT, NULL, &mn, NULL, NULL);
     if (!multirecv || !monorecv)
         goto error;
 
