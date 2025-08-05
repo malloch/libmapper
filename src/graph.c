@@ -790,21 +790,26 @@ void mpr_graph_print(mpr_graph g)
     printf("Registered maps (%d):\n", mpr_list_get_size(maps));
     while (maps) {
         mpr_map map = (mpr_map)*maps;
-        printf(" └─ ");
-        mpr_obj_print((mpr_obj)map, 0);
-        sigs = mpr_map_get_sigs(map, MPR_LOC_SRC);
-        while (sigs) {
-            mpr_sig sig = (mpr_sig)*sigs;
-            sigs = mpr_list_get_next(sigs);
-            printf("    ├─ SRC ");
-            mpr_obj_print((mpr_obj)sig, 0);
+        if (((mpr_obj)map)->status >= MPR_STATUS_STAGED) {
+            printf(" └─ ");
+            mpr_obj_print((mpr_obj)map, 0);
+            sigs = mpr_map_get_sigs(map, MPR_LOC_SRC);
+            while (sigs) {
+                mpr_sig sig = (mpr_sig)*sigs;
+                sigs = mpr_list_get_next(sigs);
+                printf("    ├─ SRC ");
+                mpr_obj_print((mpr_obj)sig, 0);
+            }
+            sigs = mpr_map_get_sigs(map, MPR_LOC_DST);
+            while (sigs) {
+                mpr_sig sig = (mpr_sig)*sigs;
+                sigs = mpr_list_get_next(sigs);
+                printf("    └─ DST ");
+                mpr_obj_print((mpr_obj)sig, 0);
+            }
         }
-        sigs = mpr_map_get_sigs(map, MPR_LOC_DST);
-        while (sigs) {
-            mpr_sig sig = (mpr_sig)*sigs;
-            sigs = mpr_list_get_next(sigs);
-            printf("    └─ DST ");
-            mpr_obj_print((mpr_obj)sig, 0);
+        else {
+            printf("skipping uninitialized map\n");
         }
         maps = mpr_list_get_next(maps);
     }

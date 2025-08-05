@@ -214,7 +214,7 @@ void mpr_obj_push(mpr_obj object);
 /*! Helper to print the properties of an object.
  *  \param object       The object to print.
  *  \param properties   `1` to print the object's properties, `0` otherwise. */
-void mpr_obj_print(mpr_obj object, int include_props);
+void mpr_obj_print(mpr_obj object, int properties);
 
 // TODO: SHOULD WE SUPPORT OSCPATH HERE?
 // mpr_obj_add_cb(obj, "//[@type='sig']");
@@ -235,7 +235,7 @@ typedef void mpr_evt_handler(mpr_obj object, mpr_status event, mpr_id instance, 
  *  \param data         A user-defined pointer to be passed to the callback for context.
  *  \param manage       Set to 1 if the object should manage the memory pointed to by `data`.
  *  \return             One if a callback was added, otherwise zero. */
-int mpr_obj_add_cb(mpr_obj obj, mpr_evt_handler *handler, int events, const void *data, int manage);
+int mpr_obj_add_cb(mpr_obj object, mpr_evt_handler *handler, int events, const void *data, int manage);
 
 /*! Remove an object record callback from the graph service. If NULLs are provided for both
  * `hander` and `data` arguments the first callback will be removed.
@@ -356,9 +356,6 @@ void mpr_dev_update_maps(mpr_dev device);
  *  \param maximum          Pointer to a maximum value, or `NULL` for none.
  *  \param num_instances    Pointer to the number of signal instances, or `NULL` to indicate that
  *                          instances will not be used.
- *  \param handler          Function to be called when the signal is updated, or `NULL` for none.
- *  \param events           Bitflags for types of events that should trigger the handler. Event
- *                          types are listed in the enum `mpr_status` found in `mapper_constants.h`
  *  \return                 The new signal. */
 mpr_sig mpr_sig_new(mpr_obj parent, mpr_dir direction, const char *name, int length, mpr_type type,
                     const char *unit, const void *minimum, const void *maximum, int *num_instances);

@@ -732,7 +732,7 @@ namespace mapper {
     public:
         /*! Add a Status event callback to an Object.
          *  \param h        Callback function.
-         *  \param types    Bitflags setting the type of information of interest.
+         *  \param events   Bitflags setting the type of information of interest.
          *                  Can be a combination of Event values.
          *  \return         Self. */
         template <typename H>

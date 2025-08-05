@@ -703,6 +703,7 @@ void mpr_obj_print(mpr_obj o, int include_props)
 
     switch (o->type) {
         case MPR_GRAPH:
+            printf("GRAPH: ");
             mpr_graph_print((mpr_graph)o);
             break;
         case MPR_OBJ:
@@ -726,7 +727,11 @@ void mpr_obj_print(mpr_obj o, int include_props)
             return;
     }
 
-    RETURN_UNLESS(include_props && o->props.synced);
+    if (!include_props || !o->props.synced) {
+        printf("\n");
+        return;
+    }
+
     num_props = mpr_obj_get_num_props(o, 0);
     for (i = 0; i < num_props; i++) {
         p = mpr_tbl_get_record_by_idx(o->props.synced, i, &key, &len, &type, &val, 0);
