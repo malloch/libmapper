@@ -9,11 +9,9 @@ src = mpr.Device("py.testmapfromstr.src")
 outsig = src.add_signal(mpr.Signal.Direction.OUTGOING, "outsig", 1, mpr.Type.INT32)
 
 dest = mpr.Device("py.testmapfromstr.dst")
-insig = dest.add_signal(mpr.Signal.Direction.INCOMING, "insig", 1, mpr.Type.FLOAT,
-                        None, None, None, None,
-                        lambda s, e, i, v, t: print('signal', s['name'], 'got value',
-                                                    v, 'at time', t.get_double()),
-                        mpr.Signal.Event.UPDATE)
+insig = dest.add_signal(mpr.Signal.Direction.INCOMING, "insig", 1, mpr.Type.FLOAT)
+insig.add_callback(lambda s, e, i: print('signal', s['name'], 'got value', s.get_value()),
+                   mpr.Signal.Event.UPDATE)
 
 while not src.ready or not dest.ready:
     src.poll(10)

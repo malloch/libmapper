@@ -5,16 +5,17 @@ import random, libmapper as mpr
 print('starting testinstance.py')
 print('libmapper version:', mpr.__version__, 'with' if mpr.has_numpy() else 'without', 'numpy support')
 
-def h(sig, event, id, val, time):
+def h(sig, event, id):
     try:
         if event == mpr.Signal.Event.UPDATE:
+            val, time = sig.get_value()
             print('--> destination instance', id, 'got', val)
         elif event == mpr.Signal.Event.REL_UPSTRM:
             print('--> retiring destination instance', id)
             sig.Instance(id).release()
     except:
         print('--> exception!')
-        print(sig, event, id, val)
+        print(sig, event, id)
 
 def print_instance_ids():
     phrase = 'active /outsig: ['
@@ -75,8 +76,8 @@ outsig.set_property(mpr.Property.EPHEMERAL, True)
 
 dest = mpr.Device("py.testinstance.dst")
 # reserve 0 instances to start so we can use custom indexes
-insig = dest.add_signal(mpr.Signal.Direction.INCOMING, "insig", 1, mpr.Type.INT32, None, 0, 1, 0, h,
-                        mpr.Signal.Event.ALL)
+insig = dest.add_signal(mpr.Signal.Direction.INCOMING, "insig", 1, mpr.Type.INT32, None, 0, 1, 0)
+insig.add_callback(h, mpr.Signal.Event.ALL)
 insig.reserve_instances([100, 200, 300])
 insig.set_property(mpr.Property.STEALING, mpr.Signal.Stealing.OLDEST)
 insig.set_property(mpr.Property.EPHEMERAL, True)

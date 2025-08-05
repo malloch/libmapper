@@ -15,19 +15,22 @@ def handler_done(signum, frame):
 signal.signal(signal.SIGINT, handler_done)
 signal.signal(signal.SIGTERM, handler_done)
 
-def h(sig, event, id, val, time):
-    print('  handler got', sig['name'], '=', val, 'at time', time.get_double())
+def h(sig, event, id):
+    val, time = sig.get_value()
+    print('  handler1 got', sig['name'], '=', val, 'at time', time.get_double())
 
-def h2(sig, event, id, val, time):
+def h2(sig, event, id):
+    val, time = sig.get_value()
     print('  handler2 got', sig['name'], '=', val, 'at time', time.get_double())
 
 src = mpr.Device("py.testvector.src")
 outsig = src.add_signal(mpr.Signal.Direction.OUTGOING, "outsig", 10, mpr.Type.INT32, None, 0, 1)
 
 dest = mpr.Device("py.testvector.dst")
-insig = dest.add_signal(mpr.Signal.Direction.INCOMING, "insig", 10, mpr.Type.FLOAT, None, 0, 1, None, h)
-
-insig.set_callback(h2)
+insig = dest.add_signal(mpr.Signal.Direction.INCOMING, "insig", 10, mpr.Type.FLOAT, None, 0, 1)
+insig.add_callback(h)
+insig.remove_callback()
+insig.add_callback(h2)
 
 while not done and (not src.ready or not dest.ready):
     src.poll(10)

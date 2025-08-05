@@ -15,7 +15,7 @@ signal.signal(signal.SIGTERM, handler_done)
 
 graph = mpr.Graph()
 
-def on_event(type, obj, event):
+def on_event(obj, event, id):
     global redraw
     redraw = True
 

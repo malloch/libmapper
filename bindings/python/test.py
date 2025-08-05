@@ -7,14 +7,16 @@ print('libmapper version:', mpr.__version__, 'with' if mpr.has_numpy() else 'wit
 
 start = mpr.Time()
 
-def h(sig, event, id, val, time):
+def h(sig, event, id):
     try:
+        val, time = sig.get_value()
         print(sig[mpr.Property.NAME], 'instance', id, 'got', val, 'at T+%.2f' % (time-start).get_double(), 'sec')
     except:
         print('exception')
 
 def setup(d):
-    sig = d.add_signal(mpr.Signal.Direction.INCOMING, "freq", 1, mpr.Type.INT32, "Hz", 0, 100, None, h)
+    sig = d.add_signal(mpr.Signal.Direction.INCOMING, "freq", 1, mpr.Type.INT32, "Hz", 0, 100)
+    sig.add_callback(h)
 
     while not d.ready:
         d.poll(10)
@@ -70,7 +72,8 @@ def setup(d):
 
     print('signal properties:', sig.properties)
 
-    sig = d.add_signal(mpr.Signal.Direction.INCOMING, "insig", 4, mpr.Type.INT32, None, None, None, None, h)
+    sig = d.add_signal(mpr.Signal.Direction.INCOMING, "insig", 4, mpr.Type.INT32)
+    sig.add_callback(h)
     print('signal properties:', sig.properties)
     print('signal status:', sig.get_status())
     sig = d.add_signal(mpr.Signal.Direction.OUTGOING, "outsig", 4, mpr.Type.FLOAT)
@@ -87,16 +90,11 @@ setup(dev1)
 dev2 = mpr.Device("py.test2")
 setup(dev2)
 
-def object_name(type):
-    if type is mpr.Type.DEVICE:
-        return 'DEVICE'
-    elif type is mpr.Type.SIGNAL:
-        return 'SIGNAL'
-    elif type is mpr.Type.MAP:
-        return 'MAP'
-
-def graph_cb(type, object, event):
+def graph_cb(object, event, id):
     print(event.name)
+    # TODO: enable getting type as property:
+#    type = object[mpr.Property.TYPE]
+    type = object.type()
     if type is mpr.Type.DEVICE or type is mpr.Type.SIGNAL:
         print(' ', type.name + ':', object['name'])
     elif type is mpr.Type.MAP:
@@ -105,6 +103,8 @@ def graph_cb(type, object, event):
             print("  src: ", s.device()['name'], ':', s['name'])
         for s in object.signals(mpr.Map.Location.DESTINATION):
             print("  dst: ", s.device()['name'], ':', s['name'])
+    else:
+        print("got", type, object)
 
 g = mpr.Graph(mpr.Type.OBJECT)
 g.add_callback(graph_cb)

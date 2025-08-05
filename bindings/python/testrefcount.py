@@ -5,7 +5,8 @@ import libmapper as mpr
 print('starting testrefcount.py')
 print('libmapper version:', mpr.__version__, 'with' if mpr.has_numpy() else 'without', 'numpy support')
 
-def h(sig, event, id, val, time):
+def h(sig, event, id):
+    val, time = sig.get_value()
     print('  handler got', sig['name'], '=', val, 'at time', time.get_double())
 
 src = mpr.Device('py.testrefcount.src')
@@ -17,7 +18,8 @@ num_dst = 5
 
 for i in range(num_dst):
     # don't store references to input signals
-    dest.add_signal(mpr.Signal.Direction.INCOMING, 'insig%i' %i, 10, mpr.Type.FLOAT, None, 0, 1, None, h)
+    dest.add_signal(mpr.Signal.Direction.INCOMING, 'insig%i' %i, 10, mpr.Type.FLOAT, None, 0, 1)
+    dest.add_callback(h)
 
 while not src.ready or not dest.ready:
     src.poll(10)

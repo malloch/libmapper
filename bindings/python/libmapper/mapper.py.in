@@ -72,8 +72,6 @@ mpr.mpr_obj_get_prop_as_str.restype = c_char_p
 mpr.mpr_obj_set_prop.argtypes = [c_void_p, c_int, c_char_p, c_int, c_char, c_void_p, c_int]
 mpr.mpr_obj_set_prop.restype = c_int
 
-SIG_HANDLER = CFUNCTYPE(None, c_void_p, c_int, c_longlong, c_int, c_char, c_void_p, c_void_p)
-
 @unique
 class Operator(IntFlag):
     """Possible operations for composing queries."""
@@ -769,9 +767,36 @@ class List:
             mpr.mpr_list_print(self._ref)
         return self
 
+py_obj_cb_type = CFUNCTYPE(None, py_object, py_object, c_longlong)
+c_obj_cb_type = CFUNCTYPE(None, c_void_p, c_int, c_longlong, c_void_p)
+
+@CFUNCTYPE(None, c_void_p, c_int, c_longlong, c_void_p)
+def object_cb_py(_obj, _evt, _inst, _data):
+    # _data is the object id of the python callback function
+    cb = cast(_data, py_object).value
+
+    if cb == None:
+        print("error: couldn't retrieve object callback")
+        return
+
+    # TODO: check if cb was registered with object or instances
+    mpr.mpr_obj_get_type.argtypes = [c_void_p]
+    mpr.mpr_obj_get_type.restype = c_byte
+    _type = int(mpr.mpr_obj_get_type(_obj))
+    if _type == Type.DEVICE:
+        _obj = Device(_obj)
+    elif _type == Type.SIGNAL:
+        _obj = Signal(_obj)
+    elif _type == Type.MAP:
+        _obj = Map(_obj)
+    else:
+        _obj = Object(_obj)
+    cb(_obj, Object.Status(_evt), _inst)
+
 class Object:
     """Objects provide a generic representation of Graphs, Devices, Signals, and Maps."""
 
+    @unique
     class Status(IntFlag):
         """Describes the possible statuses for a libmapper object."""
 
@@ -1170,6 +1195,56 @@ class Object:
         _type = int(mpr.mpr_obj_get_type(self._obj))
         return Type(_type)
 
+    def add_callback(self, callback, events=Status.ANY):
+        """
+        Add an event handler to an object.
+
+        Args:
+            callback: a function to be called when the Object is modified.
+            events (bitflags: libmapper.Object.Status): The type(s) of events that will trigger the
+                callback.
+
+        Returns:
+            self
+        """
+
+        if callback == None:
+            return self
+
+        _c_inc_ref(callback)
+        callback = id(callback)
+
+        mpr.mpr_obj_add_cb.argtypes = [c_void_p, c_obj_cb_type, c_int, c_void_p, c_int]
+        mpr.mpr_obj_add_cb.restype = None
+        mpr.mpr_obj_add_cb(self._obj, object_cb_py, events.value, callback, 0)
+        return self
+
+    def remove_callback(self, callback=None, events=Status.UNDEFINED):
+        """
+        Remove an event handler from an object.
+
+        Args:
+            callback: the function to remove. If ommitted or set to none all callbacks matching the
+                events argument will be removed.
+            events: (bitflags: libmapper.Object.Status): The type(s) of events to match.
+
+        Returns:
+            self
+        """
+
+        if callback:
+            callback_id = id(callback)
+        else:
+            callback_id = None
+
+        mpr.mpr_obj_remove_cb.argtypes = [c_void_p, c_obj_cb_type, c_void_p]
+        mpr.mpr_obj_remove_cb_restype = c_void_p
+        data = mpr.mpr_obj_remove_cb(self._obj, object_cb_py, callback_id)
+        while data:
+            _c_dec_ref(callback)
+            data = mpr.mpr_obj_remove_cb(self._obj, object_cb_py, callback_id)
+        return self
+
     def print(self, staged=0):
         """Print the properties of an object."""
 
@@ -1185,47 +1260,6 @@ class Object:
         if self._obj:
             mpr.mpr_obj_push(self._obj)
         return self
-
-c_sig_cb_type = CFUNCTYPE(None, c_void_p, c_int, c_longlong, c_int, c_char, c_void_p, c_longlong)
-
-@CFUNCTYPE(None, c_void_p, c_int, c_longlong, c_int, c_char, c_void_p, c_longlong)
-def signal_cb_py(_sig, _evt, _inst, _len, _type, _val, _time):
-    data = mpr.mpr_obj_get_prop_as_ptr(_sig, 0x0200, None) # MPR_PROP_DATA
-    cb = cast(data, py_sig_cb_type)
-
-    if cb == None:
-        print("error: couldn't retrieve signal callback")
-        return
-
-    if _val == None:
-        val = None
-    elif _type == b'i':
-        _val = cast(_val, POINTER(c_int))
-        if _len == 1:
-            val = _val[0]
-        else:
-            val = [_val[i] for i in range(_len)]
-    elif _type == b'f':
-        _val = cast(_val, POINTER(c_float))
-        if _len == 1:
-            val = _val[0]
-        else:
-            val = [_val[i] for i in range(_len)]
-    elif _type == b'd':
-        _val = cast(_val, POINTER(c_double))
-        if _len == 1:
-            val = _val[0]
-        else:
-            val = [_val[i] for i in range(_len)]
-    else:
-        print("sig_cb_py : unknown signal type", _type)
-        return
-
-    if np and mpr.mpr_obj_get_prop_as_int32(_sig, 0x2800, NPARRAY_NAME):
-        val = np.array(val)
-
-    # TODO: check if cb was registered with signal or instances
-    cb(Signal(_sig), Signal.Event(_evt), _inst, val, Time(_time))
 
 class Signal(Object):
     """
@@ -1264,35 +1298,6 @@ class Signal(Object):
             return 'libmapper.Signal.Event.' + self.name
 
     @unique
-    class Status(IntFlag):
-        """The set of possible status flags for a signal instance."""
-
-        UNDEFINED           = 0x0000
-        NEW                 = 0x0001
-
-        STAGED              = 0x0010
-        ACTIVE              = 0x0020
-
-        HAS_VALUE           = 0x0040
-        NEW_VALUE           = 0x0080
-
-        UPDATE_LOC          = 0x0100
-        UPDATE_REM          = 0x0200
-        REL_UPSTRM          = 0x0400
-        REL_DNSTRM          = 0x0800
-        OVERFLOW            = 0x1000
-        ANY                 = 0x1FFF
-
-        def __str__(self):
-            if self._name_ is not None:
-                return self._name_
-            members, uncovered = _decompose(self.__cls__, self._value_)
-            return '|'.join([str(m._name_ or m._value_) for m in members])
-
-        def __repr__(self):
-            return 'libmapper.Signal.Status(' + str(self) + ')'
-
-    @unique
     class Stealing(Enum):
         """The set of possible instance-stealing modes."""
 
@@ -1316,44 +1321,10 @@ class Signal(Object):
         if not self[Property.IS_LOCAL]:
             return
 
-        data = mpr.mpr_obj_get_prop_as_ptr(self._obj, 0x0200, None) # MPR_PROP_DATA
-        if data != None:
-            cb = cast(data, py_sig_cb_type)
-            _c_dec_ref(cb)
-
         mpr.mpr_sig_free.argtypes = [c_void_p]
         mpr.mpr_sig_free.restype = None
         mpr.mpr_sig_free(self._obj)
         self._obj = None
-
-    def set_callback(self, callback, events=Event.ALL):
-        """
-        Set or unset the message handler for a signal.
-
-        Args:
-            callback: a function to be called when the Signal is updated.
-            events (bitflags: libmapper.Signal.Event): The type(s) of events that will trigger the
-                callback.
-
-        Returns:
-            self
-        """
-
-        data = mpr.mpr_obj_get_prop_as_ptr(self._obj, 0x0200, None) # MPR_PROP_DATA
-        if data != None:
-            cb = cast(data, py_sig_cb_type)
-            _c_dec_ref(cb)
-        if callback:
-            self.callback = py_sig_cb_type(callback)
-            _c_inc_ref(self.callback)
-        else:
-            self.callback = None
-        mpr.mpr_obj_set_prop(self._obj, 0x0200, None, 1, Type.POINTER.value, self.callback, 0) # MPR_PROP_DATA
-
-        mpr.mpr_sig_set_cb.argtypes = [c_void_p, c_sig_cb_type, c_int]
-        mpr.mpr_sig_set_cb.restype = None
-        mpr.mpr_sig_set_cb(self._obj, signal_cb_py, events.value)
-        return self
 
     def set_value(self, value):
         """
@@ -1415,7 +1386,7 @@ class Signal(Object):
         _time = Time()
         _val = mpr.mpr_sig_get_value(self._obj, self.id, byref(_time.value))
         if _val == None:
-            return None
+            return [None, None]
 
         _type = mpr.mpr_obj_get_prop_as_int32(self._obj, Property.TYPE.value, None)
         if _type == Type.INT32.value:
@@ -1427,10 +1398,14 @@ class Signal(Object):
 
         _len = mpr.mpr_obj_get_prop_as_int32(self._obj, Property.LENGTH.value, None)
         if _len == 1:
-            return [_val[0], _time]
+            _val = _val[0]
         else:
             _val = [_val[i] for i in range(_len)]
-            return [_val, _time]
+
+        if np and mpr.mpr_obj_get_prop_as_int32(self._obj, 0x2800, NPARRAY_NAME):
+            _val = np.array(_val)
+
+        return [_val, _time]
 
     def reserve_instances(self, arg):
         """
@@ -1493,7 +1468,7 @@ class Signal(Object):
         else:
             return super().get_status()
 
-    def num_instances(self, status=Status.ANY):
+    def num_instances(self, status=Object.Status.ANY):
         """
         Get the number of instances for this Signal.
 
@@ -1506,25 +1481,25 @@ class Signal(Object):
 
         mpr.mpr_sig_get_num_inst.argtypes = [c_void_p, c_int]
         mpr.mpr_sig_get_num_inst.restype = c_int
-        if not isinstance(status, Signal.Status):
-            status = Signal.Status(status)
+        if not isinstance(status, Object.Status):
+            status = Object.Status(status)
         return mpr.mpr_sig_get_num_inst(self._obj, status.value)
 
-    def instances(self, status=Status.ANY):
+    def instances(self, status=Object.Status.ANY):
         """
         Get a list of Signal Instances matching a given status.
 
         Args:
-            status (libmapper.Signal.Status): The statuses of the instances to search for.
+            status (libmapper.Object.Status): The statuses of the instances to search for.
 
         Returns:
             mpr.List
         """
 
-        if not isinstance(status, Signal.Status):
-            status = Signal.Status(status)
+        if not isinstance(status, Object.Status):
+            status = Object.Status(status)
 
-        if type(status) is Status:
+        if type(status) is Object.Status:
             status = status.value
         if status == 0:
             return None
@@ -1558,8 +1533,6 @@ class Signal(Object):
         mpr.mpr_sig_get_maps.argtypes = [c_void_p, c_int]
         mpr.mpr_sig_get_maps.restype = c_void_p
         return List(mpr.mpr_sig_get_maps(self._obj, direction), None)
-
-py_sig_cb_type = CFUNCTYPE(None, py_object, py_object, c_longlong, py_object, py_object)
 
 class Map(Object):
     """
@@ -1768,28 +1741,6 @@ class Map(Object):
         return self
 
 class Graph(Object):
-    pass
-
-graph_dev_cbs = set()
-graph_sig_cbs = set()
-graph_map_cbs = set()
-
-@CFUNCTYPE(None, c_void_p, c_void_p, c_int, c_void_p)
-def graph_cb_py(_graph, c_obj, evt, user):
-    mpr.mpr_obj_get_type.argtypes = [c_void_p]
-    mpr.mpr_obj_get_type.restype = c_byte
-    _type = mpr.mpr_obj_get_type(c_obj)
-    if _type == Type.DEVICE:
-        for f in graph_dev_cbs:
-            f(Type.DEVICE, Device(c_obj), Graph.Event(evt))
-    elif _type == Type.SIGNAL:
-        for f in graph_sig_cbs:
-            f(Type.SIGNAL, Signal(c_obj), Graph.Event(evt))
-    elif _type == Type.MAP:
-        for f in graph_map_cbs:
-            f(Type.MAP, Map(c_obj), Graph.Event(evt))
-
-class Graph(Object):
     """
     Graphs are the primary interface through which a program may observe the distributed graph
     and store information about devices and signals that are present.  Each Graph stores records
@@ -1798,17 +1749,6 @@ class Graph(Object):
 
     mpr.mpr_graph_get_list.argtypes = [c_void_p, c_int]
     mpr.mpr_graph_get_list.restype = c_void_p
-
-    @unique
-    class Event(Enum):
-        """The set of possible graph events, used to inform callbacks."""
-        NEW      = 0x01
-        MODIFIED = 0x02
-        REMOVED  = 0x04
-        EXPIRED  = 0x08
-
-        def __repr__(self):
-            return 'libmapper.Graph.Event.' + self.name
 
     def __init__(self, subscribe_flags=Type.OBJECT, ptr=None):
         """
@@ -1831,8 +1771,6 @@ class Graph(Object):
             self._obj = mpr.mpr_graph_new(subscribe_flags.value)
 
 #        self._finalizer = weakref.finalize(self, mpr_graph_free, self._obj)
-        mpr.mpr_graph_add_cb.argtypes = [c_void_p, c_void_p, c_int, c_void_p]
-        mpr.mpr_graph_add_cb(self._obj, graph_cb_py, Type.DEVICE | Type.SIGNAL | Type.MAP, None)
 
     def free(self):
         """Disconnect from the network and free resources."""
@@ -1914,58 +1852,6 @@ class Graph(Object):
 
         mpr.mpr_graph_poll.argtypes = [c_void_p, c_int]
         mpr.mpr_graph_poll(self._obj, timeout)
-        return self
-
-    def add_callback(self, func, types=Type.OBJECT):
-        """
-        Register a callback for when an object record is added or updated in the graph.
-
-        Args:
-            func: a function to be called when object records are added, modified, or removed
-            types (bitflags: libmapper.Type): Bitflags setting the type of information of interest.
-                Can be a combination of `DEVICE`, `SIGNAL`, and/or `MAP`. Defaults to `OBJECT`
-                (any object type).
-
-        Returns:
-            self
-        """
-
-        updated = False
-        if types & Type.DEVICE:
-            if func not in graph_dev_cbs:
-                graph_dev_cbs.add(func)
-                updated = True
-        if types & Type.SIGNAL:
-            if func not in graph_sig_cbs:
-                graph_sig_cbs.add(func)
-                updated = True
-        if types & Type.MAP:
-            if func not in graph_map_cbs:
-                graph_map_cbs.add(func)
-                updated = True
-        return self
-
-    def remove_callback(self, func):
-        """
-        Remove an object record callback from the graph service.
-
-        Args:
-            func: The callback function to remove.
-
-        Returns:
-            self
-        """
-
-        updated = False
-        if func in graph_dev_cbs:
-            graph_dev_cbs.remove(func)
-            updated = True
-        if func in graph_sig_cbs:
-            graph_sig_cbs.remove(func)
-            updated = True
-        if func in graph_map_cbs:
-            graph_map_cbs.remove(func)
-            updated = True
         return self
 
     def subscribe(self, device, flags, timeout=-1):
@@ -2117,7 +2003,7 @@ class Device(Object):
         return mpr.mpr_dev_poll(self._obj, timeout)
 
     def add_signal(self, dir, name, length=1, datatype=Type.FLOAT, unit=None, min=None, max=None,
-                   num_inst=None, callback=None, events=Signal.Event.ALL):
+                   num_inst=None):
         """
         Create a new Signal and add it to this Device.
 
@@ -2130,28 +2016,24 @@ class Device(Object):
             min (numeric, optional): The minimum value for this signal, if any.
             max (numeric, optional): The maximum value for this signal, if any.
             num_inst (int or None): The number of instances for this signal, or None for singleton.
-            callback (code, optional): Function to be called when the signal is updated.
-            events (libmapper.Signal.Event): The types of events to trigger a call to `callback`.
 
         Returns:
             The new Signal.
         """
 
         mpr.mpr_sig_new.argtypes = [c_void_p, c_int, c_char_p, c_int, c_char, c_char_p, c_void_p,
-                                    c_void_p, POINTER(c_int), c_void_p, c_int]
+                                    c_void_p, POINTER(c_int)]
         mpr.mpr_sig_new.restype = c_void_p
 
         is_np_array = np and datatype > 0xFF
         datatype &= 0xFF
 
         ptr = mpr.mpr_sig_new(self._obj, dir.value, name.encode('utf-8'), length,
-                              datatype.value, None, None, None, None, None, Signal.Event.NONE)
+                              datatype.value, None, None, None, None)
 
         signal = Signal(ptr)
         if is_np_array:
             mpr.mpr_obj_set_prop(ptr, 0, NPARRAY_NAME, 1, 0x62, byref(c_int(1)), 0)
-        if callback is not None:
-            signal.set_callback(callback, events)
         if unit is not None:
             signal.set_property(Property.UNIT, unit)
         if min is not None:

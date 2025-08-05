@@ -31,10 +31,10 @@ for i in range(100):
     outsig.set_value([i, i+1, i+2, i+3, i+4, i+5, i+6, i+7, i+8, i+9])
     dest.poll(10)
     src.poll(10)
-    val = insig.get_value()
+    val, time = insig.get_value()
     print('value:', val)
-    if val and val[1] > last_update:
-        last_update = val[1]
+    if val and time > last_update:
+        last_update = time
     else:
         print('  updating locally!')
         insig.set_value(0)

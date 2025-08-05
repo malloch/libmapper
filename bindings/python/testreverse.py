@@ -5,16 +5,16 @@ import libmapper as mpr
 print('starting testreverse.py')
 print('libmapper version:', mpr.__version__, 'with' if mpr.has_numpy() else 'without', 'numpy support')
 
-def h(sig, event, id, val, time):
+def h(sig, event, id):
     try:
-        print('--> source received', val)
+        print('--> source received', sig.get_value())
     except:
         print('exception')
-        print(sig, val)
+        print(sig, event, id)
 
 src = mpr.Device("py.testreverse.src")
 outsig = src.add_signal(mpr.Signal.Direction.OUTGOING, "outsig", 1, mpr.Type.FLOAT, None, 0, 1000)
-outsig.set_callback(h)
+outsig.add_callback(h)
 
 dest = mpr.Device("py.testreverse.dst")
 insig = dest.add_signal(mpr.Signal.Direction.INCOMING, "insig", 1, mpr.Type.FLOAT, None, 0, 1)

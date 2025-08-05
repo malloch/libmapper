@@ -11,7 +11,8 @@ except:
     print('this test requires numpy, quitting now')
     np = None
 
-def h(sig, event, id, val, time):
+def h(sig, event, id):
+    val, time = sig.get_value()
     print('  handler got', sig['name'], '=', type(val), val, 'at time', time.get_double())
 
 if np:
@@ -19,7 +20,8 @@ if np:
     outsig = src.add_signal(mpr.Signal.Direction.OUTGOING, "outsig", 10, mpr.Type.NP_INT32, None, 0, 1)
 
     dest = mpr.Device("py.testnumpy.dst")
-    insig = dest.add_signal(mpr.Signal.Direction.INCOMING, "insig", 10, mpr.Type.NP_FLOAT, None, 0, np.array([1,2,3]), None, h)
+    insig = dest.add_signal(mpr.Signal.Direction.INCOMING, "insig", 10, mpr.Type.NP_FLOAT, None, 0, np.array([1,2,3]))
+    insig.add_callback(h)
 
     print("insig properties:")
     print("  type:", insig['type'])

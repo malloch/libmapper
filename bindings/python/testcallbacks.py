@@ -5,41 +5,34 @@ import libmapper as mpr
 print('starting testcallbacks.py')
 print('libmapper version:', mpr.__version__, 'with' if mpr.has_numpy() else 'without', 'numpy support')
 
-def sig_h(sig, event, id, val, time):
+def h(obj, event, id):
     try:
-        print(sig['name'], val)
+        type = obj.type()
+        print("got type: ", obj.type())
+        if type is mpr.Type.DEVICE:
+            print(event.name, 'device', obj['name'])
+        elif type is mpr.Type.SIGNAL:
+            val, time = obj.get_value()
+            print(event.name, 'signal', obj['name'], val)
+        elif type is mpr.Type.MAP:
+            print(event.name, 'map:')
+            for s in obj.signals(mpr.Map.Location.SOURCE):
+                print("  src: ", s.device()['name'], ':', s['name'])
+            for s in map.signals(mpr.Map.Location.DESTINATION):
+                print("  dst: ", s.device()['name'], ':', s['name'])
+        else:
+            print("unknown type")
     except:
         print('exception')
-        print(sig, val)
-
-def device_h(type, device, event):
-    try:
-        print(event.name, 'device', device['name'])
-    except:
-        print('exception')
-        print(device)
-        print(event_name(event))
-
-def map_h(type, map, event):
-    try:
-        print(event.name, 'map:')
-        for s in map.signals(mpr.Map.Location.SOURCE):
-            print("  src: ", s.device()['name'], ':', s['name'])
-        for s in map.signals(mpr.Map.Location.DESTINATION):
-            print("  dst: ", s.device()['name'], ':', s['name'])
-    except:
-        print('exception')
-        print(map)
-        print(event_name(event))
+        print(event.name)
 
 src = mpr.Device("py.testcallbacks.src")
-src.graph().add_callback(device_h, mpr.Type.DEVICE)
-src.graph().add_callback(map_h, mpr.Type.MAP)
+src.graph().add_callback(h)
 outsig = src.add_signal(mpr.Signal.Direction.OUTGOING, "outsig", 1, mpr.Type.FLOAT, None, 0, 1000)
 
 dst = mpr.Device("py.testcallbacks.dst")
-dst.graph().add_callback(map_h, mpr.Type.MAP)
-insig = dst.add_signal(mpr.Signal.Direction.INCOMING, "insig", 1, mpr.Type.FLOAT, None, 0, 1, None, sig_h)
+dst.graph().add_callback(h)
+insig = dst.add_signal(mpr.Signal.Direction.INCOMING, "insig", 1, mpr.Type.FLOAT, None, 0, 1)
 
 while not src.ready or not dst.ready:
     src.poll()
