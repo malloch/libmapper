@@ -69,20 +69,21 @@ class test {
                 }
             }});
 
-        Signal inp1 = dev1.addSignal(mapper.signal.Direction.INCOMING, "insig1", 1, Type.INT32, "Hz",
-                                     null, null, null, new mapper.signal.Listener() {
-            public void onEvent(Signal signal, mapper.object.Status event, int value, Time time) {
-                System.out.println(signal.properties().get("name") + " got "
-                                   + value + " at t=" + time.toString()
-                                   + ", status=" + signal.getStatus());
+        Signal inp1 = dev1.addSignal(mapper.signal.Direction.INCOMING, "insig1", 1, Type.INT32,
+                                     "Hz", null, null, null);
+        inp1.addListener(new mapper.object.Listener() {
+            public void onEvent(mapper.Object object, mapper.object.Status event) {
+                System.out.println(object.properties().get("name")
+                                   + " got " + ((Signal)object).getValue()
+                                   + ", status=" + object.getStatus());
             }});
 
         System.out.println("Input signal name: "+inp1.properties().get("name"));
 
         Signal out1 = dev2.addSignal(mapper.signal.Direction.OUTGOING, "outsig1", 1, Type.INT32,
-                                     "Hz", 0, 1, null, null);
+                                     "Hz", 0, 1, null);
         Signal out2 = dev2.addSignal(mapper.signal.Direction.OUTGOING, "outsig2", 2, Type.FLOAT,
-                                     "Hz", 0.0f, 1.0f, null, null);
+                                     "Hz", 0.0f, 1.0f, null);
 
         dev1.properties().put("width", 256);
         dev1.properties().put("height", 12.5);

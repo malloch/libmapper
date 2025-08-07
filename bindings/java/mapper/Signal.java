@@ -9,7 +9,7 @@ import java.util.EnumSet;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 
-public class Signal extends AbstractObject
+public class Signal extends mapper.Object
 {
     /* constructors */
     public Signal(long sig) {
@@ -24,51 +24,6 @@ public class Signal extends AbstractObject
 
     /* device */
     public native Device device();
-
-    /* callbacks */
-    private native void mapperSignalSetCB(long sig, Listener l, String methodSig, int flags);
-    private void _setListener(Listener l, int flags) {
-        if (l == null) {
-            mapperSignalSetCB(_obj, null, null, 0);
-            return;
-        }
-
-        // try to check type of listener
-        String[] instanceName = l.toString().split("@", 0);
-        for (Method method : l.getClass().getMethods()) {
-            if ((method.getModifiers() & Modifier.STATIC) != 0)
-                continue;
-            String methodName = method.toString();
-            if (methodName.startsWith("public void "+instanceName[0]+".")) {
-                mapperSignalSetCB(_obj, l, methodName, flags);
-                return;
-            }
-        }
-        System.out.println("Error: no match for listener.");
-    }
-    public Signal setListener(Listener l, Status status) {
-        _setListener(l, status.value());
-        return this;
-    }
-    public Signal setListener(Listener l, EnumSet<Status> statuses) {
-        int flags = 0;
-        for (Status s : Status.values()) {
-            if (statuses.contains(s))
-                flags |= s.value();
-        }
-        _setListener(l, flags);
-        return this;
-    }
-    public Signal setListener(Listener l) {
-        _setListener(l, Status.REMOTE_UPDATE.value());
-        return this;
-    }
-
-    private native void _removeListener(long sig);
-    public Signal removeListener() {
-        _removeListener(_obj);
-        return this;
-    }
 
     private native void mapperSignalReserveInstances(long sig, int num, long[] ids);
     public Signal reserveInstances(int num) {
@@ -110,8 +65,8 @@ public class Signal extends AbstractObject
     }
 
     /* set value */
-    public native Signal setValue(long id, Object value);
-    public Signal setValue(Object value) {
+    public native Signal setValue(long id, java.lang.Object value);
+    public Signal setValue(java.lang.Object value) {
         return setValue(0, value);
     }
 
@@ -119,13 +74,13 @@ public class Signal extends AbstractObject
     public native boolean hasValue(long id);
     public boolean hasValue() { return hasValue(0); }
 
-    public native Object getValue(long id);
-    public Object getValue() { return getValue(0); }
+    public native java.lang.Object getValue(long id);
+    public java.lang.Object getValue() { return getValue(0); }
 
     public native Signal releaseInstance(long id);
     public native Signal removeInstance(long id);
 
-    public class Instance extends AbstractObject
+    public class Instance extends mapper.Object
     {
         /* constructors */
         private native long mapperInstance(boolean hasId, long id, java.lang.Object obj);
@@ -161,13 +116,13 @@ public class Signal extends AbstractObject
         public boolean hasValue() { return Signal.this.hasValue(_id); }
 
         /* update */
-        public Instance setValue(Object value) {
+        public Instance setValue(java.lang.Object value) {
             Signal.this.setValue(_id, value);
             return this;
         }
 
         /* value */
-        public Object getValue() { return Signal.this.getValue(_id); }
+        public java.lang.Object getValue() { return Signal.this.getValue(_id); }
 
         /* userObject */
         public native java.lang.Object getUserReference();

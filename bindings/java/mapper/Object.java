@@ -1,16 +1,20 @@
 
 package mapper;
 
+import mapper.object.*;
 import mapper.NativeLib;
 import mapper.Property;
+import java.util.EnumSet;
 
-public abstract class AbstractObject<T extends AbstractObject<T>>
+public class Object
 {
     /* constructor */
-    public AbstractObject(long obj) { _obj = obj; _owned = false; }
+    public Object(long obj) { _obj = obj; _owned = false; }
 
     /* self */
-    abstract T self();
+    Object self() {
+        return this;
+    }
 
     /* graph */
     private native long graph(long obj);
@@ -22,22 +26,52 @@ public abstract class AbstractObject<T extends AbstractObject<T>>
     public native int getStatus();
 
     private native void _reset_status(long obj);
-    public T resetStatus() {
+    public Object resetStatus() {
         _reset_status(_obj);
         return self();
+    }
+
+    /* callbacks */
+    private native void mapperObjectAddCB(long obj, Listener l, int flags);
+    private void _addListener(Listener l, int flags) {
+        if (l != null)
+            mapperObjectAddCB(_obj, l, flags);
+    }
+    public Object addListener(Listener l) {
+        _addListener(l, Status.REMOTE_UPDATE.value());
+        return this;
+    }
+    public Object addListener(Listener l, Status status) {
+        _addListener(l, status.value());
+        return this;
+    }
+    public Object addListener(Listener l, EnumSet<Status> statuses) {
+        int flags = 0;
+        for (Status s : Status.values()) {
+            if (statuses.contains(s))
+                flags |= s.value();
+        }
+        _addListener(l, flags);
+        return this;
+    }
+
+    private native void _removeListener(long obj, Listener l);
+    public Object removeListener(Listener l) {
+        _removeListener(_obj, l);
+        return this;
     }
 
     /* properties */
     public class Properties
     {
         /* constructor */
-        public Properties(AbstractObject obj) { _obj = obj._obj; }
+        public Properties(Object obj) { _obj = obj._obj; }
 
         public void clear()
             { throw new UnsupportedOperationException(); }
 
         private native boolean _containsKey(long obj, int idx, String key);
-        public boolean containsKey(Object key)
+        public boolean containsKey(java.lang.Object key)
         {
             if (key instanceof Integer)
                 return _containsKey(_obj, (int)key, null);
@@ -49,8 +83,8 @@ public abstract class AbstractObject<T extends AbstractObject<T>>
                 return false;
         }
 
-        private native boolean _containsValue(long obj, Object value);
-        public boolean containsValue(Object value)
+        private native boolean _containsValue(long obj, java.lang.Object value);
+        public boolean containsValue(java.lang.Object value)
             { return _containsValue(_obj, value); }
 
         public class Entry
@@ -61,19 +95,19 @@ public abstract class AbstractObject<T extends AbstractObject<T>>
                 { return _key; }
             public mapper.Property getProperty()
                 { return mapper.Property.values()[_id]; }
-            public Object getValue()
+            public java.lang.Object getValue()
                 { return _value; }
             public String toString()
                 { return _key + ": " + _value.toString(); }
 
             private int _id;
             private String _key;
-            private Object _value;
+            private java.lang.Object _value;
         }
 
         // TODO: implement iterator
 
-        public Entry getEntry(Object key)
+        public Entry getEntry(java.lang.Object key)
         {
             if (key instanceof Integer) {
                 Entry e = new Entry();
@@ -91,8 +125,8 @@ public abstract class AbstractObject<T extends AbstractObject<T>>
                 return null;
         }
 
-        private native Object _get(long obj, int idx, String key);
-        public Object get(Object key)
+        private native java.lang.Object _get(long obj, int idx, String key);
+        public java.lang.Object get(java.lang.Object key)
         {
             if (key instanceof Integer)
                 return _get(_obj, (int)key, null);
@@ -107,8 +141,9 @@ public abstract class AbstractObject<T extends AbstractObject<T>>
         public boolean isEmpty()
             { return false; }
 
-        private native Object _put(long obj, int idx, String key, Object value, boolean publish);
-        public Object put(Object key, Object value, boolean publish)
+        private native java.lang.Object _put(long obj, int idx, String key, java.lang.Object value,
+                                             boolean publish);
+        public java.lang.Object put(java.lang.Object key, java.lang.Object value, boolean publish)
         {
             // translate some enum objects to their int form
             if (value instanceof mapper.signal.Direction)
@@ -132,11 +167,11 @@ public abstract class AbstractObject<T extends AbstractObject<T>>
                 return null;
         }
 
-        public Object put(Object key, Object value)
+        public java.lang.Object put(java.lang.Object key, java.lang.Object value)
             { return put(key, value, true); }
 
-        private native Object _remove(long obj, int idx, String key);
-        public Object remove(Object key)
+        private native java.lang.Object _remove(long obj, int idx, String key);
+        public java.lang.Object remove(java.lang.Object key)
         {
             if (key instanceof Integer)
                 return _remove(_obj, (int)key, null);
@@ -157,7 +192,7 @@ public abstract class AbstractObject<T extends AbstractObject<T>>
         { return new Properties(this); }
 
     private native void _push(long obj);
-    public T push() {
+    public Object push() {
         _push(_obj);
         return self();
     }

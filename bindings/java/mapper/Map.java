@@ -3,7 +3,7 @@ package mapper;
 
 import mapper.map.Location;
 
-public class Map extends mapper.AbstractObject
+public class Map extends mapper.Object
 {
     /* constructor */
     public Map(long map) {

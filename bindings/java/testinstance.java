@@ -24,8 +24,9 @@ class testinstance {
             });
 
         Signal inp1 = dev1.addSignal(mapper.signal.Direction.INCOMING, "insig1", 1, Type.INT32, "Hz",
-                                     2.0f, null, 10, new mapper.signal.Listener() {
-            public void onEvent(Signal.Instance inst, mapper.object.Status event, int value, Time time) {
+                                     2.0f, null, 10);
+        inp1.addListener(new mapper.object.Listener() {
+            public void onEvent(mapper.Object.Instance inst, mapper.object.Status event, int value, Time time) {
                 System.out.println(event + " for " + inst.properties().get("name") + ": "
                                    + value + " at t=" + time);
             }});
@@ -33,9 +34,9 @@ class testinstance {
         System.out.println("Input signal name: "+inp1.properties().get("name"));
 
         Signal out1 = dev2.addSignal(mapper.signal.Direction.OUTGOING, "outsig1", 1, Type.INT32,
-                                     "Hz", 0, 1, 10, null);
+                                     "Hz", 0, 1, 10);
         Signal out2 = dev2.addSignal(mapper.signal.Direction.OUTGOING, "outsig2", 2, Type.FLOAT,
-                                     "Hz", 0.0f, 1.0f, 10, null);
+                                     "Hz", 0.0f, 1.0f, 10);
 
         System.out.print("Waiting for ready... ");
         while (!dev1.ready() || !dev2.ready()) {
@@ -64,8 +65,8 @@ class testinstance {
             System.out.println("Signal has no value.");
 
         // Test instances
-        out1.setListener(new mapper.signal.Listener() {
-            public void onEvent(Signal.Instance inst, mapper.object.Status event, int value, Time time) {
+        out1.addListener(new mapper.object.Listener() {
+            public void onEvent(mapper.Object.Instance inst, mapper.object.Status event, int value, Time time) {
                 System.out.println(event + " for " + inst.properties().get("name")
                                    + " instance " + inst.id() + ": " + event);
                 java.lang.Object userObject = inst.getUserReference();
@@ -78,8 +79,8 @@ class testinstance {
                 }
             }}, mapper.object.Status.ANY);
 
-        inp1.setListener(new mapper.signal.Listener() {
-            public void onEvent(Signal.Instance inst, mapper.object.Status event, int val, Time time) {
+        inp1.addListener(new mapper.object.Listener() {
+            public void onEvent(mapper.Object.Instance inst, mapper.object.Status event, int val, Time time) {
                 System.out.println(event + " for " + inst.properties().get("name")
                                    + " instance " + inst.id() + ": " + inst.getUserReference()
                                    + ", val= " + val);

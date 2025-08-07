@@ -4,8 +4,8 @@
 #include <arpa/inet.h>
 #include <mapper/mapper.h>
 
-#include "mapper_AbstractObject.h"
-#include "mapper_AbstractObject_Properties.h"
+#include "mapper_Object.h"
+#include "mapper_Object_Properties.h"
 #include "mapper_Device.h"
 #include "mapper_Graph.h"
 #include "mapper_List.h"
@@ -814,23 +814,23 @@ static jobject create_signal_object(JNIEnv *env, jobject devobj, signal_jni_cont
     return sigobj;
 }
 
-/**** mapper_AbstractObject.h ****/
+/**** mapper_Object.h ****/
 
-JNIEXPORT jlong JNICALL Java_mapper_AbstractObject_graph
+JNIEXPORT jlong JNICALL Java_mapper_Object_graph
   (JNIEnv *env, jobject jobj, jlong ptr)
 {
     mpr_obj mobj = (mpr_obj) ptr_jlong(ptr);
     return mobj ? jlong_ptr(mpr_obj_get_graph(mobj)) : 0;
 }
 
-JNIEXPORT jint JNICALL Java_mapper_AbstractObject_getStatus
+JNIEXPORT jint JNICALL Java_mapper_Object_getStatus
   (JNIEnv *env, jobject jobj)
 {
     mpr_obj obj = get_mpr_obj_from_jobject(env, jobj);
     return obj ? mpr_obj_get_status(obj) : 0;
 }
 
-JNIEXPORT void JNICALL Java_mapper_AbstractObject__1reset_1status
+JNIEXPORT void JNICALL Java_mapper_Object__1reset_1status
   (JNIEnv *env, jobject jobj, jlong ptr)
 {
     mpr_obj obj = (mpr_obj) ptr_jlong(ptr);
@@ -838,7 +838,7 @@ JNIEXPORT void JNICALL Java_mapper_AbstractObject__1reset_1status
         mpr_obj_reset_status(obj);
 }
 
-JNIEXPORT void JNICALL Java_mapper_AbstractObject__1push
+JNIEXPORT void JNICALL Java_mapper_Object__1push
   (JNIEnv *env, jobject jobj, jlong ptr)
 {
     mpr_obj obj = (mpr_obj)ptr_jlong(ptr);
@@ -846,9 +846,46 @@ JNIEXPORT void JNICALL Java_mapper_AbstractObject__1push
         mpr_obj_push(obj);
 }
 
-/**** mapper_AbstractObject_Properties.h ****/
+JNIEXPORT void JNICALL Java_mapper_Object_mapperObjectSetCB
+  (JNIEnv *env, jobject obj, jlong jobj, jobject listener, jstring methodSig,
+    jint flags)
+{
+    mpr_obj mobj = (mpr_obj) ptr_jlong(jobj);
+    object_jni_context ctx = (object_jni_context)object_user_data(mobj);
+    if (!ctx) {
+        return;
+    }
+    if (ctx->listener == listener) {
+        mpr_obj_set_cb(obj, java_object_update_cb, flags);
+        return;
+    }
+    if (ctx->listener) {
+        (*env)->DeleteGlobalRef(env, ctx->listener);
+    }
+    if (listener) {
+        const char *cMethodSig = (*env)->GetStringUTFChars(env, methodSig, 0);
+        ctx->listener_type = object_listener_type(cMethodSig);
+        (*env)->ReleaseStringUTFChars(env, methodSig, cMethodSig);
+        ctx->listener = (*env)->NewGlobalRef(env, listener);
+        mpr_obj_set_cb(sig, java_object_update_cb, flags);
+    }
+    else {
+        ctx->listener = 0;
+        mpr_obj_set_cb(mobj, NULL, 0);
+    }
+    return;
+}
 
-JNIEXPORT jboolean JNICALL Java_mapper_AbstractObject_00024Properties__1containsKey
+JNIEXPORT void JNICALL Java_mapper_Object__1removeListener
+  (JNIEnv *env, jobject obj, jlong jobj)
+{
+    mpr_obj mobj = (mpr_sig) ptr_jlong(jobj);
+    mpr_obj_set_cb(mobj, NULL, 0);
+}
+
+/**** mapper_Object_Properties.h ****/
+
+JNIEXPORT jboolean JNICALL Java_mapper_Object_00024Properties__1containsKey
   (JNIEnv *env, jobject jobj, jlong ptr, jint id, jstring jkey)
 {
     mpr_obj mobj = (mpr_obj) ptr_jlong(ptr);
@@ -956,7 +993,7 @@ int compare_object_equals_property(JNIEnv *env, jobject jval, int prop_len, mpr_
     return 0;
 }
 
-JNIEXPORT jboolean JNICALL Java_mapper_AbstractObject_00024Properties__1containsValue
+JNIEXPORT jboolean JNICALL Java_mapper_Object_00024Properties__1containsValue
   (JNIEnv *env, jobject jobj, jlong ptr, jobject jval)
 {
     mpr_obj mobj = (mpr_obj) ptr_jlong(ptr);
@@ -973,7 +1010,7 @@ JNIEXPORT jboolean JNICALL Java_mapper_AbstractObject_00024Properties__1contains
     return JNI_FALSE;
 }
 
-JNIEXPORT jobject JNICALL Java_mapper_AbstractObject_00024Properties__1get
+JNIEXPORT jobject JNICALL Java_mapper_Object_00024Properties__1get
   (JNIEnv *env, jobject jobj, jlong ptr, jint id, jstring jkey)
 {
     mpr_obj mobj = (mpr_obj) ptr_jlong(ptr);
@@ -995,7 +1032,7 @@ JNIEXPORT jobject JNICALL Java_mapper_AbstractObject_00024Properties__1get
     return o;
 }
 
-JNIEXPORT jobject JNICALL Java_mapper_AbstractObject_00024Properties_00024Entry__1set
+JNIEXPORT jobject JNICALL Java_mapper_Object_00024Properties_00024Entry__1set
   (JNIEnv *env, jobject entry, jlong ptr, jint id, jstring jkey)
 {
     mpr_obj mobj = (mpr_obj) ptr_jlong(ptr);
@@ -1058,7 +1095,7 @@ JNIEXPORT jobject JNICALL Java_mapper_AbstractObject_00024Properties_00024Entry_
 }
 
 // needs to return the previous value or null
-JNIEXPORT jobject JNICALL Java_mapper_AbstractObject_00024Properties__1put
+JNIEXPORT jobject JNICALL Java_mapper_Object_00024Properties__1put
   (JNIEnv *env, jobject jobj, jlong ptr, jint id, jstring jkey, jobject jval, jboolean publish)
 {
     mpr_obj mobj = (mpr_obj) ptr_jlong(ptr);
@@ -1175,12 +1212,12 @@ JNIEXPORT jobject JNICALL Java_mapper_AbstractObject_00024Properties__1put
 }
 
 // returns the previous value if there was one
-JNIEXPORT jobject JNICALL Java_mapper_AbstractObject_00024Properties__1remove
+JNIEXPORT jobject JNICALL Java_mapper_Object_00024Properties__1remove
   (JNIEnv *env, jobject jobj, jlong ptr, jint id, jstring jkey)
 {
     mpr_obj mobj = (mpr_obj) ptr_jlong(ptr);
 
-    jobject ret = Java_mapper_AbstractObject_00024Properties__1get(env, jobj, ptr, id, jkey);
+    jobject ret = Java_mapper_Object_00024Properties__1get(env, jobj, ptr, id, jkey);
 
     const char *ckey = jkey ? (*env)->GetStringUTFChars(env, jkey, 0) : 0;
     mpr_obj_remove_prop(mobj, id, ckey);
@@ -1189,7 +1226,7 @@ JNIEXPORT jobject JNICALL Java_mapper_AbstractObject_00024Properties__1remove
     return ret;
 }
 
-JNIEXPORT jint JNICALL Java_mapper_AbstractObject_00024Properties__1size
+JNIEXPORT jint JNICALL Java_mapper_Object_00024Properties__1size
   (JNIEnv *env, jobject jobj, jlong ptr)
 {
     mpr_obj mobj = (mpr_obj) ptr_jlong(ptr);
@@ -1504,12 +1541,12 @@ JNIEXPORT jobject JNICALL Java_mapper_Device_add_1signal
         return 0;
     }
     if (min) {
-        Java_mapper_AbstractObject_00024Properties__1put(env, sigobj, jlong_ptr(sig),
-                                                         MPR_PROP_MIN, NULL, min, JNI_TRUE);
+        Java_mapper_Object_00024Properties__1put(env, sigobj, jlong_ptr(sig),
+                                                 MPR_PROP_MIN, NULL, min, JNI_TRUE);
     }
     if (max) {
-        Java_mapper_AbstractObject_00024Properties__1put(env, sigobj, jlong_ptr(sig),
-                                                         MPR_PROP_MAX, NULL, max, JNI_TRUE);
+        Java_mapper_Object_00024Properties__1put(env, sigobj, jlong_ptr(sig),
+                                                 MPR_PROP_MAX, NULL, max, JNI_TRUE);
     }
     return sigobj;
 }
@@ -1918,43 +1955,6 @@ JNIEXPORT jobject JNICALL Java_mapper_Signal_device
 
     jmethodID mid = (*env)->GetMethodID(env, cls, "<init>", "(J)V");
     return (*env)->NewObject(env, cls, mid, jlong_ptr(dev));
-}
-
-JNIEXPORT void JNICALL Java_mapper_Signal_mapperSignalSetCB
-  (JNIEnv *env, jobject obj, jlong jsig, jobject listener, jstring methodSig,
-    jint flags)
-{
-    mpr_sig sig = (mpr_sig) ptr_jlong(jsig);
-    signal_jni_context ctx = (signal_jni_context)signal_user_data(sig);
-    if (!ctx) {
-        return;
-    }
-    if (ctx->listener == listener) {
-        mpr_sig_set_cb(sig, java_signal_update_cb, flags);
-        return;
-    }
-    if (ctx->listener) {
-        (*env)->DeleteGlobalRef(env, ctx->listener);
-    }
-    if (listener) {
-        const char *cMethodSig = (*env)->GetStringUTFChars(env, methodSig, 0);
-        ctx->listener_type = signal_listener_type(cMethodSig);
-        (*env)->ReleaseStringUTFChars(env, methodSig, cMethodSig);
-        ctx->listener = (*env)->NewGlobalRef(env, listener);
-        mpr_sig_set_cb(sig, java_signal_update_cb, flags);
-    }
-    else {
-        ctx->listener = 0;
-        mpr_sig_set_cb(sig, NULL, 0);
-    }
-    return;
-}
-
-JNIEXPORT void JNICALL Java_mapper_Signal__1removeListener
-  (JNIEnv *env, jobject obj, jlong jsig)
-{
-    mpr_sig sig = (mpr_sig) ptr_jlong(jsig);
-    mpr_sig_set_cb(sig, NULL, 0);
 }
 
 JNIEXPORT void JNICALL Java_mapper_Signal_mapperSignalReserveInstances
