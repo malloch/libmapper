@@ -7,7 +7,6 @@ typedef struct _mpr_dev *mpr_dev;
 typedef struct _mpr_local_dev *mpr_local_dev;
 
 #include "id.h"
-#include "id_map.h"
 #include "link.h"
 #include "message.h"
 #include "mpr_signal.h"
@@ -61,10 +60,6 @@ mpr_list mpr_dev_get_links(mpr_dev dev, mpr_dir dir);
 
 mpr_list mpr_dev_get_maps(mpr_dev dev, mpr_dir dir);
 
-int mpr_dev_ids_decref_local(mpr_local_dev dev, mpr_id_pair ids);
-
-int mpr_dev_ids_decref_global(mpr_local_dev dev, mpr_id_pair ids);
-
 void mpr_dev_init(mpr_dev dev, mpr_id id);
 
 void mpr_dev_process_incoming_maps(mpr_local_dev dev);
@@ -107,22 +102,5 @@ void mpr_local_dev_restart_registration(mpr_local_dev dev, int start_ordinal);
 void mpr_local_dev_handler_logout(mpr_local_dev dev, mpr_dev remote, const char *prefix, int ordinal);
 
 void mpr_local_dev_add_sig(mpr_local_dev dev, mpr_local_sig sig, mpr_dir dir);
-
-mpr_id_pair mpr_dev_add_ids(mpr_local_dev dev, mpr_id local, mpr_id global, int indirect);
-
-mpr_id_pair mpr_dev_get_ids_local(mpr_local_dev dev, mpr_id id);
-
-mpr_id_pair mpr_dev_get_ids_global(mpr_local_dev dev, mpr_id id);
-
-/* TODO: rename this function */
-mpr_id_pair mpr_dev_get_ids_global_free(mpr_local_dev dev, mpr_id last_id);
-
-int mpr_local_dev_get_id_map_size(mpr_local_dev dev, int active);
-
-void mpr_dev_remove_ids(mpr_local_dev dev, mpr_id_pair rem);
-
-#ifdef DEBUG
-void mpr_local_dev_print_id_map(mpr_local_dev dev);
-#endif
 
 #endif /* __MPR_DEVICE_H__ */

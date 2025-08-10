@@ -531,6 +531,7 @@ int run_test(test_config *config)
     mpr_sig both_src[2];
     int num_src = 1, use_inst, compare_count;
     int result = 0, active_count = 0, reserve_count = 0, count_epsilon;
+    mpr_id_map id_map;
     mpr_map map;
 
     both_src[0] = monosend;
@@ -654,26 +655,28 @@ int run_test(test_config *config)
         ++result;
     }
 
-    active_count = mpr_local_dev_get_id_map_size((mpr_local_dev)src, 1);
-    reserve_count = mpr_local_dev_get_id_map_size((mpr_local_dev)src, 0);
+    id_map = mpr_obj_get_id_map((mpr_obj)src);
+    active_count = mpr_id_map_get_size(id_map, 1);
+    reserve_count = mpr_id_map_get_size(id_map, 0);
     if (active_count > 1 || reserve_count > 6) {
         printf("Error: src device using %d active and %d reserve id maps (should be <=1 and <=6)\n",
                active_count, reserve_count);
 #ifdef DEBUG
-        mpr_local_dev_print_id_map((mpr_local_dev)src);
+        mpr_id_map_print(id_map);
 #endif
         ++result;
     }
 
-    active_count = mpr_local_dev_get_id_map_size((mpr_local_dev)dst, 1);
-    reserve_count = mpr_local_dev_get_id_map_size((mpr_local_dev)dst, 0);
+    id_map = mpr_obj_get_id_map((mpr_obj)dst);
+    active_count = mpr_id_map_get_size(id_map, 1);
+    reserve_count = mpr_id_map_get_size(id_map, 0);
     if (   active_count > mpr_sig_get_num_inst(multirecv, MPR_STATUS_ACTIVE) * !ephemeral + 1
         || reserve_count > 10) {
         printf("Error: dst device using %d active and %d reserve id maps (should be <=%d and <10)\n",
                active_count, reserve_count,
                mpr_sig_get_num_inst(multirecv, MPR_STATUS_ACTIVE) * !ephemeral + 1);
 #ifdef DEBUG
-        mpr_local_dev_print_id_map((mpr_local_dev)dst);
+        mpr_id_map_print(id_map);
 #endif
         ++result;
     }

@@ -457,19 +457,21 @@ void mpr_map_free(mpr_map map)
             for (i = 0; i < map->num_src; i++) {
                 mpr_sig sig = mpr_slot_get_sig(map->src[i]);
                 if (mpr_obj_get_is_local((mpr_obj)sig)) {
-                    mpr_local_dev dev = (mpr_local_dev)mpr_sig_get_dev(sig);
-                    mpr_id_pair ids = mpr_dev_get_ids_global(dev, lmap->ids.global);
+                    // TODO: map indicates which level in object hierarchy holds appropriate id_map
+                    mpr_id_map id_map = mpr_obj_get_id_map((mpr_obj)mpr_sig_get_dev(sig));
+                    mpr_id_pair ids = mpr_id_map_get_global(id_map, lmap->ids.global);
                     if (ids)
-                        mpr_dev_remove_ids(dev, ids);
+                        mpr_id_map_remove(id_map, ids);
                 }
             }
             {
                 mpr_sig sig = mpr_slot_get_sig(map->dst);
                 if (mpr_obj_get_is_local((mpr_obj)sig)) {
-                    mpr_local_dev dev = (mpr_local_dev)mpr_sig_get_dev(sig);
-                    mpr_id_pair ids = mpr_dev_get_ids_global(dev, lmap->ids.global);
+                    // TODO: map indicates which level in object hierarchy holds appropriate id_map
+                    mpr_id_map id_map = mpr_obj_get_id_map((mpr_obj)mpr_sig_get_dev(sig));
+                    mpr_id_pair ids = mpr_id_map_get_global(id_map, lmap->ids.global);
                     if (ids)
-                        mpr_dev_remove_ids(dev, ids);
+                        mpr_id_map_remove(id_map, ids);
                 }
             }
         }
@@ -849,8 +851,9 @@ void mpr_map_send(mpr_local_map m, mpr_time time)
 
             if (MPR_MAP == manage_inst && ids->local) {
                 /* need to clear ids */
-                mpr_id_pair tmp = mpr_dev_get_ids_local(dev, MPR_DEFAULT_LOCAL_INST_ID);
-                mpr_dev_remove_ids(dev, tmp);
+                mpr_id_map id_map = mpr_obj_get_id_map((mpr_obj)dev);
+                mpr_id_pair tmp = mpr_id_map_get_local(id_map, MPR_DEFAULT_LOCAL_INST_ID);
+                mpr_id_map_remove(id_map, tmp);
                 ids->local = 0;
             }
             /* TODO: if signal is managing instances we should retire reinstancing id_pair here */
@@ -860,11 +863,12 @@ void mpr_map_send(mpr_local_map m, mpr_time time)
             if (MPR_MAP == manage_inst) {
                 if (!ids->local) {
                     /* need to (re)create ids */
-                    mpr_id_pair tmp = mpr_dev_get_ids_local(dev, MPR_DEFAULT_LOCAL_INST_ID);
+                    mpr_id_map id_map = mpr_obj_get_id_map((mpr_obj)dev);
+                    mpr_id_pair tmp = mpr_id_map_get_local(id_map, MPR_DEFAULT_LOCAL_INST_ID);
                     if (!tmp) {
                         /* add a new ids to the device */
-                        tmp = mpr_dev_add_ids(dev, MPR_DEFAULT_LOCAL_INST_ID,
-                                              mpr_dev_generate_unique_id((mpr_dev)dev), 0);
+                        tmp = mpr_id_map_add(id_map, MPR_DEFAULT_LOCAL_INST_ID,
+                                             mpr_dev_generate_unique_id((mpr_dev)dev), 0);
                     }
                     /* copy the new id_pair values into the map's id_pair */
                     ids->local = MPR_DEFAULT_LOCAL_INST_ID;
@@ -882,8 +886,9 @@ void mpr_map_send(mpr_local_map m, mpr_time time)
 
             if (MPR_MAP == manage_inst && ids->local) {
                 /* need to clear ids */
-                mpr_id_pair tmp = mpr_dev_get_ids_local(dev, MPR_DEFAULT_LOCAL_INST_ID);
-                mpr_dev_remove_ids(dev, tmp);
+                mpr_id_map id_map = mpr_obj_get_id_map((mpr_obj)dev);
+                mpr_id_pair tmp = mpr_id_map_get_local(id_map, MPR_DEFAULT_LOCAL_INST_ID);
+                mpr_id_map_remove(id_map, tmp);
                 ids->local = 0;
             }
             /* TODO: if signal is managing instances we should retire reinstancing id_pair here */

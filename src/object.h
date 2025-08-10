@@ -11,6 +11,7 @@ typedef struct _mpr_dict {
 } mpr_dict_t, *mpr_dict;
 
 #include "id.h"
+#include "id_map.h"
 #include "mpr_type.h"
 #include "value.h"
 
@@ -45,6 +46,8 @@ typedef struct _mpr_obj
     int ephemeral;                  /*!< 1 if signal is ephemeral, 0 otherwise. */
 
     fptr_list callbacks;            /*!< List of object record callbacks. */
+
+    mpr_id_map id_map;              /*!< Id map for coordinating child instances. */
 } mpr_obj_t;
 
 #include "graph.h"
@@ -111,5 +114,9 @@ void mpr_obj_free_cbs(mpr_obj obj);
 int mpr_obj_get_num_inst_internal(mpr_obj obj);
 
 int mpr_obj_get_use_inst(mpr_obj obj);
+
+/**** id maps ****/
+
+mpr_id_map mpr_obj_get_id_map(mpr_obj obj);
 
 #endif /* __MPR_OBJECT_H__ */

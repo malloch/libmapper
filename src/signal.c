@@ -173,8 +173,8 @@ static void process_maps(mpr_local_sig sig, int id_map_idx)
 
             mpr_id_pair tmp_ids = mpr_local_map_get_ids(map);
             if (tmp_ids->global == ids->global) {
+                mpr_id_map_decref_global(mpr_obj_get_id_map((mpr_obj)sig->dev), ids);
                 tmp_ids->local = tmp_ids->global = 0;
-                mpr_dev_ids_decref_global(sig->dev, ids);
             }
 
             /* reset associated output memory */
@@ -438,8 +438,9 @@ again:
     /* TODO: if dst-processing and the expression is reducing we should enable caching up to slot->num_inst values */
 
     if (global_id) {
+        mpr_id_map dev_id_map = mpr_obj_get_id_map((mpr_obj)dev);
         /* don't activate an instance just to release it again */
-        remote_ids = mpr_dev_get_ids_global(dev, global_id);
+        remote_ids = mpr_id_map_get_global(dev_id_map, global_id);
 
         if (remote_ids && remote_ids->indirect) {
             trace("remapping instance GUID %"PR_MPR_ID" -> %"PR_MPR_ID"\n", global_id, remote_ids->local);
@@ -460,10 +461,10 @@ again:
             /* instance was already released locally, we are only interested in release messages */
             if (0 == vals) {
                 /* we can clear signal's reference to map */
-                mpr_dev_ids_decref_global(dev, sig->id_map[id_map_idx].ids);
+                mpr_id_map_decref_global(dev_id_map, sig->id_map[id_map_idx].ids);
                 sig->id_map[id_map_idx].ids = 0;
                 if (remote_ids) {
-                    mpr_dev_ids_decref_global(dev, remote_ids);
+                    mpr_id_map_decref_global(dev_id_map, remote_ids);
                 }
             }
             trace("instance already released locally\n");
@@ -494,6 +495,7 @@ again:
 
     if (vals == 0) {
         if (global_id) {
+            mpr_id_map dev_id_map = mpr_obj_get_id_map((mpr_obj)dev);
             if (sig->obj.ephemeral)
                 sig->id_map[id_map_idx].status |= RELEASED_REMOTELY;
             if (sig->dir == MPR_DIR_IN)
@@ -501,9 +503,9 @@ again:
             else
                 sig->id_map[id_map_idx].inst->status |= MPR_STATUS_REL_DNSTRM;
             sig->obj.status |= sig->id_map[id_map_idx].inst->status;
-            mpr_dev_ids_decref_global(dev, ids);
+            mpr_id_map_decref_global(dev_id_map, ids);
             if (remote_ids) {
-                mpr_dev_ids_decref_global(dev, remote_ids);
+                mpr_id_map_decref_global(dev_id_map, remote_ids);
             }
         }
         /* if user-code has registered callback for release events we will proceed even if the
@@ -806,6 +808,7 @@ static int activate_instance(mpr_local_sig lsig, mpr_id *local_id, mpr_id *globa
 {
     int i;
     mpr_sig_inst si;
+    mpr_id_map dev_id_map = mpr_obj_get_id_map((mpr_obj)lsig->dev);
     mpr_id_pair ids = 0, remote_ids = 0;
 
 #ifdef DEBUG
@@ -822,7 +825,7 @@ static int activate_instance(mpr_local_sig lsig, mpr_id *local_id, mpr_id *globa
 
     if (local_id) {
         /* check if the device already has an id_pair for this local id */
-        ids = mpr_dev_get_ids_local(lsig->dev, *local_id);
+        ids = mpr_id_map_get_local(dev_id_map, *local_id);
         /* try to find existing instance with this id */
         if ((si = _find_inst_by_id(lsig, *local_id))) {
             trace("found existing match...\n");
@@ -831,10 +834,10 @@ static int activate_instance(mpr_local_sig lsig, mpr_id *local_id, mpr_id *globa
     }
     else if (global_id) {
         /* check if the device already has an id_pair for this global id */
-        ids = mpr_dev_get_ids_global(lsig->dev, *global_id);
+        ids = mpr_id_map_get_global(mpr_obj_get_id_map((mpr_obj)lsig->dev), *global_id);
         if (ids) {
             trace("found existing id_pair for global id\n");
-            remote_ids = mpr_dev_get_ids_local(lsig->dev, *global_id);
+            remote_ids = mpr_id_map_get_local(dev_id_map, *global_id);
             if ((si = _find_inst_by_id(lsig, ids->local))) {
                 trace("found existing match...\n");
                 goto done;
@@ -852,7 +855,7 @@ static int activate_instance(mpr_local_sig lsig, mpr_id *local_id, mpr_id *globa
                     continue;
             }
             else {
-                ids = mpr_dev_get_ids_local(lsig->dev, si->id);
+                ids = mpr_id_map_get_local(dev_id_map, si->id);
                 if (ids && (lsig->obj.ephemeral || ids->refcount.global > 0))
                     continue;
             }
@@ -866,7 +869,7 @@ static int activate_instance(mpr_local_sig lsig, mpr_id *local_id, mpr_id *globa
     for (i = 0; i < lsig->obj.num_inst; i++) {
         si = lsig->inst[i];
         if (   (!lsig->obj.ephemeral || !(si->status & MPR_STATUS_ACTIVE))
-            && (local_id || !mpr_dev_get_ids_local(lsig->dev, si->id))) {
+            && (local_id || !mpr_id_map_get_local(dev_id_map, si->id))) {
             trace("    found inactive instance at inst[%d] idx %d\n", i, si->idx);
             goto done;
         }
@@ -887,7 +890,7 @@ static int activate_instance(mpr_local_sig lsig, mpr_id *local_id, mpr_id *globa
                 /* set up indirect id_pair to refer to old id_pair */
                 trace("  setting up id_pair indirection: %"PR_MPR_ID" -> %"PR_MPR_ID" : %"PR_MPR_ID"\n",
                       *global_id, ids->global, ids->local);
-                mpr_id_pair indirect = mpr_dev_add_ids(lsig->dev, ids->global, *global_id, 1);
+                mpr_id_pair indirect = mpr_id_map_add(dev_id_map, ids->global, *global_id, 1);
 
                 /* increment global id refcounts for both id_pairs */
                 mpr_ids_incref_global(indirect);
@@ -902,14 +905,14 @@ static int activate_instance(mpr_local_sig lsig, mpr_id *local_id, mpr_id *globa
 
     {
         mpr_id last = 0;
-        while ((ids = mpr_dev_get_ids_global_free(lsig->dev, last))) {
+        while ((ids = mpr_id_map_get_global_free(dev_id_map, last))) {
             trace("  found freed id_pair %"PR_MPR_ID" (%d) : %"PR_MPR_ID" (%d)\n", ids->local,
                   ids->refcount.local, ids->global, ids->refcount.global);
             if ((si = _find_inst_by_id(lsig, ids->local))) {
                 /* set up indirect id_pair to refer to old id_pair */
                 trace("  setting up id_pair indirection: %"PR_MPR_ID" -> %"PR_MPR_ID" : %"PR_MPR_ID"\n",
                       *global_id, ids->global, ids->local);
-                mpr_id_pair indirect = mpr_dev_add_ids(lsig->dev, ids->global, *global_id, 1);
+                mpr_id_pair indirect = mpr_id_map_add(dev_id_map, ids->global, *global_id, 1);
 
                 /* increment global id refcounts for new id_pair */
                 mpr_ids_incref_global(indirect);
@@ -933,8 +936,8 @@ done:
     }
     if (!ids) {
         /* Claim id map locally */
-        ids = mpr_dev_add_ids(lsig->dev, si->id,
-                              global_id ? *global_id : mpr_dev_generate_unique_id((mpr_dev)lsig->dev), 0);
+        ids = mpr_id_map_add(dev_id_map, si->id,
+                             global_id ? *global_id : mpr_dev_generate_unique_id((mpr_dev)lsig->dev), 0);
     }
     else
         mpr_ids_incref_local(ids);
@@ -1371,7 +1374,7 @@ static void mpr_sig_release_inst_internal(mpr_local_sig lsig, int id_map_idx)
     time = mpr_dev_get_time((mpr_dev)lsig->dev);
     mpr_value_reset_inst(lsig->value, smap->inst->idx, time);
     process_maps(lsig, id_map_idx);
-    if (smap->ids && mpr_dev_ids_decref_local((mpr_local_dev)lsig->dev, smap->ids)) {
+    if (smap->ids && mpr_id_map_decref_local(mpr_obj_get_id_map((mpr_obj)lsig->dev), smap->ids)) {
         smap->ids = 0;
     }
     else if ((lsig->dir & MPR_DIR_OUT) || smap->status & RELEASED_REMOTELY) {
@@ -1394,11 +1397,13 @@ void mpr_local_sig_release_inst_by_origin(mpr_local_sig lsig, mpr_dev origin)
 {
     int i;
     mpr_id id;
+    mpr_id_map dev_id_map;
     mpr_time time;
 
     RETURN_UNLESS(lsig->obj.ephemeral);
 
     mpr_time_set(&time, MPR_NOW);
+    dev_id_map = mpr_obj_get_id_map((mpr_obj)lsig->dev);
     id = mpr_obj_get_id((mpr_obj)origin);
     for (i = 0; i < lsig->id_map_size; i++) {
         mpr_sig_inst si = lsig->id_map[i].inst;
@@ -1406,7 +1411,7 @@ void mpr_local_sig_release_inst_by_origin(mpr_local_sig lsig, mpr_dev origin)
         if (   si     && si->status & MPR_STATUS_ACTIVE
             && ids && (ids->global & 0xFFFFFFFF00000000) == id) {
             /* decrement the id_pair's global refcount */
-            mpr_dev_ids_decref_global(lsig->dev, ids);
+            mpr_id_map_decref_global(dev_id_map, ids);
 
             mpr_sig_call_handler(lsig, MPR_STATUS_REL_UPSTRM, si->id, si->idx);
         }

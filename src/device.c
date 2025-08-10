@@ -66,8 +66,6 @@ struct _mpr_local_dev {
 
     mpr_subscriber subscribers;         /*!< Linked-list of subscribed peers. */
 
-    mpr_id_map id_map;
-
     mpr_time time;
     uint8_t time_is_stale;
     uint8_t polling;
@@ -168,8 +166,6 @@ mpr_dev mpr_dev_new(const char *name_prefix, mpr_graph graph)
     dev->ordinal_allocator.val = 1;
     dev->ordinal_allocator.count_time = mpr_get_current_time();
 
-    dev->id_map = mpr_id_map_new();
-
     return (mpr_dev)dev;
 }
 
@@ -236,8 +232,6 @@ void mpr_dev_free(mpr_dev dev)
         list = mpr_list_get_next(list);
         mpr_graph_remove_link(graph, link, MPR_STATUS_REMOVED);
     }
-
-    mpr_id_map_free(ldev->id_map);
 
     dev->obj.status |= MPR_STATUS_REMOVED;
     if (own_graph)
@@ -516,67 +510,6 @@ void mpr_dev_set_time(mpr_dev dev, mpr_time time)
         process_outgoing_maps(ldev);
     mpr_time_set(&ldev->time, time);
     ldev->time_is_stale = 0;
-}
-
-void mpr_dev_reserve_ids(mpr_local_dev dev)
-{
-    mpr_id_map_reserve(dev->id_map);
-}
-
-int mpr_local_dev_get_id_map_size(mpr_local_dev dev, int active)
-{
-    return mpr_id_map_get_size(dev->id_map, active);
-}
-
-#ifdef DEBUG
-void mpr_local_dev_print_id_map(mpr_local_dev dev)
-{
-    printf("ID MAP for %s:\n", dev->obj.name);
-    mpr_id_map_print(dev->id_map);
-}
-#endif
-
-mpr_id_pair mpr_dev_add_ids(mpr_local_dev dev, mpr_id local, mpr_id global, int indirect)
-{
-    mpr_id_pair ids = mpr_id_map_add(dev->id_map, local, global, indirect);
-#ifdef DEBUG
-    mpr_id_map_print(dev->id_map);
-#endif
-    return ids;
-}
-
-void mpr_dev_remove_ids(mpr_local_dev dev, mpr_id_pair rem)
-{
-    mpr_id_map_remove(dev->id_map, rem);
-#ifdef DEBUG
-    mpr_id_map_print(dev->id_map);
-#endif
-}
-
-int mpr_dev_ids_decref_local(mpr_local_dev dev, mpr_id_pair ids)
-{
-    return mpr_id_map_decref_local(dev->id_map, ids);
-}
-
-int mpr_dev_ids_decref_global(mpr_local_dev dev, mpr_id_pair ids)
-{
-    return mpr_id_map_decref_global(dev->id_map, ids);
-}
-
-mpr_id_pair mpr_dev_get_ids_local(mpr_local_dev dev, mpr_id id)
-{
-    return mpr_id_map_get_local(dev->id_map, id);
-}
-
-mpr_id_pair mpr_dev_get_ids_global(mpr_local_dev dev, mpr_id id)
-{
-    return mpr_id_map_get_global(dev->id_map, id);
-}
-
-/* TODO: rename this function */
-mpr_id_pair mpr_dev_get_ids_global_free(mpr_local_dev dev, mpr_id last_id)
-{
-    return mpr_id_map_get_global_free(dev->id_map, last_id);
 }
 
 /*! Probe the network to see if a device's proposed name.ordinal is available. */

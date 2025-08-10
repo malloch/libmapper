@@ -11,14 +11,35 @@
 #include "slot.h"
 #include <mapper/mapper.h>
 
+#ifdef DEBUG
+void mpr_obj_print_type(mpr_type type)
+{
+    switch(type) {
+        case MPR_OBJ:   printf("object");   break;
+        case MPR_GRAPH: printf("graph");    break;
+        case MPR_DEV:   printf("device");   break;
+        case MPR_SIG:   printf("signal");   break;
+        case MPR_LINK:  printf("link");     break;
+        case MPR_MAP:   printf("map");      break;
+        default:        printf("unknown");  break;
+    }
+}
+#endif
+
 void mpr_obj_init(mpr_obj o, mpr_graph g, const char *name, mpr_type type, int is_local)
 {
-    trace("initializing %s object '%s'\n", is_local ? "local" : "remote", name);
+#ifdef DEBUG
+    printf("initializing %s ", is_local ? "local" : "remote");
+    mpr_obj_print_type(type);
+    printf(" '%s'\n", name);
+#endif
     o->graph = g;
     if (name)
         o->name = strdup(name);
-    if (MPR_DEV == type)
+    if (MPR_DEV == type) {
         o->root = (MPR_DEV == type) ? (mpr_dev)o : o->root;
+        o->id_map = mpr_id_map_new();
+    }
     o->type = type;
     o->is_local = is_local;
     o->status = MPR_STATUS_NEW;
@@ -190,6 +211,9 @@ mpr_obj mpr_obj_new_internal(mpr_obj parent, const char *name, int num_inst, int
     else
         o->root = parent->root;
 
+    // TODO: this is only needed for local, instanced objects
+    o->id_map = mpr_id_map_new();
+
     /* inform graph */
 //    mpr_graph_add_obj((mpr_graph)(((mpr_obj)o->root)->parent), o);
 
@@ -245,6 +269,7 @@ void mpr_obj_free(mpr_obj o)
     FUNC_IF(free, o->name);
     FUNC_IF(mpr_tbl_free, o->props.staged);
     FUNC_IF(mpr_tbl_free, o->props.synced);
+    FUNC_IF(mpr_id_map_free, o->id_map);
 //    FUNC_IF(mpr_id_mapper_free, o->id_mapper);
 
     mpr_obj_free_cbs(o);
@@ -816,6 +841,8 @@ int mpr_obj_get_num_inst_internal(mpr_obj obj)
     return obj->num_inst;
 }
 
+/* callbacks */
+
 int mpr_obj_add_cb(mpr_obj obj, mpr_evt_handler *h, int events, const void *user, int manage)
 {
     fptr_list cb = obj->callbacks;
@@ -900,3 +927,14 @@ void mpr_obj_free_cbs(mpr_obj obj)
         free(cb);
     }
 }
+
+/* end callbacks */
+
+/* id maps */
+
+mpr_id_map mpr_obj_get_id_map(mpr_obj obj)
+{
+    return obj->id_map;
+}
+
+/* end id maps */
