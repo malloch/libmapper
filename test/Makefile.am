@@ -31,6 +31,7 @@ if WINDOWS_DLL
         testmapscope \
         testmonitor \
         testnetwork \
+        testobjecthierarchy \
         testparams \
         testparser \
         testprops \
@@ -39,7 +40,6 @@ if WINDOWS_DLL
         testreverse \
         testselfmap \
         testsetremote \
-        testsignalhierarchy \
         testsignals \
         testspeed \
         teststealing \
@@ -77,7 +77,7 @@ if WINDOWS_DLL
         testmapscope \
         testcalibrate \
         testlocalmap \
-        testsignalhierarchy \
+        testobjecthierarchy \
         testsetremote \
         testselfmap \
         teststealing \
@@ -110,6 +110,7 @@ else
         testmapscope \
         testmonitor \
         testnetwork \
+        testobjecthierarchy \
         testparams \
         testparser \
         testprops \
@@ -118,7 +119,6 @@ else
         testreverse \
         testselfmap \
         testsetremote \
-        testsignalhierarchy \
         testsignals \
         testspeed \
         teststealing \
@@ -159,7 +159,7 @@ else
         testlocalmap \
         testthread \
         testinterrupt \
-        testsignalhierarchy \
+        testobjecthierarchy \
         testsetremote \
         testselfmap \
         teststealing \
@@ -267,6 +267,10 @@ testnetwork_CFLAGS = $(TEST_CFLAGS)
 testnetwork_SOURCES = testnetwork.c
 testnetwork_LDADD = $(TEST_LDADD)
 
+testobjecthierarchy_CFLAGS = $(TEST_CFLAGS)
+testobjecthierarchy_SOURCES = testobjecthierarchy.c
+testobjecthierarchy_LDADD = $(TEST_LDADD)
+
 testparams_CFLAGS = $(TEST_CFLAGS)
 testparams_SOURCES = testparams.c
 testparams_LDADD = $(TEST_LDADD)
@@ -298,10 +302,6 @@ testselfmap_LDADD = $(TEST_LDADD)
 testsetremote_CFLAGS = $(TEST_CFLAGS)
 testsetremote_SOURCES = testsetremote.c
 testsetremote_LDADD = $(TEST_LDADD)
-
-testsignalhierarchy_CFLAGS = $(TEST_CFLAGS)
-testsignalhierarchy_SOURCES = testsignalhierarchy.c
-testsignalhierarchy_LDADD = $(TEST_LDADD)
 
 testsignals_CFLAGS = $(TEST_CFLAGS)
 testsignals_SOURCES = testsignals.c

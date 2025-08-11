@@ -80,6 +80,7 @@ test/testmapprotocol
 test/testmapscope
 test/testmonitor
 test/testnetwork
+test/testobjecthierarchy
 test/testparams
 test/testparser
 test/testprops
@@ -89,7 +90,6 @@ test/testreverse
 test/testselfmap
 test/testsetiface
 test/testsetremote
-test/testsignalhierarchy
 test/testsignals
 test/testspeed
 test/teststealing
