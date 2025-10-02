@@ -29,7 +29,7 @@
 int verbose = 1;
 char str[MAX_STR_LEN];
 mpr_expr e;
-int iterations = 20;//000;
+int iterations = 20000;
 int expression_count = 1;
 int token_count = 0;
 int update_count;
@@ -927,9 +927,9 @@ int run_tests()
     expect_flt[3] = expect_flt[4] = expect_flt[5] = 0;
     for (i = 0; i < iterations; i++) {
         /* update emd */
-        expect_flt[0] += ((expect_flt[3] - (float)src_int[0]) - expect_flt[0]) * 0.1f;
-        expect_flt[1] += ((expect_flt[4] - (float)src_int[1]) - expect_flt[1]) * 0.2f;
-        expect_flt[2] += ((expect_flt[5] - (float)src_int[2]) - expect_flt[2]) * 0.3f;
+        expect_flt[0] += (fabsf(expect_flt[3] - (float)src_int[0]) - expect_flt[0]) * 0.1f;
+        expect_flt[1] += (fabsf(expect_flt[4] - (float)src_int[1]) - expect_flt[1]) * 0.2f;
+        expect_flt[2] += (fabsf(expect_flt[5] - (float)src_int[2]) - expect_flt[2]) * 0.3f;
 
         /* update ema */
         expect_flt[3] += ((float)src_int[0] - expect_flt[3]) * 0.1f;
@@ -1930,6 +1930,21 @@ int run_tests()
     expect_flt[3] = 0.f;
     if (parse_and_eval(PARSE_SUCCESS | EVAL_SUCCESS, 9, 1, iterations))
         return 1;
+
+    /* 147) normal distribution */
+    set_expr_str("y = emd(normal(abs(x)), 0.1);");
+    setup_test(MPR_FLT, 1, MPR_FLT, 1);
+    if (parse_and_eval(PARSE_SUCCESS | EVAL_SUCCESS, 11, 0, iterations))
+        return 1;
+    if (start_index < 0 || start_index == 147) {
+        /* deviation should approach abs(x) as iterations increase */
+        if ((fabsf(dst_flt[0]) - fabsf(src_flt[0])) > fabsf(src_flt[0])) {
+            eprintf("... error: expected value approaching %g\n", fabsf(src_flt[0]));
+            return 1;
+        }
+        else
+            eprintf("... OK\n");
+    }
 
 //    /* 137) Signal count() */
 //    set_expr_str("y=x / x.signal.count();");

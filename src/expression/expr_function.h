@@ -6,6 +6,24 @@
 #include "expr_operator.h"
 #include "expr_value.h"
 
+#define powd pow
+#define sqrtd sqrt
+#define cosd cos
+#define sind sin
+#define acosd acos
+#define logd log
+#define absd fabs
+
+#if _M_ARM64
+    /* Needed to work around the fact that the function fabsf on Windows ARM64 is inline-only
+     * This lets libmapper compile with optimizations when targeting Windows ARM64 */
+    float absf(float a) {
+        return (float)fabs(a);
+    }
+#else
+    #define absf fabsf
+#endif
+
 #define EXTREMA_FUNC(NAME, TYPE, OP)    \
     static TYPE NAME(TYPE x, TYPE y) { return (x OP y) ? x : y; }
 EXTREMA_FUNC(maxi, int, >)
@@ -22,11 +40,22 @@ UNARY_FUNC(float, hzToMidi, f, 69.f + 12.f * log2f(x / 440.f))
 UNARY_FUNC(double, hzToMidi, d, 69. + 12. * log2(x / 440.))
 UNARY_FUNC(float, midiToHz, f, 440.f * powf(2.f, (x - 69.f) / 12.f))
 UNARY_FUNC(double, midiToHz, d, 440. * pow(2., (x - 69.) / 12.))
-UNARY_FUNC(float, uniform, f, (float)rand() / (RAND_MAX + 1.f) * x)
-UNARY_FUNC(double, uniform, d, (double)rand() / (RAND_MAX + 1.) * x)
+UNARY_FUNC(float, uniform, f, (float)rand() / (RAND_MAX + 1.f) * absf(x))
+UNARY_FUNC(double, uniform, d, (double)rand() / (RAND_MAX + 1.) * absd(x))
 UNARY_FUNC(int, sign, i, x >= 0 ? 1 : -1)
 UNARY_FUNC(float, sign, f, x >= 0.f ? 1.f : -1.f)
 UNARY_FUNC(double, sign, d, x >= 0. ? 1. : -1.)
+
+/* currently using Box-Muller, consider upgrading to Ziggurat */
+#define NORMAL_FUNC(TYPE, T)                                            \
+static TYPE normal##T(TYPE x)                                           \
+{                                                                       \
+    register TYPE v1 = (TYPE)(rand() + 1.) / (TYPE)(RAND_MAX + 1.);     \
+    register TYPE v2 = (TYPE)(rand() + 1.) / (TYPE)(RAND_MAX + 1.);     \
+return cos##T(2.0 * M_PI * v2) * sqrt##T(-2.0 * log##T(v1)) * abs##T(x);\
+}
+NORMAL_FUNC(float, f)
+NORMAL_FUNC(double, d)
 
 #define COMP_VFUNC(NAME, TYPE, OP, CMP, RET, T)     \
 static void NAME(evalue val, uint8_t *dim, int inc) \
@@ -171,12 +200,6 @@ static void NAME(evalue val, uint8_t *dim, int inc)         \
 MEDIAN_VFUNC(vmediani, int, i)
 MEDIAN_VFUNC(vmedianf, float, f)
 MEDIAN_VFUNC(vmediand, double, d)
-
-#define powd pow
-#define sqrtd sqrt
-#define cosd cos
-#define sind sin
-#define acosd acos
 
 #define NORM_VFUNC(NAME, TYPE, T)                   \
 static void NAME(evalue val, uint8_t *dim, int inc) \
@@ -405,14 +428,14 @@ SLERP_QFUNC(qslerpd, double, d)
  * vector element is processed separately. For convenience and reduced code we will also use vector
  * functions for ema and schmitt since they also require "memory". */
 
-#define EMA_VFUNC(NAME, TYPE, T)                         \
-static void NAME(evalue ema, uint8_t *dim, int inc)      \
-{                                                        \
-    evalue new = ema + inc, weight = new + inc;          \
-    uint8_t i;                                           \
-    for (i = 0; i < dim[0]; i++) {                       \
-        ema[i].T += (new[i].T - ema[i].T) * weight[i].T; \
-    }                                                    \
+#define EMA_VFUNC(NAME, TYPE, T)                                 \
+static void NAME(evalue ema, uint8_t *dim, int inc)              \
+{                                                                \
+    evalue new = ema + inc, weight = new + inc;                  \
+    uint8_t i;                                                   \
+    for (i = 0; i < dim[0]; i++) {                               \
+        ema[i].T += (new[i].T - ema[i].T) * abs##T(weight[i].T); \
+    }                                                            \
 }
 EMA_VFUNC(vemaf, float, f)
 EMA_VFUNC(vemad, double, d)
@@ -426,8 +449,9 @@ static void NAME(evalue emd, uint8_t *dim, int inc)     \
     uint8_t i;                                          \
     for (i = 0; i < dim[0]; i++) {                      \
         register TYPE diff = ema[i].T - new[i].T;       \
-        emd[i].T += (diff - emd[i].T) * weight[i].T;    \
-        ema[i].T -= diff * weight[i].T;                 \
+        register TYPE w = abs##T(weight[i].T);          \
+        emd[i].T += (abs##T(diff) - emd[i].T) * w;      \
+        ema[i].T -= diff * w;                           \
     }                                                   \
 }
 EMD_VFUNC(vemdf, float, f)
@@ -490,6 +514,7 @@ typedef enum {
     FN_DEL_IDX,
     FN_SIG_IDX,
     FN_VEC_IDX,
+    FN_NORMAL,
     FN_UNIFORM,
     N_FN
 } expr_fn_t;
@@ -533,16 +558,6 @@ static double dbl_sqrt(double x) { return sqrt(x); }
 static double dbl_tan(double x) { return tan(x); }
 static double dbl_tanh(double x) { return tanh(x); }
 
-#if _M_ARM64
-    /* Needed to work around the fact that the function fabsf on Windows ARM64 is inline-only
-     * This lets libmapper compile with optimizations when targeting Windows ARM64 */
-    float fabsf2(float a) {
-        return (float)fabs(a);
-    }
-#else
-    #define fabsf2 fabsf
-#endif
-
 static struct {
     const char *name;
     uint8_t arity;
@@ -550,7 +565,7 @@ static struct {
     void *fn_flt;
     void *fn_dbl;
 } fn_tbl[] = {
-    { "abs",      1, (void*)abs,   (void*)fabsf2,    (void*)fabs      },
+    { "abs",      1, (void*)abs,   (void*)absf,      (void*)absd      },
     { "acos",     1, 0,            (void*)flt_acos,  (void*)dbl_acos  },
     { "acosh",    1, 0,            (void*)acoshf,    (void*)acosh     },
     { "asin",     1, 0,            (void*)flt_asin,  (void*)dbl_asin  },
@@ -587,6 +602,7 @@ static struct {
     { "delay",    1, (void*)1,     0,                0                },
     { "sig_idx",  1, (void*)1,     0,                0                },
     { "vec_idx",  1, (void*)1,     0,                0                },
+    { "normal",   1, 0,            (void*)normalf,   (void*)normald   },
     { "uniform",  1, 0,            (void*)uniformf,  (void*)uniformd  },
 };
 

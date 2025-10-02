@@ -128,6 +128,7 @@ generated output.
 * `sign(x)` – return 1 if `x` is greater than or equal to 0, `-1` otherwise
 
 ### Random number generation:
+* `normal(x)` - normal random distribution with mean `0` and variance `x`. Note that the output can be anywhere on the entire real line.
 * `uniform(x)` — uniform random distribution between 0 and the given value
 
 ### Conversion functions:
@@ -136,6 +137,7 @@ generated output.
 
 ### Filters
 * `ema(x, w)` – a cheap low-pass filter: calculate a running *exponential moving average* with input `x` and a weight `w` applied to the current sample.
+* `emd(x, w)` – similarly, a cheap estimate of deviation.
 
 ### Quaternion functions:
 
