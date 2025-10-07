@@ -150,9 +150,9 @@ In the matrix graphic, `S` and `I` on the left side represent possible **source 
   </tbody>
 </table>
 
-<h2 id="stealing">Resource Stealing</h3>
+<h2 id="stealing">Resource Stealing</h2>
 
-Anologous to voice stealing in resource-constrained synthesizers, libmapper supports *resource stealing* for signal instances. If an update arrives for a new instance and all existing instances are already mapped, an active instance can be released and re-assigned to be controlled by the new remote instance. This scenario is typically implemented in one of three ways:
+Analogous to voice stealing in resource-constrained synthesizers, libmapper supports *resource stealing* for signal instances. If an update arrives for a new instance and all existing instances are already mapped, an active instance can be released and re-assigned to be controlled by the new remote instance. This scenario is typically implemented in one of three ways:
 
 1. Setting the property `MPR_PROP_STEAL_MODE` to automatically steal the `oldest` or `newest` instance, determined by comparing instance activation timestamps.
 2. Writing a signal handler function and subscribing to the `overflow` event type. The handler code might implement custom logic for determining which instance to release (e.g. the quietest voice of a synthesizer) or perhaps allocate more instances for the signal that is overflowing. This handler event is called during instance assignment so it is possible to act before the new instance update needs to be dropped.

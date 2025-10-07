@@ -246,7 +246,6 @@ INDEX_VFUNC(vindexd, double, d)
 
 /* TODO: should we handle multidimensional angles as well? Problem with sign...
  * should probably have separate function for signed and unsigned: angle vs. rotation */
-/* TODO: quaternion functions */
 
 #define atan2d atan2
 #define ANGLE_VFUNC(NAME, TYPE, T)                              \

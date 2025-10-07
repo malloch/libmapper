@@ -141,7 +141,7 @@ generated output.
 
 ### Quaternion functions:
 
-The inputs and outputs of the following functions are expected to be float or double vectors of length 4.
+The inputs and outputs of the following functions are expected to be float or double vectors of length 4 with the elements ordered in Hamilton representation, i.e. `[w,x,y,z]`.
 
 * `qconj(q)` – calculate the conjugate of quaternion `x`
 * `qinv(x)` – calculate the inverse of quaternion `x`

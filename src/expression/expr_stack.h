@@ -827,6 +827,8 @@ static int estack_get_eval_buffer_size(estack stk)
     return eval_buffer_len;
 }
 
+/* checks if the stack contains references to input variables that do not occur within a reduce
+ * sub-expression */
 static int estack_get_reduces_inst(estack stk)
 {
     int i, reducing = 0;
