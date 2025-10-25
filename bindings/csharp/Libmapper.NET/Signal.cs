@@ -391,16 +391,20 @@ public class Signal : MapperObject
     }
 
     [DllImport("mapper", CharSet = CharSet.Ansi, CallingConvention = CallingConvention.StdCall)]
-    private static extern ulong mpr_sig_get_inst_id(IntPtr sig, int index, int status);
+    private static extern unsafe int mpr_sig_get_inst_id(IntPtr sig, int index, int status, void* id);
 
     /// <summary>
     ///     Get a reference to an instance of this signal by index.
     /// </summary>
     /// <param name="index">The instance index</param>
     /// <param name="status">Status flags to match</param>
-    public Instance GetInstance(int index, Status status = Status.Any)
+    public unsafe Instance? GetInstance(int index, Status status = Status.Any)
     {
-        return new Instance(NativePtr, mpr_sig_get_inst_id(NativePtr, index, (int)status));
+        ulong instanceId = 0;
+        if (mpr_sig_get_inst_id(NativePtr, index, (int)status, &instanceId) != 0)
+            return new Instance(NativePtr, instanceId);
+        else
+            return null;
     }
 
     // TODO: add handler with Signal Instance object instead of Signal + InstanceId
