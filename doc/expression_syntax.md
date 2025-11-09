@@ -135,9 +135,11 @@ generated output.
 * `midiToHz(x)` — convert MIDI note value to frequency in Herz
 * `hzToMidi(x)` — convert Herz frequency value to MIDI note
 
-### Filters
-* `ema(x, w)` – a cheap low-pass filter: calculate a running *exponential moving average* with input `x` and a weight `w` applied to the current sample.
-* `emd(x, w)` – similarly, a cheap estimate of deviation.
+### Filters (functions with memory):
+* `ema(x, w)`,`x.ema(w)` – a cheap low-pass filter: calculate a running *exponential moving average* with input `x` and a weight `w` applied to the current sample.
+* `emd(x, w)`,`x.emd(w)` – similarly, a cheap estimate of deviation.
+* `diff(x)`,`x.diff()`,`x'` – the difference between variable `x` and it's last value.
+* `edge(x)`,`x.edge()` – outputs `1` on zero->nonzero transitions, `-1` on nonzero->zero transitions, and `0` otherwise.
 
 ### Quaternion functions:
 
@@ -158,7 +160,7 @@ The inputs and outputs of the following functions are expected to be float or do
 Individual elements of variable values can be accessed using the notation
 `<variable>[<index>]` in which `index` specifies the vector element starting from zero. Overruns and underruns are not possible as the modulus will be used if the index is outside the range `<0,length-1>`. This means that negative indices may be used for indexing from the end of the vector.
 
-When assigning values to a vector, if the source is shorter than the assignee it will be repeated as necessary, e.g. if `myvar` has length 5 and the expression assigns `myvar=[1,2,3]` its value will now be `[1,2,3,1,2]`.
+When assigning values to a vector, if the source is shorter than the assignee it will be repeated as necessary, e.g. if `myvar` has length 5 and the expression assigns `myvar=[1,2,3]` its value will now be `[1,2,3,1,2]`. When the source is longer than the assignee the source vector is truncated to the assignee length.
 
 Variables and expressions may also be used as indexes. A fractional index will result in linear interpolation between the neighbouring elements. Since we use the index modulus it is possible to interpolate between the last and first elements of the vector.
 

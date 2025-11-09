@@ -466,21 +466,25 @@ static void etoken_print(etoken tok, expr_var_t *vars, int show_locks)
 
 
             if (tok->var.idx == VAR_Y)
-                d += snprintf(s + d, l - d, ".y");
+                d += snprintf(s + d, l - d, "[y]");
             else if (tok->var.idx == VAR_X_NEWEST)
-                d += snprintf(s + d, l - d, ".x$$");
+                d += snprintf(s + d, l - d, "[x$$]");
             else if (tok->var.idx >= VAR_X) {
-                d += snprintf(s + d, l - d, ".x");
+                d += snprintf(s + d, l - d, "[x");
                 if (tok->gen.flags & VAR_SIG_IDX)
-                    d += snprintf(s + d, l - d, "$N");
+                    d += snprintf(s + d, l - d, "$N]");
                 else
-                    d += snprintf(s + d, l - d, "$%d", tok->var.idx - VAR_X);
+                    d += snprintf(s + d, l - d, "$%d]", tok->var.idx - VAR_X);
             }
-            else
-                d += snprintf(s + d, l - d, "%d%c.%s%s", tok->var.idx,
-                              vars ? vars[tok->var.idx].datatype : '?',
-                              vars ? vars[tok->var.idx].name : "?",
-                              vars ? (vars[tok->var.idx].flags & VAR_INSTANCED) ? ".N" : ".0" : ".?");
+            else if (vars) {
+                d += snprintf(s + d, l - d, "[%d:%s]%c%s", tok->var.idx,
+                              vars[tok->var.idx].name ? vars[tok->var.idx].name : "",
+                              vars[tok->var.idx].datatype,
+                              (vars[tok->var.idx].flags & VAR_INSTANCED) ? ".N" : "");
+            }
+            else {
+                d += snprintf(s + d, l - d, "[%d:?]?.?", tok->var.idx);
+            }
 
             if (tok->gen.flags & VAR_HIST_IDX)
                 d += snprintf(s + d, l - d, "{N}");
@@ -505,14 +509,19 @@ static void etoken_print(etoken tok, expr_var_t *vars, int show_locks)
         case TOK_VAR_NUM_INST:
             d = snprintf(s, l, "%s\t", TOK_VAR_INST_IDX == tok->toktype ? "INST_IDX" : "NUM_INST");
             if (tok->var.idx == VAR_Y)
-                snprintf(s + d, l - d, "var.y");
+                snprintf(s + d, l - d, "var[y]");
             else if (tok->var.idx == VAR_X_NEWEST)
-                snprintf(s + d, l - d, "var.x$$");
+                snprintf(s + d, l - d, "var[x$$]");
             else if (tok->var.idx >= VAR_X)
-                snprintf(s + d, l - d, "var.x$%d", tok->var.idx - VAR_X);
+                snprintf(s + d, l - d, "var[x$%d]", tok->var.idx - VAR_X);
+            else if (vars && vars[tok->var.idx].name)
+                snprintf(s + d, l - d, "var[%d:%s]%s", tok->var.idx, vars[tok->var.idx].name,
+                         (vars[tok->var.idx].flags & VAR_INSTANCED) ? ".N" : ".0");
+            else if (vars)
+                snprintf(s + d, l - d, "var[%d]%s", tok->var.idx,
+                         (vars[tok->var.idx].flags & VAR_INSTANCED) ? ".N" : ".0");
             else
-                snprintf(s + d, l - d, "var.%s%s", vars ? vars[tok->var.idx].name : "?",
-                         vars ? (vars[tok->var.idx].flags & VAR_INSTANCED) ? ".N" : ".0" : ".?");
+                snprintf(s + d, l - d, "var[%d].?", tok->var.idx);
             break;
         case TOK_FN:        snprintf(s, l, "FN\t\t%s()", fn_tbl[tok->fn.idx].name);     break;
         case TOK_COMMA:     snprintf(s, l, ",");                                        break;

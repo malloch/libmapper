@@ -1777,7 +1777,8 @@ int mpr_map_set_from_msg(mpr_map m, mpr_msg msg)
                         for (j = 0; j < lm->num_vars; j++) {
                             /* check if matches existing varname */
                             name = mpr_expr_get_var_name(lm->expr, j);
-                            if (strcmp(name, key+4)!=0)
+                            /* skip function memory variables since they do not have names */
+                            if (!name || strcmp(name, key+4)!=0)
                                 continue;
                             /* found variable */
                             ++updated;

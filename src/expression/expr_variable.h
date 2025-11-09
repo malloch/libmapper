@@ -72,7 +72,8 @@ static int expr_var_find_by_name(expr_var_t *vars, int num_var, const char *str,
     /* check if variable name matches known variable */
     int i;
     for (i = 0; i < num_var; i++) {
-        if (strlen(vars[i].name) == len && strncmp(vars[i].name, str, len) == 0)
+        char *s = vars[i].name;
+        if (s && strlen(s) == len && strncmp(s, str, len) == 0)
             return i;
     }
     return -1;

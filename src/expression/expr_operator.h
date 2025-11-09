@@ -22,6 +22,7 @@ typedef enum {
     OP_BITWISE_OR,
     OP_LOGICAL_AND,
     OP_LOGICAL_OR,
+    OP_PRIME,
     OP_IF,
     OP_IF_ELSE,
     OP_IF_THEN_ELSE
@@ -59,6 +60,7 @@ static struct {
     { "|",          2, 3,  GET_OPER | GET_OPER <<4 | GET_ONE  <<8 | GET_ONE  <<12 },
     { "&&",         2, 2,  GET_ZERO | GET_ZERO <<4 | NONE     <<8 | NONE     <<12 },
     { "||",         2, 1,  GET_OPER | GET_OPER <<4 | GET_ONE  <<8 | GET_ONE  <<12 },
+    { "'",          1, 12, GET_ZERO | NONE     <<4 | GET_ZERO <<8 | NONE     <<12 },
     /* TODO: handle optimization of ternary operator */
     { "IFTHEN",     2, 0,  NONE     | NONE     <<4 | NONE     <<8 | NONE     <<12 },
     { "IFELSE",     2, 0,  NONE     | NONE     <<4 | NONE     <<8 | NONE     <<12 },

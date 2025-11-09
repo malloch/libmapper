@@ -88,6 +88,9 @@ void mpr_expr_cpy_stack_and_vars(mpr_expr expr, void *stack, void *vars, int num
 
         /* check for special variables 'alive' and 'muted' */
         for (i = 0; i < num_var; i++) {
+            /* function memory variables do not have names */
+            if (!expr->vars[i].name)
+                continue;
             if (strcmp(expr->vars[i].name, "alive") == 0)
                 expr->inst_ctl = i;
             else if (strcmp(expr->vars[i].name, "muted") == 0)

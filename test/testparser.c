@@ -926,15 +926,15 @@ int run_tests()
     expect_flt[0] = expect_flt[1] = expect_flt[2] = 0;
     expect_flt[3] = expect_flt[4] = expect_flt[5] = 0;
     for (i = 0; i < iterations; i++) {
-        /* update emd */
-        expect_flt[0] += (fabsf(expect_flt[3] - (float)src_int[0]) - expect_flt[0]) * 0.1f;
-        expect_flt[1] += (fabsf(expect_flt[4] - (float)src_int[1]) - expect_flt[1]) * 0.2f;
-        expect_flt[2] += (fabsf(expect_flt[5] - (float)src_int[2]) - expect_flt[2]) * 0.3f;
-
-        /* update ema */
-        expect_flt[3] += ((float)src_int[0] - expect_flt[3]) * 0.1f;
-        expect_flt[4] += ((float)src_int[1] - expect_flt[4]) * 0.2f;
-        expect_flt[5] += ((float)src_int[2] - expect_flt[5]) * 0.3f;
+        float *emd = expect_flt;
+        float *ema = expect_flt + 3;
+        float weight[3] = {0.1f, 0.2f, 0.3f};
+        int j;
+        for (j = 0; j < 3; j++) {
+            float diff = (float)src_int[j] - ema[j];
+            emd[j] += (fabs(diff) - emd[j]) * weight[j];
+            ema[j] += diff * weight[j];
+        }
     }
     if (parse_and_eval(PARSE_SUCCESS | EVAL_SUCCESS, 0, 1, iterations))
         return 1;
@@ -1946,7 +1946,21 @@ int run_tests()
             eprintf("... OK\n");
     }
 
-//    /* 137) Signal count() */
+    /* 148) derivative with prime notation */
+    set_expr_str("a = a + 2; y = a.diff() + diff(a) + a';");
+    setup_test(MPR_FLT, 1, MPR_FLT, 1);
+    expect_flt[0] = 6;
+    if (parse_and_eval(PARSE_SUCCESS | EVAL_SUCCESS, 0, 1, iterations))
+        return 1;
+
+    /* 149) edge() */
+    set_expr_str("a = a + 0.1; y = y{-1} + ((sin(a)>0).edge() == 1)");
+    setup_test(MPR_FLT, 1, MPR_FLT, 1);
+    expect_flt[0] = 1 + floor((iterations - 1) * 0.1 / (M_PI * 2));
+    if (parse_and_eval(PARSE_SUCCESS | EVAL_SUCCESS, 0, 1, iterations))
+        return 1;
+
+//    /* 150) Signal count() */
 //    set_expr_str("y=x / x.signal.count();");
 //    types[0] = MPR_FLT;
 //    types[1] = MPR_INT32;
@@ -1989,9 +2003,14 @@ int main(int argc, char **argv)
                         if (strcmp(argv[i], "--expr")==0 && argc>i+1) {
                             ++i;
                             start_index = stop_index = atoi(argv[i]);
-                            if (argc>i+1 && strcmp(argv[i + 1], "...")==0) {
-                                stop_index = 1000000;
-                                ++i;
+                            if (argc > i + 1) {
+                                if (strcmp(argv[i + 1], "...")==0) {
+                                    stop_index = 1000000;
+                                    ++i;
+                                }
+                                else if (argv[i + 1][0] != '-' && (stop_index = atoi(argv[i + 1]))) {
+                                    ++i;
+                                }
                             }
                         }
                         else if (strcmp(argv[i], "--iterations")==0 && argc>i+1) {

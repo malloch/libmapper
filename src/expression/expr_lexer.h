@@ -83,7 +83,7 @@ static int expr_lex(const char *str, int idx, etoken tok)
     switch (c) {
     case '.':
         c = str[++idx];
-        if (!isdigit(c) && c!='e') {
+        if (!isdigit(c) && (c != 'e' || (c && isalpha(str[idx+1])))) {
             if (integer_found) {
                 etoken_set_flt(tok, (float)n);
                 return idx;
@@ -93,12 +93,12 @@ static int expr_lex(const char *str, int idx, etoken tok)
             ++i;
             if ((tok->fn.idx = vfn_lookup(str+i, idx-i)) != VFN_UNKNOWN) {
                 tok->toktype = TOK_VFN_DOT;
-                return idx + ((vfn_tbl[tok->fn.idx].arity == 1) ? 2 : 1);
+                return idx;
             }
             else if ((tok->fn.idx = rfn_lookup(str+i, idx-i)) != RFN_UNKNOWN) {
                 tok->toktype = TOK_RFN;
                 /* skip over '()' for reduce functions but not reduce types other than 'history' */
-                return tok->fn.idx >= RFN_FILTER ? idx : idx + 2;
+                return idx;
             }
             else
                 break;
@@ -110,7 +110,7 @@ static int expr_lex(const char *str, int idx, etoken tok)
             etoken_set_flt(tok, atof(str+i));
             return idx;
         }
-        /* continue to next case 'e' */
+        /* do not break, continue to next case 'e' */
     case 'e':
         if (!integer_found) {
             while (c && (isalpha(c) || isdigit(c) || c == '_'))
@@ -234,6 +234,11 @@ static int expr_lex(const char *str, int idx, etoken tok)
     case '^':
         /* bitwise XOR */
         etoken_set_op(tok, OP_BITWISE_XOR);
+        return ++idx;
+    case '\'':
+        /* prime */
+        tok->toktype = TOK_OP;
+        tok->op.idx = OP_PRIME;
         return ++idx;
     case '(':
         tok->toktype = TOK_OPEN_PAREN;

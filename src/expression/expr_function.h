@@ -425,7 +425,52 @@ SLERP_QFUNC(qslerpd, double, d)
 /* The emd() function needs to read and write 2 variables (ema and ema of difference). Since this
  * is not possible with regular functions we will use a vector function here, even though each
  * vector element is processed separately. For convenience and reduced code we will also use vector
- * functions for ema and schmitt since they also require "memory". */
+ * functions for other functions that require "memory": ema, schmitt, diff, edge */
+
+/* The reason we are handling edge and diff using functions with memory rather than simply
+ * accessing value history is that the diff/edge input may be a subexpression. */
+
+/* TODO: consider merits of adding an `accum` function. */
+
+#define DIFF_VFUNC(NAME, TYPE, T)                   \
+static void NAME(evalue out, uint8_t *dim, int inc) \
+{                                                   \
+    evalue mem = out + inc;                         \
+    evalue new = mem + inc;                         \
+    uint8_t i;                                      \
+    for (i = 0; i < dim[0]; i++) {                  \
+        out[i].T = new[i].T - mem[i].T;             \
+        /* store current value of `new` */          \
+        mem[i].T = new[i].T;                        \
+    }                                               \
+}
+DIFF_VFUNC(vdiffi, int, i)
+DIFF_VFUNC(vdifff, float, f)
+DIFF_VFUNC(vdiffd, double, d)
+
+/* the edge functions detect rising and falling egdes:
+ *  old     new     output  description
+ *  0       0       0       no change
+ *  0       1       1       rising edge
+ *  1       0      -1       falling edge
+ *  1       1       0       no change
+ */
+
+#define EDGE_VFUNC(NAME, TYPE, T)                     \
+static void NAME(evalue out, uint8_t *dim, int inc)   \
+{                                                     \
+    evalue mem = out + inc;                           \
+    evalue new = mem + inc;                           \
+    uint8_t i;                                        \
+    for (i = 0; i < dim[0]; i++) {                    \
+        out[i].T = (new[i].T != 0) - (mem[i].T != 0); \
+        /* store current value of `new` */            \
+        mem[i].T = new[i].T;                          \
+    }                                                 \
+}
+EDGE_VFUNC(vedgei, int, i)
+EDGE_VFUNC(vedgef, float, f)
+EDGE_VFUNC(vedged, double, d)
 
 #define EMA_VFUNC(NAME, TYPE, T)                                 \
 static void NAME(evalue ema, uint8_t *dim, int inc)              \
@@ -447,10 +492,10 @@ static void NAME(evalue emd, uint8_t *dim, int inc)     \
            weight = new + inc;                          \
     uint8_t i;                                          \
     for (i = 0; i < dim[0]; i++) {                      \
-        register TYPE diff = ema[i].T - new[i].T;       \
+        register TYPE diff = new[i].T - ema[i].T;       \
         register TYPE w = abs##T(weight[i].T);          \
         emd[i].T += (abs##T(diff) - emd[i].T) * w;      \
-        ema[i].T -= diff * w;                           \
+        ema[i].T += diff * w;                           \
     }                                                   \
 }
 EMD_VFUNC(vemdf, float, f)
@@ -623,7 +668,10 @@ typedef enum {
     VFN_MAXMIN,
     VFN_SUMNUM,
     VFN_ANGLE,
+    VFN_DIFF,
+    VFN_DIFF2,
     VFN_DOT,
+    VFN_EDGE,
     VFN_INDEX,
     VFN_LENGTH,
     VFN_MEDIAN,
@@ -664,7 +712,10 @@ static struct {
     { "maxmin",  3, 0, 0, 0, vmaxmini, vmaxminf, vmaxmind },
     { "sumnum",  3, 0, 0, 0, vsumnumi, vsumnumf, vsumnumd },
     { "angle",   2, 0, 1, 2, 0,        vanglef,  vangled  },
+    { "diff",    3, 2, 0, 0, vdiffi,   vdifff,   vdiffd   },
+    { "diff2",   3, 2, 0, 0, vdiffi,   vdifff,   vdiffd   },
     { "dot",     2, 0, 1, 0, vdoti,    vdotf,    vdotd    },
+    { "edge",    3, 2, 0, 0, vedgei,   vedgef,   vedged   },
     { "index",   2, 0, 1, 0, vindexi,  vindexf,  vindexd  },
     { "length",  1, 0, 1, 0, vleni,    vlenf,    vlend    },
     { "median",  1, 0, 1, 0, vmediani, vmedianf, vmediand },
@@ -766,10 +817,9 @@ static expr_##LC##_t LC##_lookup(const char *s, int len)            \
             j = strlen(LC##_tbl[i].name);                           \
             if (CLOSE && i > RFN_HISTORY)                           \
                 return s[j] == '.' ? i : UC##_UNKNOWN;              \
-            /* check for parentheses */                             \
+            /* check for parentheses allowing for leading spaces */ \
+            while (s[j] && ' ' == s[j]) { ++j; }                    \
             if (s[j] != '(')                                        \
-                return UC##_UNKNOWN;                                \
-            else if (CLOSE && i > RFN_HISTORY && s[j + 1] != ')')   \
                 return UC##_UNKNOWN;                                \
             return i;                                               \
         }                                                           \

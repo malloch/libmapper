@@ -383,7 +383,9 @@ static etoken estack_check_type(estack stk, expr_var_t *vars, int enable_optimiz
     switch (tokens[sp].toktype) {
         case TOK_OP:
             if (tokens[sp].op.idx == OP_IF) {
+#if TRACE_PARSE
                 trace("Ternary operator is missing operand.\n");
+#endif
                 return 0;
             }
             arity = op_tbl[tokens[sp].op.idx].arity;
@@ -524,7 +526,9 @@ static etoken estack_check_type(estack stk, expr_var_t *vars, int enable_optimiz
         if (enable_optimize && !can_precompute) {
             switch (optimize) {
                 case BAD_EXPR:
+#if TRACE_PARSE
                     trace("Operator '%s' cannot have zero operand.\n", op_tbl[tokens[sp].op.idx].name);
+#endif
                     return 0;
                 case GET_ZERO:
                 case GET_ONE: {
@@ -640,8 +644,12 @@ static etoken estack_check_type(estack stk, expr_var_t *vars, int enable_optimiz
 #if TRACE_PARSE
         printf("precomputing tokens[%d:%d]\n", sp - arity, sp);
 #endif
-        if (precompute(stk, arity + 1))
+        if (precompute(stk, arity + 1)) {
+#if TRACE_PARSE
+            trace("Error precomputing subexpression.\n");
+#endif
             return 0;
+        }
     }
     return &tokens[stk->num_tokens-1];
 }
@@ -668,7 +676,9 @@ static int estack_check_assign_type_and_len(estack stk, expr_var_t *vars)
     expr_len += estack_get_substack_len(stk, j);
 
     if (expr_len > sp + 1) {
+#if TRACE_PARSE
         trace("Malformed expression (1)\n");
+#endif
         return -1;
     }
 

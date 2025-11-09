@@ -211,7 +211,7 @@ int mpr_expr_eval(mpr_expr expr, ebuffer buff, mpr_value *v_in, mpr_value *v_var
             if (tok->var.idx == VAR_Y) {
                 RETURN_ARG_UNLESS(v_out, status);
 #if TRACE_EVAL
-                printf("\n\t\tvar.y");
+                printf("\n\t\tvar[y]");
 #endif
                 v = v_out;
                 can_advance = 0;
@@ -223,13 +223,13 @@ int mpr_expr_eval(mpr_expr expr, ebuffer buff, mpr_value *v_in, mpr_value *v_var
                     int newest_idx = _newest_val_idx(v_in, expr->num_src, inst_idx);
                     v = v_in[newest_idx];
 #if TRACE_EVAL
-                    printf("\n\t\tvar.x$%d", newest_idx);
+                    printf("\n\t\tvar[x$%d]", newest_idx);
 #endif
                 }
                 else if (!(tok->gen.flags & VAR_SIG_IDX)) {
                     v = v_in[tok->var.idx - VAR_X + sig_offset];
 #if TRACE_EVAL
-                    printf("\n\t\tvar.x$%d", tok->var.idx - VAR_X + sig_offset);
+                    printf("\n\t\tvar[x$%d]", tok->var.idx - VAR_X + sig_offset);
 #endif
                 }
                 else {
@@ -239,7 +239,7 @@ int mpr_expr_eval(mpr_expr expr, ebuffer buff, mpr_value *v_in, mpr_value *v_var
                         if (sidx < 0)
                             sidx += expr->num_src;
 #if TRACE_EVAL
-                        printf("\n\t\tvar.x$(%d)", sidx);
+                        printf("\n\t\tvar[x$%d]", sidx);
 #endif
                         v = v_in[sidx];
                         --idxp;
@@ -257,10 +257,10 @@ int mpr_expr_eval(mpr_expr expr, ebuffer buff, mpr_value *v_in, mpr_value *v_var
             }
             else if (v_vars) {
 #if TRACE_EVAL
-                if (expr->vars)
-                    printf("\n\t\tvar.%s", expr->vars[tok->var.idx].name);
+                if (expr->vars && expr->vars[tok->var.idx].name)
+                    printf("\n\t\tvar[%d:%s]", tok->var.idx, expr->vars[tok->var.idx].name);
                 else
-                    printf("\n\t\tvars.%d", tok->var.idx);
+                    printf("\n\t\tvar[%d]", tok->var.idx);
 #endif
                 v = v_vars[tok->var.idx];
                 can_advance = 0;
@@ -767,6 +767,7 @@ int mpr_expr_eval(mpr_expr expr, ebuffer buff, mpr_value *v_in, mpr_value *v_var
         case TOK_SP_ADD:
             INCR_STACK_PTR(tok->lit.val.i);
 #if TRACE_EVAL
+            evalue_print(vals + sp, types[dp], lens[dp], dp);
             printf("\n");
 #endif
             break;
@@ -999,11 +1000,14 @@ int mpr_expr_eval(mpr_expr expr, ebuffer buff, mpr_value *v_in, mpr_value *v_var
 #if TRACE_EVAL
             if (VAR_Y == tok->var.idx)
                 printf("\n\t\tvar.y");
+            else if (expr->vars && expr->vars[tok->var.idx].name)
+                printf("\n\t\tvar[%d:%s]", tok->var.idx, expr->vars[tok->var.idx].name);
             else
-                printf("\n\t\tvar.%s", expr->vars[tok->var.idx].name);
+                printf("\n\t\tvar[%d]", tok->var.idx);
             printf("{%s%d}", tok->gen.flags & VAR_HIST_IDX ? "N=" : "", hidx);
             printf("[%s%d]", tok->gen.flags & VAR_VEC_IDX ? "N=" : "", vidx);
-            printf(" (%c x %u)\n", types[dp], tok->gen.vec_len);
+            printf(" (%c%u)\t", types[dp], tok->gen.vec_len);
+            evalue_print(vals + sp, types[dp], lens[dp], dp);
 #endif
 
             /* Copy time from input */
@@ -1030,10 +1034,10 @@ int mpr_expr_eval(mpr_expr expr, ebuffer buff, mpr_value *v_in, mpr_value *v_var
             }
 
 #if TRACE_EVAL
-            printf("\n");
 #if DEBUG
             mpr_value_print_inst_hist(v, inst_idx % mpr_value_get_num_inst(v));
 #endif /* DEBUG */
+            printf("\n");
 #endif /* TRACE_EVAL */
 
             if (tok->var.idx == expr->inst_ctl) {
@@ -1113,7 +1117,7 @@ int mpr_expr_eval(mpr_expr expr, ebuffer buff, mpr_value *v_in, mpr_value *v_var
         if (tok->gen.casttype) {
             assert(dp >= 0);
 #if TRACE_EVAL
-            printf("     cast\tvals[%d] %c->%c\t\t", dp, types[dp], tok->gen.casttype);
+            printf("     cast\t%c->%c\t\t\t", types[dp], tok->gen.casttype);
 #endif
             /* need to cast to a different type */
             switch (types[dp]) {
