@@ -100,6 +100,8 @@ const unsigned int RtApi::SAMPLE_RATES[] = {
 
 #include <CoreAudio/AudioHardware.h>
 
+#define MAX_NUM_DEVICES 64
+
 class RtApiCore: public RtApi
 {
 public:
@@ -1117,7 +1119,7 @@ void RtApiCore :: probeDevices( void )
     return;
   }
 
-  AudioDeviceID ids[ nDevices ];
+  AudioDeviceID ids[ MAX_NUM_DEVICES ];
   property.mSelector = kAudioHardwarePropertyDevices;
   result = AudioObjectGetPropertyData( kAudioObjectSystemObject, &property, 0, NULL, &dataSize, (void *) &ids );
   if ( result != noErr ) {
@@ -1328,7 +1330,7 @@ bool RtApiCore :: probeDeviceInfo( AudioDeviceID id, RtAudio::DeviceInfo& info )
   }
 
   UInt32 nRanges = dataSize / sizeof( AudioValueRange );
-  AudioValueRange rangeList[ nRanges ];
+  AudioValueRange rangeList[ MAX_NUM_DEVICES ];
   result = AudioObjectGetPropertyData( id, &property, 0, NULL, &dataSize, &rangeList );
   if ( result != kAudioHardwareNoError ) {
     errorStream_ << "RtApiCore::probeDeviceInfo: system error (" << getErrorCode( result ) << ") getting sample rates.";
