@@ -761,19 +761,20 @@ class Object:
         mpr.mpr_obj_get_graph.restype = c_void_p
         return Graph(None, mpr.mpr_obj_get_graph(self._obj))
 
-    def get_status(self):
-        """Get the status of an object"""
+    def get_status(self, clear_volatile=False):
+        """
+        Get the status of an object
 
-        mpr.mpr_obj_get_status.argtypes = [c_void_p]
+        Args:
+            clear_volatile (boolean): True to clear volatile status bits, False otherwise
+
+        Returns:
+            status flags for this object.
+        """
+
+        mpr.mpr_obj_get_status.argtypes = [c_void_p, c_int]
         mpr.mpr_obj_get_status.restype = c_int
-        return Status(mpr.mpr_obj_get_status(self._obj))
-
-    def reset_status(self):
-        """Reset the ephemeral status flags of an object"""
-
-        mpr.mpr_obj_reset_status.argtypes = [c_void_p]
-        mpr.mpr_obj_reset_status.restype = c_void_p
-        mpr.mpr_obj_reset_status(self._obj)
+        return Status(mpr.mpr_obj_get_status(self._obj, int(clear_volatile)))
 
     def get_num_properties(self):
         """Get an object's number of properties."""
@@ -1434,15 +1435,24 @@ class Signal(Object):
         mpr.mpr_sig_release_inst.restype = None
         mpr.mpr_sig_release_inst(self._obj, self.id)
 
-    def get_status(self):
-        """Get the status of this signal or signal instance."""
+    def get_status(self, clear_volatile=False):
+        """
+        Get the status of this signal or signal instance.
+
+        Args:
+            clear_volatile (boolean): True if volatile status bits should be cleared, False otherwise
+
+        Returns:
+            status flags for this object
+        """
 
         if self._is_sig_inst:
-            mpr.mpr_sig_get_inst_status.argtypes = [c_void_p, c_longlong]
+            mpr.mpr_sig_get_inst_status.argtypes = [c_void_p, c_longlong, c_int]
             mpr.mpr_sig_get_inst_status.restype = c_int
-            return Signal.Status(mpr.mpr_sig_get_inst_status(self._obj, self.id))
+            clear_volatile = int(clear_volatile)
+            return Status(mpr.mpr_sig_get_inst_status(self._obj, self.id, clear_volatile))
         else:
-            return super().get_status()
+            return super().get_status(clear_volatile)
 
     def num_instances(self, status=Status.ANY):
         """

@@ -402,10 +402,9 @@ int loop(test_config *config)
 
         if (config->dst_type & SNGL) {
             /* check status */
-            int status = mpr_obj_get_status((mpr_obj)monorecv);
+            int status = mpr_obj_get_status((mpr_obj)monorecv, 1);
             if (status & MPR_STATUS_UPDATE_REM) {
                 ++received;
-                mpr_obj_reset_status((mpr_obj)monorecv);
             }
         }
         if (config->dst_type & INST) {
@@ -442,7 +441,7 @@ int loop(test_config *config)
                 eprintf("--> destination multirecv instance %i got upstream release\n", (int)id);
                 mpr_sig_release_inst(multirecv, id);
             }
-            if (!num_inst && mpr_obj_get_status((mpr_obj)multirecv) & MPR_STATUS_OVERFLOW) {
+            if (!num_inst && mpr_obj_get_status((mpr_obj)multirecv, 0) & MPR_STATUS_OVERFLOW) {
                 switch (config->oflw_action) {
                     case ADD:
                         eprintf("OVERFLOW!! ALLOCATING ANOTHER INSTANCE.\n");

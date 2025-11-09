@@ -221,7 +221,7 @@ void mpr_graph_cleanup(mpr_graph g)
     maps = mpr_list_from_data(g->maps);
     while (maps) {
         mpr_map map = (mpr_map)*maps;
-        int status = mpr_obj_get_status((mpr_obj)map);
+        int status = mpr_obj_get_status((mpr_obj)map, 0);
         maps = mpr_list_get_next(maps);
         if (   !mpr_obj_get_is_local((mpr_obj)map)
             || (status & (MPR_STATUS_ACTIVE | MPR_STATUS_REMOVED)) == MPR_STATUS_ACTIVE)
@@ -772,7 +772,7 @@ mpr_map mpr_graph_add_map(mpr_graph g, mpr_id id, int num_src, const char **src_
         mpr_prop_print(1, MPR_MAP, map);
         printf("\n");
 #endif
-        if (mpr_obj_get_status((mpr_obj)map) & MPR_STATUS_ACTIVE)
+        if (mpr_obj_get_status((mpr_obj)map, 0) & MPR_STATUS_ACTIVE)
             mpr_graph_call_cbs(g, (mpr_obj)map, MPR_MAP, MPR_STATUS_NEW);
     }
     else {
@@ -816,7 +816,7 @@ mpr_map mpr_graph_add_map(mpr_graph g, mpr_id id, int num_src, const char **src_
                     break;
                 }
             }
-            if (mpr_obj_get_status((mpr_obj)map) & MPR_STATUS_ACTIVE)
+            if (mpr_obj_get_status((mpr_obj)map, 0) & MPR_STATUS_ACTIVE)
                 mpr_graph_call_cbs(g, (mpr_obj)map, MPR_MAP, MPR_STATUS_MODIFIED);
         }
     }
@@ -827,7 +827,7 @@ void mpr_graph_remove_map(mpr_graph g, mpr_map m, mpr_graph_evt e)
 {
     RETURN_UNLESS(m);
     mpr_list_remove_item((void**)&g->maps, m);
-    if (mpr_obj_get_status((mpr_obj)m) & MPR_STATUS_ACTIVE)
+    if (mpr_obj_get_status((mpr_obj)m, 0) & MPR_STATUS_ACTIVE)
         mpr_graph_call_cbs(g, (mpr_obj)m, MPR_MAP, e);
 
 #ifdef DEBUG

@@ -1825,7 +1825,7 @@ static int handler_map(const char *path, const char *types, lo_arg **av, int ac,
 #endif
 
     props = mpr_msg_parse_props(ac, types, av);
-    if (mpr_obj_get_status((mpr_obj)map) & MPR_STATUS_ACTIVE) {
+    if (mpr_obj_get_status((mpr_obj)map, 0) & MPR_STATUS_ACTIVE) {
         mpr_loc loc = mpr_local_map_get_process_loc_from_msg(map, props);
         if (MPR_LOC_DST == loc) {
             /* Forward to local handler_map_mod(). */
@@ -1867,13 +1867,13 @@ static int handler_map_to(const char *path, const char *types, lo_arg **av,
     map = (mpr_local_map)find_map(net, types, ac, av, MPR_LOC_ANY, ADD | UPDATE);
     RETURN_ARG_UNLESS(map && MPR_MAP_ERROR != (mpr_map)map, 0);
 
-    status = mpr_obj_get_status((mpr_obj)map);
+    status = mpr_obj_get_status((mpr_obj)map, 0);
     if (!(status & MPR_STATUS_ACTIVE)) {
         /* Set map properties. */
         mpr_msg props = mpr_msg_parse_props(ac, types, av);
         mpr_map_set_from_msg((mpr_map)map, props);
         mpr_msg_free(props);
-        status = mpr_obj_get_status((mpr_obj)map);
+        status = mpr_obj_get_status((mpr_obj)map, 0);
     }
 
     if (status & MPR_MAP_STATUS_READY) {
@@ -1971,7 +1971,7 @@ static int handler_mapped(const char *path, const char *types, lo_arg **av,
     mpr_msg_free(props);
 
     if (mpr_obj_get_is_local((mpr_obj)map)) {
-        int status = mpr_obj_get_status((mpr_obj)map);
+        int status = mpr_obj_get_status((mpr_obj)map, 0);
         RETURN_ARG_UNLESS(MPR_MAP_STATUS_READY & status, 0);
         if (!(MPR_STATUS_ACTIVE & status)) {
             int i, num_src = mpr_map_get_num_src(map);
@@ -2070,7 +2070,7 @@ static int handler_map_mod(const char *path, const char *types, lo_arg **av,
         handler_map(path, types, av, ac, msg, user);
         return 0;
     }
-    RETURN_ARG_UNLESS(mpr_obj_get_status((mpr_obj)map) & MPR_STATUS_ACTIVE, 0);
+    RETURN_ARG_UNLESS(mpr_obj_get_status((mpr_obj)map, 0) & MPR_STATUS_ACTIVE, 0);
 
     /* remove MPR_STATUS_REMOVED and MPR_STATUS_EXPIRED status flags if they are set */
     mpr_obj_set_status((mpr_obj)map, 0, MPR_STATUS_REMOVED | MPR_STATUS_EXPIRED);
@@ -2216,7 +2216,7 @@ static int handler_unmap(const char *path, const char *types, lo_arg **av,
     }
     /* if destination is remote this guarantees all sources are local */
     /* only send /unmap to destination the second time this message is received */
-    else if ((mpr_obj_get_status((mpr_obj)map) & MPR_STATUS_REMOVED)) {
+    else if ((mpr_obj_get_status((mpr_obj)map, 0) & MPR_STATUS_REMOVED)) {
         mpr_net_use_mesh(net, addr);
         mpr_map_send_state((mpr_map)map, -1, MSG_UNMAP, version);
     }
@@ -2225,7 +2225,7 @@ static int handler_unmap(const char *path, const char *types, lo_arg **av,
      * destingation device) occurs _after_ any cached signal updates have propagated across the map
      * so that stray updates don't re-activate destination instances after tha map is removed.*/
     if (    MPR_LOC_BOTH == mpr_map_get_locality((mpr_map)map)
-        || (mpr_obj_get_status((mpr_obj)map) & MPR_STATUS_REMOVED)) {
+        || (mpr_obj_get_status((mpr_obj)map, 0) & MPR_STATUS_REMOVED)) {
         /* can remove immediately */
         trace("removing map\n");
         mpr_graph_remove_map(graph, (mpr_map)map, MPR_STATUS_REMOVED);

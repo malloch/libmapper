@@ -44,6 +44,8 @@ MPR_INLINE static void mpr_obj_set_id(mpr_obj obj, mpr_id id)
 MPR_INLINE static void mpr_obj_set_status(mpr_obj obj, int add, int remove)
     { obj->status = (obj->status | add) & ~remove; }
 
+void mpr_obj_reset_status(mpr_obj obj);
+
 MPR_INLINE static int mpr_obj_get_is_local(mpr_obj obj)
     { return obj->is_local; }
 

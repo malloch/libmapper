@@ -51,9 +51,13 @@ void mpr_obj_incr_version(mpr_obj o)
     mpr_obj_set_status((mpr_obj)o->graph, MPR_STATUS_MODIFIED, 0);
 }
 
-int mpr_obj_get_status(mpr_obj obj)
+int mpr_obj_get_status(mpr_obj obj, int clear_volatile)
 {
-    return obj->status & 0xFFFF;
+    int status = obj->status & 0xFFFF;
+    if (clear_volatile) {
+        mpr_obj_reset_status(obj);
+    }
+    return status;
 }
 
 void mpr_obj_reset_status(mpr_obj obj)

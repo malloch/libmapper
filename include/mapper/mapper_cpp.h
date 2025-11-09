@@ -559,14 +559,12 @@ namespace mapper {
         inline Graph graph() const;
 
         /*! Get the status bitflags for an Object.
-         *  \return         Status bitflags. */
-        int get_status() const
-            { return mpr_obj_get_status(_obj); }
-
-        /*! Reset the ephemeral status bitflags for an Object.
-         *  \return         Self. */
-        Object& reset_status()
-            { mpr_obj_reset_status(_obj); RETURN_SELF; }
+         *  \param clear_volatile   Clear volatile status bitflags. If the object is a `Graph` this
+         *                          will also reset the volatile status bits for objects stored in
+         *                          the graph.
+         *  \return                 Status bitflags. */
+        int get_status(bool clear_volatile=false) const
+            { return mpr_obj_get_status(_obj, (int)clear_volatile); }
 
         /*! Set arbitrary properties for an Object.
          *  \param vals     The Properties to add or modify.

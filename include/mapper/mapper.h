@@ -32,14 +32,12 @@ to get started with libmapper concepts.
 mpr_graph mpr_obj_get_graph(mpr_obj object);
 
 /*! Return the status bitflags used by an object.
- *  \param object       The object to query.
- *  \return             The status bitflags used by this object. */
-int mpr_obj_get_status(mpr_obj object);
-
-/*! Reset the volatile status bitflags used by an object. If the object is a `mpr_graph` this
- *  will also reset the volatile status bits for objects stored in the graph.
- *  \param object       The object to reset. */
-void mpr_obj_reset_status(mpr_obj object);
+ *  \param object           The object to query.
+ *  \param clear_volatile   1 to clear the volatile status bitflags used by the object. If the
+ *                          object is a `mpr_graph` this will also clear the volatile status bits
+ *                          for objects stored in the graph.
+ *  \return                 The status bitflags used by this object. */
+int mpr_obj_get_status(mpr_obj object, int clear_volatile);
 
 /*! Return the specific type of an object.
  *  \param object       The object to query.
@@ -420,14 +418,14 @@ void mpr_sig_release_inst(mpr_sig signal, mpr_id instance);
 void mpr_sig_remove_inst(mpr_sig signal, mpr_id instance);
 
 /*! Get the status of a signal instance as a set of bitflags.
- *  \param signal       The signal to check.
- *  \param instance     The identifier of the instance to check.
- *  \param clear        Non-zero value causes the dynamic status bits to be cleared.
- *  \return             The status of the signal instance returned as bitflags. Test the return
- *                      value against the constants defined in the enum `mpr_status`.
- *                      Each time this function is called it will reset the bitflags for `NEW`,
- *                      `SET_*`, and `REL_DNSTRM`. The bitflag for `REL_UPSTRM` will remain */
-int mpr_sig_get_inst_status(mpr_sig signal, mpr_id instance, int clear);
+ *  \param signal           The signal to check.
+ *  \param instance         The identifier of the instance to check.
+ *  \param clear_volatile   1 to clear the volatile status bitflags used by the signal instance.
+ *  \return                 The status of the signal instance returned as bitflags. Test the return
+ *                          value against the constants defined in the enum `mpr_status`.
+ *                          Each time this function is called it will reset the bitflags for `NEW`,
+ *                          `SET_*`, and `REL_DNSTRM`. The bitflag for `REL_UPSTRM` will remain */
+int mpr_sig_get_inst_status(mpr_sig signal, mpr_id instance, int clear_volatile);
 
 /*! Activate a specific signal instance without setting its value. In general it is not necessary
  *  to use this function, since signal instances will be automatically activated as necessary when
@@ -652,7 +650,7 @@ void mpr_list_print(mpr_list list);
        of devices, signals, and maps, which can be queried. Changes to the graph will trigger any
        registered graph callbacks, as well as modify the `object status` of the graph. As with
        other libmapper objects, the volatile status bits can be reset by calling
-       `mpr_obj_reset_status()`. */
+       `mpr_obj_get_status()` with the `clear_volatile` argument set to a non-zero value. */
 
 /*! Create a peer in the distributed graph.
  *  \param autosubscribe_types  A combination of `mpr_type` values controlling whether the graph

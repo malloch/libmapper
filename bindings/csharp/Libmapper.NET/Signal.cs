@@ -345,15 +345,19 @@ public class Signal : MapperObject
     public int GetNumInstances(Status status = Status.Any) => (int)mpr_sig_get_num_inst(NativePtr, (int)status);
 
     [DllImport("mapper", CharSet = CharSet.Ansi, CallingConvention = CallingConvention.StdCall)]
-    private static extern int mpr_sig_get_inst_status(IntPtr sig, ulong id = 0);
+    private static extern int mpr_sig_get_inst_status(IntPtr sig, ulong id, int clear_volatile);
 
     /// <summary>
-    /// Gets and then clears status flags attached to this signal instance.
-    /// The returned value can be used to see if the signal has been updated remotely.a
+    /// Gets and optionally clears status flags attached to this signal instance.
+    /// The returned value can be used to see if the signal has been updated remotely.
     /// <param name="instanceId">Instance id to get status for, default 0</param>
+    /// <param name="clearVolatile">Set to true to clear volatile Status flags</param>
     /// </summary>
     /// <returns>Status flags</returns>
-    public Status GetStatus(ulong instanceId = 0) => (Status)mpr_sig_get_inst_status(NativePtr, instanceId);
+    public Status GetStatus(ulong instanceId = 0, bool clearVolatile = false)
+    {
+        return (Status)mpr_sig_get_inst_status(NativePtr, instanceId, Convert.ToInt32(clearVolatile));
+    }
 
     /// <summary>
     /// Reserve a single instance, with a specific id.
@@ -480,7 +484,7 @@ public class Signal : MapperObject
         /// <param name="instanceId">Instance id to get status for, default 0</param>
         /// </summary>
         /// <returns>Status flags</returns>
-        public Status GetStatus() => (Status)mpr_sig_get_inst_status(NativePtr, id);
+        public new Status GetStatus(bool clear_volatile = false) => GetStatus(id, clear_volatile);
 
         /// <summary>
         ///     Release this instance, keeping the allocated memory allowing a new instance to take it's place.

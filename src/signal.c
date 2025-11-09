@@ -184,7 +184,8 @@ static void process_maps(mpr_local_sig sig, int id_map_idx)
         for (i = 0; i < sig->num_maps_in; i++) {
             mpr_local_slot dst_slot = sig->slots_in[i];
             map = (mpr_local_map)mpr_slot_get_map((mpr_slot)dst_slot);
-            if ((mpr_obj_get_status((mpr_obj)map) & (MPR_STATUS_ACTIVE | MPR_STATUS_REMOVED)) != MPR_STATUS_ACTIVE)
+            if (   (mpr_obj_get_status((mpr_obj)map, 0) & (MPR_STATUS_ACTIVE | MPR_STATUS_REMOVED))
+                != MPR_STATUS_ACTIVE)
                 continue;
 
             mpr_id_map tmp = mpr_local_map_get_id_map(map);
@@ -216,7 +217,8 @@ static void process_maps(mpr_local_sig sig, int id_map_idx)
         for (i = 0; i < sig->num_maps_out; i++) {
             mpr_local_slot src_slot = sig->slots_out[i], dst_slot;
             map = (mpr_local_map)mpr_slot_get_map((mpr_slot)src_slot);
-            if ((mpr_obj_get_status((mpr_obj)map) & (MPR_STATUS_ACTIVE | MPR_STATUS_REMOVED)) != MPR_STATUS_ACTIVE)
+            if (   (mpr_obj_get_status((mpr_obj)map, 0) & (MPR_STATUS_ACTIVE | MPR_STATUS_REMOVED))
+                != MPR_STATUS_ACTIVE)
                 continue;
 
             /* reset associated output memory */
@@ -259,7 +261,8 @@ static void process_maps(mpr_local_sig sig, int id_map_idx)
         src_slot = sig->slots_out[i];
 
         map = (mpr_local_map)mpr_slot_get_map((mpr_slot)src_slot);
-        if ((mpr_obj_get_status((mpr_obj)map) & (MPR_STATUS_ACTIVE | MPR_STATUS_REMOVED)) != MPR_STATUS_ACTIVE)
+        if (   (mpr_obj_get_status((mpr_obj)map, 0) & (MPR_STATUS_ACTIVE | MPR_STATUS_REMOVED))
+            != MPR_STATUS_ACTIVE)
             continue;
 
         /* TODO: should we continue for out-of-scope local destination updates? */
@@ -403,7 +406,7 @@ int mpr_sig_osc_handler(const char *path, const char *types, lo_arg **argv, int 
         }
         TRACE_RETURN_UNLESS(slot, 0, "error in mpr_sig_osc_handler: slot %d not found.\n", slot_id);
         slot_sig = mpr_slot_get_sig((mpr_slot)slot);
-        TRACE_RETURN_UNLESS((mpr_obj_get_status((mpr_obj)map) & (MPR_STATUS_ACTIVE | MPR_STATUS_REMOVED)) == MPR_STATUS_ACTIVE, 0,
+        TRACE_RETURN_UNLESS((mpr_obj_get_status((mpr_obj)map, 0) & (MPR_STATUS_ACTIVE | MPR_STATUS_REMOVED)) == MPR_STATUS_ACTIVE, 0,
                             "error in mpr_sig_osc_handler: map not yet ready.\n");
         if ((expr = mpr_local_map_get_expr(map)) && MPR_LOC_BOTH != mpr_map_get_locality((mpr_map)map)) {
             vals = check_types(types, val_len, slot_sig->type, slot_sig->len);
@@ -1636,7 +1639,6 @@ void *mpr_sig_get_inst_data(mpr_sig sig, mpr_id id)
     return si ? si->data : 0;
 }
 
-// TODO: add 'clear' argument to allow reading status without clear
 int mpr_sig_get_inst_status(mpr_sig sig, mpr_id id, int clear)
 {
     int status = 0;

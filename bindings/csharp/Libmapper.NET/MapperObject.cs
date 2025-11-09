@@ -348,4 +348,18 @@ public abstract class MapperObject
     {
         return new Graph(mpr_obj_get_graph(NativePtr));
     }
+
+    [DllImport("mapper", CharSet = CharSet.Ansi, CallingConvention = CallingConvention.StdCall)]
+    private static extern int mpr_obj_get_status(IntPtr obj, int clear_volatile);
+
+    /// <summary>
+    /// Gets and optionally clears status flags attached to this object.
+    /// The returned value can be used to see if the object has been updated remotely.
+    /// <param name="clearVolatile">Set to true to clear volatile Status flags</param>
+    /// </summary>
+    /// <returns>Status flags</returns>
+    public ObjectStatus GetStatus(bool clearVolatile = false)
+    {
+        return (ObjectStatus)mpr_obj_get_status(NativePtr, Convert.ToInt32(clearVolatile));
+    }
 }

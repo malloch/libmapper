@@ -1175,9 +1175,8 @@ int main(int argc, char **argv)
 
     eprintf("\nFilter devices by status after reset:\n");
 
-    eprintf("graph status before reset: %d\n", mpr_obj_get_status((mpr_obj)graph));
-    mpr_obj_reset_status((mpr_obj)graph);
-    eprintf("graph status after reset: %d\n", mpr_obj_get_status((mpr_obj)graph));
+    eprintf("graph status before reset: %d\n", mpr_obj_get_status((mpr_obj)graph, 1));
+    eprintf("graph status after reset: %d\n", mpr_obj_get_status((mpr_obj)graph, 0));
 
     devlist = mpr_graph_get_list(graph, MPR_DEV);
     intval = MPR_STATUS_NEW;
