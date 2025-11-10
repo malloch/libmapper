@@ -17,7 +17,7 @@ jobs:
     - name: install dependencies
       run: sudo apt-get install g++-9 autoconf-archive curl zlib1g-dev doxygen
     - name: install liblo
-      run: curl -L -O https://github.com/radarsat1/liblo/releases/download/0.34/liblo-0.34.tar.gz && tar -xzf liblo-0.34.tar.gz && cd liblo-0.34 && (./configure --host=$HOST --prefix=$PWD/inst --enable-static --disable-tests --disable-tools --disable-examples || (cat config.log; false)) && make install && find inst && cd ..
+      run: curl -L -O https://github.com/radarsat1/liblo/releases/download/0.34/liblo-0.34.tar.gz && tar -xzf liblo-0.34.tar.gz && cd liblo-0.34 && (./configure --host=$HOST --prefix=$PWD/inst --enable-static --disable-tests --disable-tools --disable-examples --disable-doc || (cat config.log; false)) && make install && find inst && cd ..
     - name: autogen
       run:
         pwd
@@ -52,7 +52,7 @@ jobs:
         fetch-depth: 0
     - name: install dependencies
       run:
-        brew install autoconf-archive automake pkg-config
+        brew install autoconf-archive automake pkg-config doxygen
         && python3 -m pip install --upgrade setuptools
         && python3 -m pip install packaging
     - name: download liblo
@@ -61,7 +61,7 @@ jobs:
       run:
         cd ./liblo-0.34
         && pwd
-        && (./configure CFLAGS="-isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk --target=arm64-apple-darwin -fPIC" CXXFLAGS="-isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk --target=arm64-apple-darwin" --build=x86_64-apple-darwin19.6.0 --host=aarch64-apple-darwin --enable-static --prefix=$PWD/inst --disable-shared --disable-tests --disable-tools --disable-examples || (cat config.log; false))
+        && (./configure CFLAGS="-isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk --target=arm64-apple-darwin -fPIC" CXXFLAGS="-isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk --target=arm64-apple-darwin" --build=x86_64-apple-darwin19.6.0 --host=aarch64-apple-darwin --enable-static --prefix=$PWD/inst --disable-shared --disable-tests --disable-tools --disable-examples --disable-doc || (cat config.log; false))
         && make install
         && mv ./inst/lib/liblo.a ./inst/lib/liblo.a.arm64
         && cd ..
