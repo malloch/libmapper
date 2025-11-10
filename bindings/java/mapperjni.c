@@ -1444,28 +1444,30 @@ JNIEXPORT void JNICALL Java_mapper_Device_mapperDeviceFree
         // do not call instance event callbacks
         mpr_sig_set_cb(temp, 0, 0);
         // check if we have active instances
-        int i, n = mpr_sig_get_num_inst(temp, MPR_STATUS_ACTIVE | MPR_STATUS_STAGED);
+        int i, n = mpr_sig_get_num_inst(temp, MPR_STATUS_ANY);
         for (i = 0; i < n; i++) {
-            mpr_id id = mpr_sig_get_inst_id(temp, i, MPR_STATUS_ACTIVE | MPR_STATUS_STAGED);
-            if (!id)
+            mpr_id id;
+            if (!mpr_sig_get_inst_id(temp, i, MPR_STATUS_ANY, &id)) {
+                printf("ERROR! instance %d of %d not found! (1)\n", i, n);
                 continue;
+            }
             inst_jni_context ictx = mpr_sig_get_inst_data(temp, id);
-            if (!ictx)
-                continue;
-            if (ictx->inst)
-                (*env)->DeleteGlobalRef(env, ictx->inst);
-            if (ictx->user_ref)
-                (*env)->DeleteGlobalRef(env, ictx->user_ref);
-            free(ictx);
+            if (ictx) {
+                if (ictx->inst)
+                    (*env)->DeleteGlobalRef(env, ictx->inst);
+                if (ictx->user_ref)
+                    (*env)->DeleteGlobalRef(env, ictx->user_ref);
+                free(ictx);
+            }
         }
         signal_jni_context ctx = (signal_jni_context)signal_user_data(temp);
-        if (!ctx)
-            continue;
-        if (ctx->signal)
-            (*env)->DeleteGlobalRef(env, ctx->signal);
-        if (ctx->listener)
-            (*env)->DeleteGlobalRef(env, ctx->listener);
-        free(ctx);
+        if (ctx) {
+            if (ctx->signal)
+                (*env)->DeleteGlobalRef(env, ctx->signal);
+            if (ctx->listener)
+                (*env)->DeleteGlobalRef(env, ctx->listener);
+            free(ctx);
+        }
     }
     mpr_dev_free(dev);
 }
@@ -1548,20 +1550,21 @@ JNIEXPORT void JNICALL Java_mapper_Device_remove_1signal
     mpr_sig_set_cb(sig, 0, 0);
 
     // check if we have active instances
-    int i, n = mpr_sig_get_num_inst(sig, MPR_STATUS_ACTIVE | MPR_STATUS_STAGED);
+    int i, n = mpr_sig_get_num_inst(sig, MPR_STATUS_ANY);
     for (i = 0; i < n; i++) {
-        mpr_id id = mpr_sig_get_inst_id(sig, i, MPR_STATUS_ACTIVE | MPR_STATUS_STAGED);
-        if (!id)
-            continue;
+        mpr_id id;
+        if (!mpr_sig_get_inst_id(sig, i, MPR_STATUS_ANY, &id)) {
+            printf("ERROR! instance %d of %d not found! (2)\n", i, n);
+        }
         inst_jni_context ictx;
         ictx = mpr_sig_get_inst_data(sig, id);
-        if (!ictx)
-            continue;
-        if (ictx->inst)
-            (*env)->DeleteGlobalRef(env, ictx->inst);
-        if (ictx->user_ref)
-            (*env)->DeleteGlobalRef(env, ictx->user_ref);
-        free(ictx);
+        if (ictx) {
+            if (ictx->inst)
+                (*env)->DeleteGlobalRef(env, ictx->inst);
+            if (ictx->user_ref)
+                (*env)->DeleteGlobalRef(env, ictx->user_ref);
+            free(ictx);
+        }
     }
 
     signal_jni_context ctx = (signal_jni_context)signal_user_data(sig);
@@ -1824,9 +1827,8 @@ JNIEXPORT jlong JNICALL Java_mapper_Signal_00024Instance_mapperInstance
 
     if (has_id)
         id = jid;
-    else if (mpr_sig_get_num_inst(sig, MPR_STATUS_STAGED)) {
+    else if (mpr_sig_get_inst_id(sig, 0, MPR_STATUS_STAGED, &id)) {
         // retrieve id from a reserved signal instance
-        id = mpr_sig_get_inst_id(sig, 0, MPR_STATUS_STAGED);
         mpr_sig_activate_inst(sig, id);
     }
     else {
@@ -2009,20 +2011,6 @@ JNIEXPORT jint JNICALL Java_mapper_Signal__1num_1instances
 {
     mpr_sig sig = (mpr_sig) ptr_jlong(jsig);
     return sig ? mpr_sig_get_num_inst(sig, status_flags) : 0;
-}
-
-JNIEXPORT jint JNICALL Java_mapper_Signal_numActiveInstances
-  (JNIEnv *env, jobject obj)
-{
-    mpr_sig sig = (mpr_sig)get_mpr_obj_from_jobject(env, obj);
-    return sig ? mpr_sig_get_num_inst(sig, MPR_STATUS_ACTIVE) : 0;
-}
-
-JNIEXPORT jint JNICALL Java_mapper_Signal_numReservedInstances
-  (JNIEnv *env, jobject obj)
-{
-    mpr_sig sig = (mpr_sig)get_mpr_obj_from_jobject(env, obj);
-    return sig ? mpr_sig_get_num_inst(sig, MPR_STATUS_STAGED) : 0;
 }
 
 JNIEXPORT jobject JNICALL Java_mapper_Signal_setValue
