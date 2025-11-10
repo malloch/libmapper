@@ -804,7 +804,7 @@ class Object:
             self.remove_property(key_or_idx)
             return self
 
-        publish = 1 if True else 0
+        publish = int(publish)
         _key, _idx, _val, _pub = c_char_p(), c_int(), c_void_p(), c_int()
         _len = 1
         _type = type(key_or_idx)
@@ -1484,11 +1484,15 @@ class Signal(Object):
             The instance identifier associated with the given index, or `0` if unsuccessful.
         """
 
-        mpr.mpr_sig_get_inst_id.argtypes = [c_void_p, c_int, c_int]
-        mpr.mpr_sig_get_inst_id.restype = c_longlong
-        if not isinstance(status, Signal.Status):
-            status = Signal.Status(status)
-        return mpr.mpr_sig_get_inst_id(self._obj, idx, status.value)
+        mpr.mpr_sig_get_inst_id.argtypes = [c_void_p, c_int, c_int, c_void_p]
+        mpr.mpr_sig_get_inst_id.restype = c_int
+        if not isinstance(status, Status):
+            status = Status(status)
+        id = c_longlong()
+        if mpr.mpr_sig_get_inst_id(self._obj, idx, status.value, byref(id)):
+            return id
+        else:
+            return None
 
     def device(self):
         """
