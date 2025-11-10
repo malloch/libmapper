@@ -854,15 +854,7 @@ JNIEXPORT jint JNICALL Java_mapper_AbstractObject_getStatus
   (JNIEnv *env, jobject jobj)
 {
     mpr_obj obj = get_mpr_obj_from_jobject(env, jobj);
-    return obj ? mpr_obj_get_status(obj) : 0;
-}
-
-JNIEXPORT void JNICALL Java_mapper_AbstractObject__1reset_1status
-  (JNIEnv *env, jobject jobj, jlong ptr)
-{
-    mpr_obj obj = (mpr_obj) ptr_jlong(ptr);
-    if (obj)
-        mpr_obj_reset_status(obj);
+    return obj ? mpr_obj_get_status(obj, 0) : 0;
 }
 
 JNIEXPORT void JNICALL Java_mapper_AbstractObject__1push
@@ -1898,7 +1890,7 @@ JNIEXPORT jint JNICALL Java_mapper_Signal_00024Instance_getStatus
     mpr_sig sig = get_inst_from_jobject(env, obj, &id);
     if (!sig)
         return 0;
-    return mpr_sig_get_inst_status(sig, id);
+    return mpr_sig_get_inst_status(sig, id, 0);
 }
 
 /**** mpr_Signal.h ****/

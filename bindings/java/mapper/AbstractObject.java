@@ -21,12 +21,6 @@ public abstract class AbstractObject<T extends AbstractObject<T>>
     /* status */
     public native int getStatus();
 
-    private native void _reset_status(long obj);
-    public T resetStatus() {
-        _reset_status(_obj);
-        return self();
-    }
-
     /* properties */
     public class Properties
     {
