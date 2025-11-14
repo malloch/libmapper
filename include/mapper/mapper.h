@@ -170,7 +170,7 @@ mpr_obj mpr_obj_get_prop_as_obj(mpr_obj object, mpr_prop property, const char *k
  *  \param object       The object to check.
  *  \param property     The symbolic identifier of the property to recover. Can be set to
  *                      `MPR_UNKNOWN` or `MPR_EXTRA` to specify the property by name instead.
- *  \param key          A string identifier (name) for the property. Only used if the 'proerty'
+ *  \param key          A string identifier (name) for the property. Only used if the 'property'
  *                      argument is set to `MPR_UNKNOWN` or `MPR_EXTRA`.
  *  \return             Value of the property, or null if the property does not exist or has an
  *                      incompatible type. */
@@ -531,7 +531,7 @@ mpr_list mpr_map_get_sigs(mpr_map map, mpr_loc endpoint);
 /*! Retrieve the index for a specific map signal.
  *  \param map          The map to check.
  *  \param signal       The signal to find.
- *  \param endpoint     The map endpoint value, must be `MPR_LOC_SRC` or 'MPR_LOC_DST`
+ *  \param endpoint     The map endpoint value, must be `MPR_LOC_SRC` or `MPR_LOC_DST`
  *  \return             The signal index, or `-1` if not found. */
 int mpr_map_get_sig_idx(mpr_map map, mpr_sig signal, mpr_loc endpoint);
 
