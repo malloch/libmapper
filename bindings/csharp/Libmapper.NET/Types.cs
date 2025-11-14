@@ -1,7 +1,7 @@
 namespace Mapper;
 
 [Flags]
-public enum MapperType
+public enum Type
 {
     Device = 0x01, //!< Devices only.
     SignalIn = 0x02, //!< Input signals.

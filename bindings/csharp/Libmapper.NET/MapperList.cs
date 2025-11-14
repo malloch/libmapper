@@ -3,31 +3,42 @@ using System.Runtime.InteropServices;
 
 namespace Mapper;
 
-public abstract class _MapperList
+public abstract class _List
 {
     private IntPtr _list;
     private bool _started;
-    protected MapperType MapperType;
+    private int _status;
+    private int _idx;
+    protected Mapper.Type _type;
 
-    public _MapperList()
+    public _List()
     {
-        MapperType = MapperType.Null;
+        _type = Mapper.Type.Null;
         _list = IntPtr.Zero;
         _started = false;
     }
 
-    public _MapperList(IntPtr list, MapperType mapperType)
+    public _List(IntPtr list, Mapper.Type type)
     {
-        MapperType = mapperType;
+        _type = type;
         _list = list;
         _started = false;
     }
 
+    public _List(IntPtr sig, int status, int num)
+    {
+        _type = Mapper.Type.Null;
+        _list = sig;
+        _started = false;
+        _status = status;
+        _idx = num - 1;
+    }
+
     /* copy constructor */
-    public _MapperList(_MapperList original)
+    public _List(_List original)
     {
         _list = mpr_list_get_cpy(original._list);
-        MapperType = original.MapperType;
+        _type = original._type;
         _started = false;
     }
 
@@ -68,13 +79,13 @@ public abstract class _MapperList
     [DllImport("mapper", CharSet = CharSet.Ansi, CallingConvention = CallingConvention.StdCall)]
     private static extern IntPtr mpr_list_get_union(IntPtr list1, IntPtr list2);
 
-    public _MapperList Join(_MapperList rhs)
+    public _List Join(_List rhs)
     {
         _list = mpr_list_get_union(_list, mpr_list_get_cpy(rhs._list));
         return this;
     }
 
-    public static IntPtr Union(_MapperList a, _MapperList b)
+    public static IntPtr Union(_List a, _List b)
     {
         return mpr_list_get_union(mpr_list_get_cpy(a._list), mpr_list_get_cpy(b._list));
     }
@@ -82,13 +93,13 @@ public abstract class _MapperList
     [DllImport("mapper", CharSet = CharSet.Ansi, CallingConvention = CallingConvention.StdCall)]
     private static extern IntPtr mpr_list_get_isect(IntPtr list1, IntPtr list2);
 
-    public _MapperList Intersect(_MapperList rhs)
+    public _List Intersect(_List rhs)
     {
         _list = mpr_list_get_isect(_list, mpr_list_get_cpy(rhs._list));
         return this;
     }
 
-    public static IntPtr Intersection(_MapperList a, _MapperList b)
+    public static IntPtr Intersection(_List a, _List b)
     {
         return mpr_list_get_isect(mpr_list_get_cpy(a._list), mpr_list_get_cpy(b._list));
     }
@@ -96,13 +107,13 @@ public abstract class _MapperList
     [DllImport("mapper", CharSet = CharSet.Ansi, CallingConvention = CallingConvention.StdCall)]
     private static extern IntPtr mpr_list_get_diff(IntPtr list1, IntPtr list2);
 
-    public _MapperList Subtract(_MapperList rhs)
+    public _List Subtract(_List rhs)
     {
         _list = mpr_list_get_diff(_list, mpr_list_get_cpy(rhs._list));
         return this;
     }
 
-    public static IntPtr Difference(_MapperList a, _MapperList b)
+    public static IntPtr Difference(_List a, _List b)
     {
         return mpr_list_get_diff(mpr_list_get_cpy(a._list), mpr_list_get_cpy(b._list));
     }
@@ -121,14 +132,18 @@ public abstract class _MapperList
 
     public override string ToString()
     {
-        return $"Mapper.List<{MapperType}>";
+        return $"Mapper.List<{_type}>";
     }
 }
 
-public class MapperList<T> : _MapperList, IEnumerator, IEnumerable, IDisposable
-    where T : MapperObject, new()
+public class List<T> : _List, IEnumerator, IEnumerable, IDisposable
+    where T : Mapper.Object, new()
 {
-    internal MapperList(IntPtr list, MapperType mapperType) : base(list, mapperType)
+    internal List(IntPtr list, Mapper.Type type) : base(list, type)
+    {
+    }
+
+    internal List(IntPtr sig, int status, int num) : base (sig, status, num)
     {
     }
 
@@ -176,18 +191,18 @@ public class MapperList<T> : _MapperList, IEnumerator, IEnumerable, IDisposable
     object IEnumerator.Current => Current;
 
     /* Overload some arithmetic operators */
-    public static MapperList<T> operator +(MapperList<T> a, MapperList<T> b)
+    public static Mapper.List<T> operator +(Mapper.List<T> a, Mapper.List<T> b)
     {
-        return new MapperList<T>(Union(a, b), a.MapperType);
+        return new Mapper.List<T>(Union(a, b), a._type);
     }
 
-    public static MapperList<T> operator *(MapperList<T> a, MapperList<T> b)
+    public static Mapper.List<T> operator *(Mapper.List<T> a, Mapper.List<T> b)
     {
-        return new MapperList<T>(Intersection(a, b), a.MapperType);
+        return new Mapper.List<T>(Intersection(a, b), a._type);
     }
 
-    public static MapperList<T> operator -(MapperList<T> a, MapperList<T> b)
+    public static Mapper.List<T> operator -(Mapper.List<T> a, Mapper.List<T> b)
     {
-        return new MapperList<T>(Difference(a, b), a.MapperType);
+        return new Mapper.List<T>(Difference(a, b), a._type);
     }
 }

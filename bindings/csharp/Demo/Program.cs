@@ -15,9 +15,9 @@ internal static class Program
             dev.Poll(100);
         }
 
-        var sigA = dev.AddSignal(Signal.Direction.Outgoing, "Sine", 1, MapperType.Double);
+        var sigA = dev.AddSignal(Signal.Direction.Outgoing, "Sine", 1, Mapper.Type.Double);
         sigA.ReserveInstances(10);
-        var sigB = dev.AddSignal(Signal.Direction.Incoming, "Debug_Log", 1, MapperType.Double);
+        var sigB = dev.AddSignal(Signal.Direction.Incoming, "Debug_Log", 1, Mapper.Type.Double);
         sigB.ReserveInstances(10);
         sigB.ValueChanged += OnEvent;
 
@@ -47,8 +47,8 @@ internal static class Program
                 sigA.Release(instanceId);
                 Console.WriteLine($"Released: {instanceId}");
             }
-            var numInstances = sigA.GetNumInstances(Signal.Status.Any);
-            Console.WriteLine($"{(int)sigA.GetNumInstances(Signal.Status.Active)}/{numInstances}Active Instances:");
+            var numInstances = sigA.GetNumInstances(Mapper.Object.Status.Any);
+            Console.WriteLine($"{(int)sigA.GetNumInstances(Mapper.Object.Status.Active)}/{numInstances}Active Instances:");
             for (int i = 0; i < numInstances; i++) {
                 var instance = sigA.GetInstance(i);
                 Console.WriteLine($"  {i}) ID: {instance.id}, STATUS: {instance.GetStatus()}");
@@ -62,7 +62,7 @@ internal static class Program
         dev = null;
     }
 
-    private static void OnEvent(object? sender, (Signal.Event eventType, ulong instanceId, object? value, MapperType objectType, Time changed) data)
+    private static void OnEvent(object? sender, (Signal.Event eventType, ulong instanceId, object? value, Mapper.Type objectType, Time changed) data)
     {
         if (sender == null)
             return;
@@ -71,7 +71,7 @@ internal static class Program
             Console.WriteLine($"Releasing: {(Signal)sender}, {data.instanceId}");
             ((Signal)sender).Release(data.instanceId);
         }
-        else if (data.eventType == Signal.Event.Update) {
+        else if (data.eventType == Signal.Event.RemoteUpdate) {
             var rcvdProp = ((Signal)sender).GetProperty("rcvd");
             int rcvd = 0;
             if (rcvdProp != null)
@@ -79,8 +79,8 @@ internal static class Program
             rcvd += 1;
             ((Signal)sender).SetProperty("rcvd", rcvd);
         }
-        var numInstances = ((Signal)sender).GetNumInstances(Signal.Status.Any);
-        Console.WriteLine($"{(int)((Signal)sender).GetNumInstances(Signal.Status.Active)}/{numInstances}Active Instances:");
+        var numInstances = ((Signal)sender).GetNumInstances(Mapper.Object.Status.Any);
+        Console.WriteLine($"{(int)((Signal)sender).GetNumInstances(Mapper.Object.Status.Active)}/{numInstances}Active Instances:");
         for (int i = 0; i < numInstances; i++) {
             var instance = ((Signal)sender).GetInstance(i);
             Console.WriteLine($"  {i}) ID: {instance.id}, STATUS: {instance.GetStatus()}");
