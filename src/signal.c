@@ -768,6 +768,8 @@ void mpr_sig_free(mpr_sig sig)
         mpr_net_add_msg(mpr_graph_get_net(lsig->obj.graph), 0, MSG_SIG_REM, msg);
     }
 
+    mpr_dev_remove_sig(sig->dev, sig);
+    /* mark for removal, but leave final freeing to graph housekeeping routines */
     sig->obj.status |= MPR_STATUS_REMOVED;
 }
 
@@ -775,7 +777,6 @@ void mpr_sig_free_internal(mpr_sig sig)
 {
     int i;
     RETURN_UNLESS(sig);
-    mpr_dev_remove_sig(sig->dev, sig);
     if (sig->obj.is_local) {
         mpr_local_sig lsig = (mpr_local_sig)sig;
         free(lsig->id_maps);
@@ -1691,17 +1692,17 @@ mpr_dev mpr_sig_get_dev(mpr_sig sig)
     return sig ? sig->dev : NULL;
 }
 
-static int cmp_qry_sig_maps(const void *context_data, mpr_map map)
+static int cmp_qry_maps(const void *context_data, mpr_map map)
 {
     mpr_sig sig = *(mpr_sig*)context_data;
     int dir = *(int*)((char*)context_data + sizeof(mpr_sig*));
-    return mpr_map_get_has_sig(map, sig, dir);
+    return !(((mpr_obj)map)->status & MPR_STATUS_REMOVED) && mpr_map_get_has_sig(map, sig, dir);
 }
 
 mpr_list mpr_sig_get_maps(mpr_sig sig, mpr_dir dir)
 {
     RETURN_ARG_UNLESS(sig, 0);
-    return mpr_graph_new_query(sig->obj.graph, 1, MPR_MAP, (void*)cmp_qry_sig_maps, "vi", &sig, dir);
+    return mpr_graph_new_query(sig->obj.graph, 1, MPR_MAP, (void*)cmp_qry_maps, "vi", &sig, dir);
 }
 
 static int _init_and_add_id_map(mpr_local_sig lsig, mpr_sig_inst si,

@@ -337,7 +337,7 @@ void mpr_graph_free(mpr_graph g)
         while (sigs) {
             mpr_obj sig = *sigs;
             sigs = mpr_list_get_next(sigs);
-                mpr_graph_remove_sig(g, (mpr_sig)sig, MPR_STATUS_REMOVED);
+            mpr_graph_remove_sig(g, (mpr_sig)sig, MPR_STATUS_REMOVED);
         }
         mpr_graph_remove_dev(g, (mpr_dev)dev, MPR_STATUS_REMOVED);
     }

@@ -110,7 +110,9 @@ static int cmp_qry_sigs(const void *context_data, mpr_sig sig)
     mpr_id dev_id = *(mpr_id*)context_data;
     int dir = *(int*)((char*)context_data + sizeof(mpr_id));
     mpr_dev dev = mpr_sig_get_dev(sig);
-    return ((dir & mpr_sig_get_dir(sig)) && (dev_id == dev->obj.id));
+    return (   (dev_id == dev->obj.id)
+            && (dir & mpr_sig_get_dir(sig))
+            && !(((mpr_obj)sig)->status & MPR_STATUS_REMOVED));
 }
 
 void mpr_dev_init(mpr_dev dev, int is_local, const char *name, mpr_id id)
@@ -385,7 +387,7 @@ static int cmp_qry_maps(const void *context_data, mpr_map map)
 {
     mpr_id dev_id = *(mpr_id*)context_data;
     mpr_dir dir = *(int*)((char*)context_data + sizeof(mpr_id));
-    return mpr_map_get_has_dev(map, dev_id, dir);
+    return !(((mpr_obj)map)->status & MPR_STATUS_REMOVED) && mpr_map_get_has_dev(map, dev_id, dir);
 }
 
 mpr_list mpr_dev_get_maps(mpr_dev dev, mpr_dir dir)
