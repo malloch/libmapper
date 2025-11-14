@@ -33,8 +33,8 @@ class testspeed {
 
         Signal in = dev2.addSignal(mapper.signal.Direction.INCOMING, "insig", 1, Type.FLOAT,
                                    "Hz", null, null, null, new Listener() {
-            public void onEvent(Signal sig, mapper.signal.Event e, float v, Time time) {
-                if (e == mapper.signal.Event.UPDATE) {
+            public void onEvent(Signal sig, mapper.object.Event evt, float val, Time time) {
+                if (evt == mapper.object.Event.REMOTE_UPDATE) {
                     out.setValue(new int[] {incCounter()});
                 }
             }

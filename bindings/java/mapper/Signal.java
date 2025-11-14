@@ -4,11 +4,12 @@ package mapper;
 import mapper.Map;
 import mapper.signal.*;
 import mapper.Device;
+import mapper.object.*;
 import java.util.EnumSet;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 
-public class Signal extends AbstractObject
+public class Signal extends mapper.Object
 {
     /* constructors */
     public Signal(long sig) {
@@ -59,7 +60,7 @@ public class Signal extends AbstractObject
         return this;
     }
     public Signal setListener(Listener l) {
-        _setListener(l, Event.UPDATE.value());
+        _setListener(l, Status.REMOTE_UPDATE.value());
         return this;
     }
 
@@ -88,14 +89,14 @@ public class Signal extends AbstractObject
     public native Instance newestActiveInstance();
 
     private native int _num_instances(long sig, int status);
-    public int numInstances(InstanceStatus status)
+    public int numInstances(Status status)
     {
         return _num_instances(_obj, status.value());
     }
-    public int numInstances(EnumSet<InstanceStatus> statuses)
+    public int numInstances(EnumSet<Status> statuses)
     {
         int flags = 0;
-        for (InstanceStatus is : InstanceStatus.values()) {
+        for (Status is : Status.values()) {
             if (statuses.contains(is))
                 flags |= is.value();
         }
@@ -103,8 +104,8 @@ public class Signal extends AbstractObject
     }
 
     /* set value */
-    public native Signal setValue(long id, Object value);
-    public Signal setValue(Object value) {
+    public native Signal setValue(long id, java.lang.Object value);
+    public Signal setValue(java.lang.Object value) {
         return setValue(0, value);
     }
 
@@ -112,13 +113,13 @@ public class Signal extends AbstractObject
     public native boolean hasValue(long id);
     public boolean hasValue() { return hasValue(0); }
 
-    public native Object getValue(long id);
-    public Object getValue() { return getValue(0); }
+    public native java.lang.Object getValue(long id);
+    public java.lang.Object getValue() { return getValue(0); }
 
     public native Signal releaseInstance(long id);
     public native Signal removeInstance(long id);
 
-    public class Instance extends AbstractObject
+    public class Instance extends mapper.Object
     {
         /* constructors */
         private native long mapperInstance(boolean hasId, long id, java.lang.Object obj);
@@ -154,13 +155,13 @@ public class Signal extends AbstractObject
         public boolean hasValue() { return Signal.this.hasValue(_id); }
 
         /* update */
-        public Instance setValue(Object value) {
+        public Instance setValue(java.lang.Object value) {
             Signal.this.setValue(_id, value);
             return this;
         }
 
         /* value */
-        public Object getValue() { return Signal.this.getValue(_id); }
+        public java.lang.Object getValue() { return Signal.this.getValue(_id); }
 
         /* userObject */
         public native java.lang.Object getUserReference();
@@ -169,7 +170,21 @@ public class Signal extends AbstractObject
         /* properties */
         // TODO: filter for instance-specific properties like id, value, time
 
-        public native int getStatus();
+        private native int get_status(long sig, boolean clear_volatile);
+        public EnumSet<Status> getStatus(boolean clear_volatile)
+        {
+            EnumSet<Status> jstatus = EnumSet.noneOf(Status.class);
+            int cstatus = get_status(_obj, clear_volatile);
+            for (Status s : Status.values()) {
+                if ((cstatus & s.value()) != 0)
+                    jstatus.add(s);
+            }
+            return jstatus;
+        }
+        public EnumSet<Status> getStatus()
+        {
+            return getStatus(false);
+        }
 
         private long _id;
     }

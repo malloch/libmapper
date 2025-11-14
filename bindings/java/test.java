@@ -26,9 +26,9 @@ class test {
             });
 
         g.addListener(new mapper.graph.Listener<Device>() {
-            public void onEvent(Device dev, mapper.graph.Event event) {
+            public void onEvent(Device dev, mapper.object.Event evt) {
                 Device.Properties p = dev.properties();
-                System.out.println("graph record "+event+" for device "+p.get("name"));
+                System.out.println("graph record "+evt+" for device "+p.get("name"));
                 int numProps = p.size();
                 for (int i = 0; i < numProps; i++) {
                     Device.Properties.Entry e = p.getEntry(i);
@@ -37,11 +37,11 @@ class test {
             }});
 
         g.addListener(new mapper.graph.Listener<Signal>() {
-            public void onEvent(Signal sig, mapper.graph.Event event) {
+            public void onEvent(Signal sig, mapper.object.Event evt) {
                 System.out.println("Graph evnt signal");
                 Signal.Properties ps = sig.properties();
                 Device.Properties pd = sig.device().properties();
-                System.out.println("graph record "+event+" for signal "
+                System.out.println("graph record "+evt+" for signal "
                                    +pd.get("name")+":"+ps.get("name"));
                 int numProps = ps.size();
                 for (int i = 0; i < numProps; i++) {
@@ -51,9 +51,9 @@ class test {
             }});
 
         g.addListener(new mapper.graph.Listener<mapper.Map>() {
-            public void onEvent(mapper.Map map, mapper.graph.Event event) {
+            public void onEvent(mapper.Map map, mapper.object.Event evt) {
                 System.out.println("Graph evnt map");
-                System.out.print("graph record "+event+" for map ");
+                System.out.print("graph record "+evt+" for map ");
                 for (mapper.Signal s : map.signals(Location.SOURCE))
                     System.out.print(s.device().properties().get("name")+":"
                                      +s.properties().get("name")+" ");
@@ -71,7 +71,7 @@ class test {
 
         Signal inp1 = dev1.addSignal(mapper.signal.Direction.INCOMING, "insig1", 1, Type.INT32, "Hz",
                                      null, null, null, new mapper.signal.Listener() {
-            public void onEvent(Signal sig, mapper.signal.Event e, int v, Time time) {
+            public void onEvent(Signal sig, mapper.object.Event evt, int v, Time time) {
                 System.out.println(sig.properties().get("name") + " got "
                                    + v + " at t=" + time.toString() + ", status=" + sig.getStatus());
             }});

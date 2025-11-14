@@ -7,7 +7,7 @@ import mapper.graph.*;
 import java.util.*;
 //import java.util.HashSet;
 
-public class Graph extends mapper.AbstractObject
+public class Graph extends mapper.Object
 {
     /* constructor */
     private native long mapperGraphNew(int flags);

@@ -6,8 +6,8 @@ libmapperjni_la_LDFLAGS = -export-dynamic -version-info @SO_VERSION@
 libmapperjni_la_LIBADD = \
     $(top_builddir)/src/libmapper.la $(liblo_LIBS)
 
-JHEADERS = mapper_AbstractObject.h mapper_AbstractObject_Properties.h    \
-           mapper_AbstractObject_Properties_Entry.h                      \
+JHEADERS = mapper_Object.h mapper_Object_Properties.h                    \
+           mapper_Object_Properties_Entry.h                              \
            mapper_Graph.h                                                \
            mapper_Device.h                                               \
            mapper_List.h                                                 \
@@ -17,24 +17,22 @@ JHEADERS = mapper_AbstractObject.h mapper_AbstractObject_Properties.h    \
 
 JFLAGS = -source 1.8 -target 1.8
 JCLASSES = mapper/NativeLib.class                                        \
-           mapper/AbstractObject.class                                   \
            mapper/Device.class                                           \
-           mapper/Graph.class mapper/graph/Event.class                   \
-           mapper/graph/Listener.class                                   \
+           mapper/Graph.class mapper/graph/Listener.class                \
            mapper/List.class                                             \
            mapper/Map.class mapper/map/Location.class                    \
            mapper/map/Protocol.class                                     \
+           mapper/Object.class mapper/object/Event.class                 \
+           mapper/object/Status.class                                    \
            mapper/Operator.class                                         \
            mapper/Property.class                                         \
            mapper/Signal.class mapper/signal/Direction.class             \
-           mapper/signal/Event.class mapper/signal/InstanceStatus.class  \
            mapper/signal/Listener.class mapper/signal/Stealing.class     \
-           mapper/Status.class                                           \
            mapper/Time.class                                             \
            mapper/Type.class
 
-JCLASSESINTERNAL = mapper/Signal$$Instance.class mapper/AbstractObject$$Properties.class \
-                   mapper/AbstractObject$$Properties$$Entry.class
+JCLASSESINTERNAL = mapper/Signal$$Instance.class mapper/Object$$Properties.class \
+                   mapper/Object$$Properties$$Entry.class
 
 JJAVA = $(JCLASSES:%.class=%.java)
 

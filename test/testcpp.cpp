@@ -95,7 +95,7 @@ void simple_handler(Signal&& sig, int length, Type type, const void *value, Time
     std::cout << std::endl;
 }
 
-void standard_handler(Signal&& sig, Signal::Event event, Id instance, int length,
+void standard_handler(Signal&& sig, Object::Event event, Id instance, int length,
                       Type type, const void *value, Time&& t)
 {
     ++received;
@@ -149,7 +149,7 @@ void standard_handler(Signal&& sig, Signal::Event event, Id instance, int length
     }
 }
 
-void instance_handler(Signal::Instance&& si, Signal::Event event, int length,
+void instance_handler(Signal::Instance&& si, Object::Event event, int length,
                       Type type, const void *value, Time&& t)
 {
     ++received;
@@ -158,7 +158,7 @@ void instance_handler(Signal::Instance&& si, Signal::Event event, int length,
                   << si.id() << " got " << event;
     }
 
-    if (event == Signal::Event::REL_UPSTRM) {
+    if (event == Object::Event::UPSTREAM_RELEASE) {
         if (verbose)
             std::cout << " release" << std::endl;
         si.release();
@@ -447,7 +447,7 @@ int main(int argc, char ** argv)
     mapper::Signal multirecv = dev.add_signal(Direction::INCOMING, "multirecv", 1, Type::FLOAT,
                                               0, 0, 0, &num_inst)
                                   .reserve_instance()
-                                  .set_callback(instance_handler, Signal::Event::ALL);
+                                  .set_callback(instance_handler, Object::Event::ANY);
     mapper::Map map2(multisend, multirecv);
     map2.push();
     while (!map2.ready() && !done) {
@@ -502,7 +502,7 @@ int main(int argc, char ** argv)
 
         dev.poll(period);
 
-        List<Signal::Instance> instances = multirecv.instances(Object::Status::UPDATE_REM);
+        List<Signal::Instance> instances = multirecv.instances(Object::Status::REMOTE_UPDATE);
         for (; instances != instances.end(); ++instances) {
             Signal::Instance i = *instances;
             if (verbose)
@@ -510,7 +510,7 @@ int main(int argc, char ** argv)
                           << " got " << *(float*)(i.value()) << std::endl;
             ++received;
         }
-        instances = multirecv.instances(Object::Status::REL_UPSTRM);
+        instances = multirecv.instances(Object::Status::UPSTREAM_RELEASE);
         for (; instances != instances.end(); ++instances) {
             Signal::Instance i = *instances;
             if (verbose)

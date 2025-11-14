@@ -1,9 +1,11 @@
 
 package mapper.graph;
 
-public class Listener<T extends mapper.AbstractObject> {
-    public void onEvent(mapper.Device device, mapper.graph.Event event) {};
-    public void onEvent(mapper.Signal signal, mapper.graph.Event event) {};
-    public void onEvent(mapper.Map map, mapper.graph.Event event) {};
+import mapper.object.Event;
+
+public class Listener<T extends mapper.Object> {
+    public void onEvent(mapper.Device device, Event event) {};
+    public void onEvent(mapper.Signal signal, Event event) {};
+    public void onEvent(mapper.Map map, Event event) {};
 
 }

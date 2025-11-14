@@ -723,30 +723,56 @@ class List:
 class Object:
     """Objects provide a generic representation of Graphs, Devices, Signals, and Maps."""
 
-    class Status(IntFlag):
-        """Describes the possible statuses for a libmapper object."""
+    class Event(IntFlag):
+        """Possible events for a libmapper object, used to register and inform callbacks"""
 
-        UNDEFINED   = 0x0000
-        NEW         = 0x0001
-        MODIFIED    = 0x0002
-        REMOVED     = 0x0004
-        EXPIRED     = 0x0008
-        STAGED      = 0x0010
-        ACTIVE      = 0x0020
-        HAS_VALUE   = 0x0040
-        NEW_VALUE   = 0x0080
-        UPDATE_LOC  = 0x0100
-        UPDATE_REM  = 0x0200
-        REL_UPSTRM  = 0x0400
-        REL_DNSTRM  = 0x0800
-        OVERFLOW    = 0x1000
-        ANY         = 0x1FFF
+        NONE               = 0x0000
+        NEW                = 0x0001
+        MODIFIED           = 0x0002
+        REMOVED            = 0x0004
+        EXPIRED            = 0x0008
+        STAGED             = 0x0010
+        ACTIVATED          = 0x0020
+        HAS_VALUE          = 0x0040
+        NEW_VALUE          = 0x0080
+        LOCAL_UPDATE       = 0x0100
+        REMOTE_UPDATE      = 0x0200
+        UPSTREAM_RELEASE   = 0x0400
+        DOWNSTREAM_RELEASE = 0x0800
+        OVERFLOW           = 0x1000
+        ANY                = 0x1FFF
 
         def __str__(self):
             if self._name_ is not None:
                 return self._name_
-            members, uncovered = _decompose(self.__cls__, self._value_)
-            return '|'.join([str(m._name_ or m._value_) for m in members])
+            return '|'.join([str(m._name_ or m._value_) for m in self.__cls__ if m.value & self.value])
+
+        def __repr__(self):
+            return 'libmapper.Object.Status(' + str(self) + ')'
+
+    class Status(IntFlag):
+        """Describes the possible statuses for a libmapper object."""
+
+        UNDEFINED          = 0x0000
+        NEW                = 0x0001
+        MODIFIED           = 0x0002
+        REMOVED            = 0x0004
+        EXPIRED            = 0x0008
+        STAGED             = 0x0010
+        ACTIVE             = 0x0020
+        HAS_VALUE          = 0x0040
+        NEW_VALUE          = 0x0080
+        LOCAL_UPDATE       = 0x0100
+        REMOTE_UPDATE      = 0x0200
+        UPSTREAM_RELEASE   = 0x0400
+        DOWNSTREAM_RELEASE = 0x0800
+        OVERFLOW           = 0x1000
+        ANY                = 0x1FFF
+
+        def __str__(self):
+            if self._name_ is not None:
+                return self._name_
+            return '|'.join([str(m._name_ or m._value_) for m in self.__cls__ if m.value & self.value])
 
         def __repr__(self):
             return 'libmapper.Object.Status(' + str(self) + ')'
@@ -1177,7 +1203,7 @@ def signal_cb_py(_sig, _evt, _inst, _len, _type, _val, _time):
         val = np.array(val)
 
     # TODO: check if cb was registered with signal or instances
-    cb(Signal(_sig), Signal.Event(_evt), _inst, val, Time(_time))
+    cb(Signal(_sig), Object.Event(_evt), _inst, val, Time(_time))
 
 class Signal(Object):
     """
@@ -1199,50 +1225,6 @@ class Signal(Object):
 
         def __repr__(self):
             return 'libmapper.Signal.Direction.' + self.name
-
-    @unique
-    class Event(IntFlag):
-        """The set of possible signal events, used to register and inform callbacks."""
-
-        NONE        = 0x0000
-        INST_NEW    = 0x0001
-        UPDATE      = 0x0200
-        REL_UPSTRM  = 0x0400
-        REL_DNSTRM  = 0x0800
-        INST_OFLW   = 0x1000
-        ALL         = 0x1FFF
-
-        def __repr__(self):
-            return 'libmapper.Signal.Event.' + self.name
-
-    @unique
-    class Status(IntFlag):
-        """The set of possible status flags for a signal instance."""
-
-        UNDEFINED           = 0x0000
-        NEW                 = 0x0001
-
-        STAGED              = 0x0010
-        ACTIVE              = 0x0020
-
-        HAS_VALUE           = 0x0040
-        NEW_VALUE           = 0x0080
-
-        UPDATE_LOC          = 0x0100
-        UPDATE_REM          = 0x0200
-        REL_UPSTRM          = 0x0400
-        REL_DNSTRM          = 0x0800
-        OVERFLOW            = 0x1000
-        ANY                 = 0x1FFF
-
-        def __str__(self):
-            if self._name_ is not None:
-                return self._name_
-            members, uncovered = _decompose(self.__cls__, self._value_)
-            return '|'.join([str(m._name_ or m._value_) for m in members])
-
-        def __repr__(self):
-            return 'libmapper.Signal.Status(' + str(self) + ')'
 
     @unique
     class Stealing(Enum):
@@ -1278,13 +1260,13 @@ class Signal(Object):
         mpr.mpr_sig_free(self._obj)
         self._obj = None
 
-    def set_callback(self, callback, events=Event.ALL):
+    def set_callback(self, callback, events=Object.Event.ANY):
         """
         Set or unset the message handler for a signal.
 
         Args:
             callback: a function to be called when the Signal is updated.
-            events (bitflags: libmapper.Signal.Event): The type(s) of events that will trigger the
+            events (bitflags: libmapper.Object.Event): The type(s) of events that will trigger the
                 callback.
 
         Returns:
@@ -1454,12 +1436,12 @@ class Signal(Object):
         else:
             return super().get_status(clear_volatile)
 
-    def num_instances(self, status=Status.ANY):
+    def num_instances(self, status=Object.Status.ANY):
         """
         Get the number of instances for this Signal.
 
         Args:
-            status (libmapper.Signal.Status): The statuses of the instances to search for.
+            status (libmapper.Object.Status): The statuses of the instances to search for.
 
         Returns:
              The number of allocated signal instances matching the specified status.
@@ -1467,18 +1449,18 @@ class Signal(Object):
 
         mpr.mpr_sig_get_num_inst.argtypes = [c_void_p, c_int]
         mpr.mpr_sig_get_num_inst.restype = c_int
-        if not isinstance(status, Signal.Status):
-            status = Signal.Status(status)
+        if not isinstance(status, Status):
+            status = Status(status)
         return mpr.mpr_sig_get_num_inst(self._obj, status.value)
 
-    def instance_id(self, idx, status=Status.ANY):
+    def instance_id(self, idx, status=Object.Status.ANY):
         """
         Get a Signal Instance's identifier by its index.
 
         Args:
             idx (int): The numerical index of the instance to retrieve.  Should be between zero
                 and the number of instances.
-            status (libmapper.Signal.Status): The statuses of the instances to search for.
+            status (libmapper.Object.Status): The statuses of the instances to search for.
 
         Returns:
             The instance identifier associated with the given index, or `0` if unsuccessful.
@@ -1743,13 +1725,13 @@ def graph_cb_py(_graph, c_obj, evt, user):
     _type = mpr.mpr_obj_get_type(c_obj)
     if _type == Type.DEVICE:
         for f in graph_dev_cbs:
-            f(Type.DEVICE, Device(c_obj), Graph.Event(evt))
+            f(Type.DEVICE, Device(c_obj), Object.Event(evt))
     elif _type == Type.SIGNAL:
         for f in graph_sig_cbs:
-            f(Type.SIGNAL, Signal(c_obj), Graph.Event(evt))
+            f(Type.SIGNAL, Signal(c_obj), Object.Event(evt))
     elif _type == Type.MAP:
         for f in graph_map_cbs:
-            f(Type.MAP, Map(c_obj), Graph.Event(evt))
+            f(Type.MAP, Map(c_obj), Object.Event(evt))
 
 class Graph(Object):
     """
@@ -1760,17 +1742,6 @@ class Graph(Object):
 
     mpr.mpr_graph_get_list.argtypes = [c_void_p, c_int]
     mpr.mpr_graph_get_list.restype = c_void_p
-
-    @unique
-    class Event(Enum):
-        """The set of possible graph events, used to inform callbacks."""
-        NEW      = 0x01
-        MODIFIED = 0x02
-        REMOVED  = 0x04
-        EXPIRED  = 0x08
-
-        def __repr__(self):
-            return 'libmapper.Graph.Event.' + self.name
 
     def __init__(self, subscribe_flags=Type.OBJECT, ptr=None):
         """
@@ -2080,7 +2051,7 @@ class Device(Object):
         return mpr.mpr_dev_poll(self._obj, timeout)
 
     def add_signal(self, dir, name, length=1, datatype=Type.FLOAT, unit=None, min=None, max=None,
-                   num_inst=None, callback=None, events=Signal.Event.ALL):
+                   num_inst=None, callback=None, events=Object.Event.ANY):
         """
         Create a new Signal and add it to this Device.
 
@@ -2094,7 +2065,7 @@ class Device(Object):
             max (numeric, optional): The maximum value for this signal, if any.
             num_inst (int or None): The number of instances for this signal, or None for singleton.
             callback (code, optional): Function to be called when the signal is updated.
-            events (libmapper.Signal.Event): The types of events to trigger a call to `callback`.
+            events (libmapper.Object.Event): The types of events to trigger a call to `callback`.
 
         Returns:
             The new Signal.
@@ -2108,7 +2079,7 @@ class Device(Object):
         datatype &= 0xFF
 
         ptr = mpr.mpr_sig_new(self._obj, dir.value, name.encode('utf-8'), length,
-                              datatype.value, None, None, None, None, None, Signal.Event.NONE)
+                              datatype.value, None, None, None, None, None, Object.Event.NONE)
 
         signal = Signal(ptr)
         if is_np_array:

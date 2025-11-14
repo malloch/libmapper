@@ -2,12 +2,14 @@
 package mapper;
 
 import mapper.NativeLib;
+import mapper.object.*;
 import mapper.Property;
+import java.util.EnumSet;
 
-public abstract class AbstractObject<T extends AbstractObject<T>>
+public abstract class Object<T extends mapper.Object<T>>
 {
     /* constructor */
-    public AbstractObject(long obj) { _obj = obj; _owned = false; }
+    public Object(long obj) { _obj = obj; _owned = false; }
 
     /* self */
     abstract T self();
@@ -19,19 +21,35 @@ public abstract class AbstractObject<T extends AbstractObject<T>>
     }
 
     /* status */
-    public native int getStatus();
+    private native int get_status(long sig, boolean clear_volatile);
+    public EnumSet<Status> getStatus(boolean clear_volatile)
+    {
+        EnumSet<Status> jstatus = EnumSet.noneOf(Status.class);
+        int cstatus = get_status(_obj, clear_volatile);
+        for (Status s : Status.values()) {
+            if (Status.ANY == s)
+                continue;
+            if ((cstatus & s.value()) != 0)
+                jstatus.add(s);
+        }
+        return jstatus;
+    }
+    public EnumSet<Status> getStatus()
+    {
+        return getStatus(false);
+    }
 
     /* properties */
     public class Properties
     {
         /* constructor */
-        public Properties(AbstractObject obj) { _obj = obj._obj; }
+        public Properties(Object obj) { _obj = obj._obj; }
 
         public void clear()
             { throw new UnsupportedOperationException(); }
 
         private native boolean _containsKey(long obj, int idx, String key);
-        public boolean containsKey(Object key)
+        public boolean containsKey(java.lang.Object key)
         {
             if (key instanceof Integer)
                 return _containsKey(_obj, (int)key, null);
@@ -43,8 +61,8 @@ public abstract class AbstractObject<T extends AbstractObject<T>>
                 return false;
         }
 
-        private native boolean _containsValue(long obj, Object value);
-        public boolean containsValue(Object value)
+        private native boolean _containsValue(long obj, java.lang.Object value);
+        public boolean containsValue(java.lang.Object value)
             { return _containsValue(_obj, value); }
 
         public class Entry
@@ -55,19 +73,19 @@ public abstract class AbstractObject<T extends AbstractObject<T>>
                 { return _key; }
             public mapper.Property getProperty()
                 { return mapper.Property.values()[_id]; }
-            public Object getValue()
+            public java.lang.Object getValue()
                 { return _value; }
             public String toString()
                 { return _key + ": " + _value.toString(); }
 
             private int _id;
             private String _key;
-            private Object _value;
+            private java.lang.Object _value;
         }
 
         // TODO: implement iterator
 
-        public Entry getEntry(Object key)
+        public Entry getEntry(java.lang.Object key)
         {
             if (key instanceof Integer) {
                 Entry e = new Entry();
@@ -85,8 +103,8 @@ public abstract class AbstractObject<T extends AbstractObject<T>>
                 return null;
         }
 
-        private native Object _get(long obj, int idx, String key);
-        public Object get(Object key)
+        private native java.lang.Object _get(long obj, int idx, String key);
+        public java.lang.Object get(java.lang.Object key)
         {
             if (key instanceof Integer)
                 return _get(_obj, (int)key, null);
@@ -101,8 +119,9 @@ public abstract class AbstractObject<T extends AbstractObject<T>>
         public boolean isEmpty()
             { return false; }
 
-        private native Object _put(long obj, int idx, String key, Object value, boolean publish);
-        public Object put(Object key, Object value, boolean publish)
+        private native java.lang.Object _put(long obj, int idx, String key, java.lang.Object value,
+                                             boolean publish);
+        public java.lang.Object put(java.lang.Object key, java.lang.Object value, boolean publish)
         {
             // translate some enum objects to their int form
             if (value instanceof mapper.signal.Direction)
@@ -126,11 +145,11 @@ public abstract class AbstractObject<T extends AbstractObject<T>>
                 return null;
         }
 
-        public Object put(Object key, Object value)
+        public java.lang.Object put(java.lang.Object key, java.lang.Object value)
             { return put(key, value, true); }
 
-        private native Object _remove(long obj, int idx, String key);
-        public Object remove(Object key)
+        private native java.lang.Object _remove(long obj, int idx, String key);
+        public java.lang.Object remove(java.lang.Object key)
         {
             if (key instanceof Integer)
                 return _remove(_obj, (int)key, null);

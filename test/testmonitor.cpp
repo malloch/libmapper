@@ -29,17 +29,20 @@ void monitor_pause(void)
 void on_object(Graph&& g, Object&& o, Graph::Event e)
 {
     switch (e) {
-        case Graph::Event::OBJ_NEW:
+        case Object::Event::NEW:
             eprintf("Added: ");
             break;
-        case Graph::Event::OBJ_MOD:
+        case Object::Event::MODIFIED:
             eprintf("Modified: ");
             break;
-        case Graph::Event::OBJ_REM:
+        case Object::Event::REMOVED:
             eprintf("Removed: ");
             break;
-        case Graph::Event::OBJ_EXP:
+        case Object::Event::EXPIRED:
             eprintf("Unresponsive: ");
+            break;
+        default:
+            eprintf("Unhandled: ");
             break;
     }
     if (verbose)

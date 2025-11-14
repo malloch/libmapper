@@ -1,6 +1,7 @@
 
 package mapper.signal;
 
+import mapper.object.Event;
 import mapper.Signal;
 
 public class Listener {

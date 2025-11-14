@@ -9,7 +9,7 @@ import mapper.Time;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 
-public class Device extends mapper.AbstractObject
+public class Device extends mapper.Object
 {
     /* constructor */
     private native long mapperDeviceNew(String name, Graph g);

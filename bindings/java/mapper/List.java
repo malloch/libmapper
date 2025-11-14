@@ -4,7 +4,7 @@ package mapper;
 import java.util.Iterator;
 import java.util.Collection;
 
-public class List<T extends AbstractObject> implements Iterable<T> {
+public class List<T extends mapper.Object> implements Iterable<T> {
 
     private native T _newObject(long ptr);
     private native long _deref(long list);

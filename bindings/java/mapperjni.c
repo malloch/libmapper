@@ -4,8 +4,8 @@
 #include <arpa/inet.h>
 #include <mapper/mapper.h>
 
-#include "mapper_AbstractObject.h"
-#include "mapper_AbstractObject_Properties.h"
+#include "mapper_Object.h"
+#include "mapper_Object_Properties.h"
 #include "mapper_Device.h"
 #include "mapper_Graph.h"
 #include "mapper_List.h"
@@ -29,20 +29,22 @@
 JNIEnv *genv=0;
 int bailing=0;
 
-const char *graph_evt_strings[] = {
+const char *evt_strings[] = {
+    "NONE",
     "NEW",
     "MODIFIED",
     "REMOVED",
-    "EXPIRED"
-};
-
-const char *signal_evt_strings[] = {
-    "NEW_INSTANCE",
-    "UPDATE",
+    "EXPIRED",
+    "STAGED",
+    "ACTIVATED",
+    "HAS_VALUE",
+    "NEW_VALUE",
+    "LOCAL_UPDATE",
+    "REMOTE_UPDATE",
     "UPSTREAM_RELEASE",
     "DOWNSTREAM_RELEASE",
     "OVERFLOW",
-    "ALL"
+    "ANY"
 };
 
 const char *direction_strings[] = {
@@ -80,6 +82,13 @@ const char *status_strings[] = {
     "EXPIRED",
     "STAGED",
     "ACTIVE",
+    "HAS_VALUE",
+    "NEW_VALUE",
+    "LOCAL_UPDATE",
+    "REMOTE_UPDATE",
+    "UPSTREAM_RELEASE",
+    "DOWNSTREAM_RELEASE",
+    "OVERFLOW",
     "ANY"
 };
 
@@ -123,18 +132,18 @@ enum {
 };
 
 const char *signal_update_method_strings[] = {
-    "(Lmapper/Signal;Lmapper/signal/Event;ILmapper/Time;)V",
-    "(Lmapper/Signal;Lmapper/signal/Event;[ILmapper/Time;)V",
-    "(Lmapper/Signal;Lmapper/signal/Event;FLmapper/Time;)V",
-    "(Lmapper/Signal;Lmapper/signal/Event;[FLmapper/Time;)V",
-    "(Lmapper/Signal;Lmapper/signal/Event;DLmapper/Time;)V",
-    "(Lmapper/Signal;Lmapper/signal/Event;[DLmapper/Time;)V",
-    "(Lmapper/Signal$Instance;Lmapper/signal/Event;ILmapper/Time;)V",
-    "(Lmapper/Signal$Instance;Lmapper/signal/Event;[ILmapper/Time;)V",
-    "(Lmapper/Signal$Instance;Lmapper/signal/Event;FLmapper/Time;)V",
-    "(Lmapper/Signal$Instance;Lmapper/signal/Event;[FLmapper/Time;)V",
-    "(Lmapper/Signal$Instance;Lmapper/signal/Event;DLmapper/Time;)V",
-    "(Lmapper/Signal$Instance;Lmapper/signal/Event;[DLmapper/Time;)V",
+    "(Lmapper/Signal;Lmapper/object/Event;ILmapper/Time;)V",
+    "(Lmapper/Signal;Lmapper/object/Event;[ILmapper/Time;)V",
+    "(Lmapper/Signal;Lmapper/object/Event;FLmapper/Time;)V",
+    "(Lmapper/Signal;Lmapper/object/Event;[FLmapper/Time;)V",
+    "(Lmapper/Signal;Lmapper/object/Event;DLmapper/Time;)V",
+    "(Lmapper/Signal;Lmapper/object/Event;[DLmapper/Time;)V",
+    "(Lmapper/Signal$Instance;Lmapper/object/Event;ILmapper/Time;)V",
+    "(Lmapper/Signal$Instance;Lmapper/object/Event;[ILmapper/Time;)V",
+    "(Lmapper/Signal$Instance;Lmapper/object/Event;FLmapper/Time;)V",
+    "(Lmapper/Signal$Instance;Lmapper/object/Event;[FLmapper/Time;)V",
+    "(Lmapper/Signal$Instance;Lmapper/object/Event;DLmapper/Time;)V",
+    "(Lmapper/Signal$Instance;Lmapper/object/Event;[DLmapper/Time;)V",
 };
 
 typedef struct {
@@ -147,10 +156,6 @@ typedef struct {
     jobject inst;
     jobject user_ref;
 } inst_jni_context_t, *inst_jni_context;
-
-const char *signal_event_method_strings[] = {
-
-};
 
 /**** Helpers ****/
 
@@ -287,58 +292,40 @@ static jobject get_jobject_from_time(JNIEnv *env, mpr_time time)
     return jtime;
 }
 
-static jobject get_jobject_from_graph_evt(JNIEnv *env, mpr_graph_evt evt)
+static jobject get_jobject_from_evt(JNIEnv *env, mpr_status evt)
 {
     jobject obj = 0;
-    jclass cls = (*env)->FindClass(env, "mapper/graph/Event");
+    jclass cls = (*env)->FindClass(env, "mapper/object/Event");
     if (cls) {
         switch (evt) {
             case MPR_STATUS_NEW:        evt = 1;    break;
             case MPR_STATUS_MODIFIED:   evt = 2;    break;
             case MPR_STATUS_REMOVED:    evt = 3;    break;
             case MPR_STATUS_EXPIRED:    evt = 4;    break;
+            case MPR_STATUS_STAGED:     evt = 5;    break;
+            case MPR_STATUS_ACTIVE:     evt = 6;    break;
+            case MPR_STATUS_HAS_VALUE:  evt = 7;    break;
+            case MPR_STATUS_NEW_VALUE:  evt = 8;    break;
+            case MPR_STATUS_UPDATE_LOC: evt = 9;    break;
+            case MPR_STATUS_UPDATE_REM: evt = 10;   break;
+            case MPR_STATUS_REL_UPSTRM: evt = 11;   break;
+            case MPR_STATUS_REL_DNSTRM: evt = 12;   break;
+            case MPR_STATUS_OVERFLOW:   evt = 13;   break;
+            case MPR_STATUS_ANY:        evt = 14;   break;
             default:                    evt = 0;    break;
         }
-        jfieldID fid = (*env)->GetStaticFieldID(env, cls, graph_evt_strings[evt],
-                                                "Lmapper/graph/Event;");
+        jfieldID fid = (*env)->GetStaticFieldID(env, cls, evt_strings[evt], "Lmapper/object/Event;");
         if (fid) {
             obj = (*env)->GetStaticObjectField(env, cls, fid);
         }
         else {
-            printf("Error looking up graph/Event field [%d].\n", evt);
+            printf("Error looking up object Event field [%d].\n", evt);
             exit(1);
         }
     }
     return obj;
 }
 
-static jobject get_jobject_from_signal_evt(JNIEnv *env, mpr_sig_evt evt)
-{
-    jobject obj = 0;
-    jclass cls = (*env)->FindClass(env, "mapper/signal/Event");
-    const char *evt_str;
-    switch (evt) {
-        case MPR_SIG_INST_NEW:      evt_str = signal_evt_strings[0];    break;
-        case MPR_SIG_UPDATE:        evt_str = signal_evt_strings[1];    break;
-        case MPR_SIG_REL_UPSTRM:    evt_str = signal_evt_strings[2];    break;
-        case MPR_SIG_REL_DNSTRM:    evt_str = signal_evt_strings[3];    break;
-        case MPR_SIG_INST_OFLW:     evt_str = signal_evt_strings[4];    break;
-        default:
-            printf("Error looking up signal event %d.\n", evt);
-            exit(1);
-    }
-    if (cls) {
-        jfieldID fid = (*env)->GetStaticFieldID(env, cls, evt_str, "Lmapper/signal/Event;");
-        if (fid) {
-            obj = (*env)->GetStaticObjectField(env, cls, fid);
-        }
-        else {
-            printf("Error looking up signal/Event field '%s'.\n", evt_str);
-            exit(1);
-        }
-    }
-    return obj;
-}
 static jobject build_value_object(JNIEnv *env, mpr_prop prop, const int len,
                                   mpr_type type, const void *val)
 {
@@ -531,7 +518,7 @@ static jobject build_value_object(JNIEnv *env, mpr_prop prop, const int len,
     return ret;
 }
 
-static void java_signal_update_cb(mpr_sig sig, mpr_sig_evt evt, mpr_id id, int len,
+static void java_signal_update_cb(mpr_sig sig, mpr_status evt, mpr_id id, int len,
                                   mpr_type type, const void *val, mpr_time time)
 {
     if (bailing)
@@ -544,7 +531,7 @@ static void java_signal_update_cb(mpr_sig sig, mpr_sig_evt evt, mpr_id id, int l
         return;
     }
 
-    jobject eventobj = get_jobject_from_signal_evt(genv, evt);
+    jobject eventobj = get_jobject_from_evt(genv, evt);
     if (!eventobj) {
         printf("Error looking up signal event\n");
         return;
@@ -759,11 +746,11 @@ static int signal_listener_type(const char *cMethodSig)
     cMethodSig += 8;
     // check if is singleton or instanced listener
     int instanced = 0;
-    if (strncmp(cMethodSig, "mapper.Signal$Instance,mapper.signal.Event,", 43) == 0) {
+    if (strncmp(cMethodSig, "mapper.Signal$Instance,mapper.object.Event,", 43) == 0) {
         instanced = 1;
         cMethodSig += 43;
     }
-    else if (strncmp(cMethodSig, "mapper.Signal,mapper.signal.Event,", 34) == 0) {
+    else if (strncmp(cMethodSig, "mapper.Signal,mapper.object.Event,", 34) == 0) {
         instanced = 0;
         cMethodSig += 34;
     }
@@ -841,23 +828,23 @@ static jobject create_signal_object(JNIEnv *env, jobject devobj, signal_jni_cont
     return sigobj;
 }
 
-/**** mapper_AbstractObject.h ****/
+/**** mapper_Object.h ****/
 
-JNIEXPORT jlong JNICALL Java_mapper_AbstractObject_graph
+JNIEXPORT jlong JNICALL Java_mapper_Object_graph
   (JNIEnv *env, jobject jobj, jlong ptr)
 {
     mpr_obj mobj = (mpr_obj) ptr_jlong(ptr);
     return mobj ? jlong_ptr(mpr_obj_get_graph(mobj)) : 0;
 }
 
-JNIEXPORT jint JNICALL Java_mapper_AbstractObject_getStatus
-  (JNIEnv *env, jobject jobj)
+JNIEXPORT jint JNICALL Java_mapper_Object_get_1status
+  (JNIEnv *env, jobject jobj, jlong ptr, jboolean clear_volatile)
 {
-    mpr_obj obj = get_mpr_obj_from_jobject(env, jobj);
-    return obj ? mpr_obj_get_status(obj, 0) : 0;
+    mpr_obj mobj = (mpr_obj) ptr_jlong(ptr);
+    return mobj ? mpr_obj_get_status(mobj, clear_volatile) : 0;
 }
 
-JNIEXPORT void JNICALL Java_mapper_AbstractObject__1push
+JNIEXPORT void JNICALL Java_mapper_Object__1push
   (JNIEnv *env, jobject jobj, jlong ptr)
 {
     mpr_obj obj = (mpr_obj)ptr_jlong(ptr);
@@ -865,9 +852,9 @@ JNIEXPORT void JNICALL Java_mapper_AbstractObject__1push
         mpr_obj_push(obj);
 }
 
-/**** mapper_AbstractObject_Properties.h ****/
+/**** mapper_Object_Properties.h ****/
 
-JNIEXPORT jboolean JNICALL Java_mapper_AbstractObject_00024Properties__1containsKey
+JNIEXPORT jboolean JNICALL Java_mapper_Object_00024Properties__1containsKey
   (JNIEnv *env, jobject jobj, jlong ptr, jint id, jstring jkey)
 {
     mpr_obj mobj = (mpr_obj) ptr_jlong(ptr);
@@ -975,7 +962,7 @@ int compare_object_equals_property(JNIEnv *env, jobject jval, int prop_len, mpr_
     return 0;
 }
 
-JNIEXPORT jboolean JNICALL Java_mapper_AbstractObject_00024Properties__1containsValue
+JNIEXPORT jboolean JNICALL Java_mapper_Object_00024Properties__1containsValue
   (JNIEnv *env, jobject jobj, jlong ptr, jobject jval)
 {
     mpr_obj mobj = (mpr_obj) ptr_jlong(ptr);
@@ -992,7 +979,7 @@ JNIEXPORT jboolean JNICALL Java_mapper_AbstractObject_00024Properties__1contains
     return JNI_FALSE;
 }
 
-JNIEXPORT jobject JNICALL Java_mapper_AbstractObject_00024Properties__1get
+JNIEXPORT jobject JNICALL Java_mapper_Object_00024Properties__1get
   (JNIEnv *env, jobject jobj, jlong ptr, jint id, jstring jkey)
 {
     mpr_obj mobj = (mpr_obj) ptr_jlong(ptr);
@@ -1014,7 +1001,7 @@ JNIEXPORT jobject JNICALL Java_mapper_AbstractObject_00024Properties__1get
     return o;
 }
 
-JNIEXPORT jobject JNICALL Java_mapper_AbstractObject_00024Properties_00024Entry__1set
+JNIEXPORT jobject JNICALL Java_mapper_Object_00024Properties_00024Entry__1set
   (JNIEnv *env, jobject entry, jlong ptr, jint id, jstring jkey)
 {
     mpr_obj mobj = (mpr_obj) ptr_jlong(ptr);
@@ -1077,7 +1064,7 @@ JNIEXPORT jobject JNICALL Java_mapper_AbstractObject_00024Properties_00024Entry_
 }
 
 // needs to return the previous value or null
-JNIEXPORT jobject JNICALL Java_mapper_AbstractObject_00024Properties__1put
+JNIEXPORT jobject JNICALL Java_mapper_Object_00024Properties__1put
   (JNIEnv *env, jobject jobj, jlong ptr, jint id, jstring jkey, jobject jval, jboolean publish)
 {
     mpr_obj mobj = (mpr_obj) ptr_jlong(ptr);
@@ -1194,12 +1181,12 @@ JNIEXPORT jobject JNICALL Java_mapper_AbstractObject_00024Properties__1put
 }
 
 // returns the previous value if there was one
-JNIEXPORT jobject JNICALL Java_mapper_AbstractObject_00024Properties__1remove
+JNIEXPORT jobject JNICALL Java_mapper_Object_00024Properties__1remove
   (JNIEnv *env, jobject jobj, jlong ptr, jint id, jstring jkey)
 {
     mpr_obj mobj = (mpr_obj) ptr_jlong(ptr);
 
-    jobject ret = Java_mapper_AbstractObject_00024Properties__1get(env, jobj, ptr, id, jkey);
+    jobject ret = Java_mapper_Object_00024Properties__1get(env, jobj, ptr, id, jkey);
 
     const char *ckey = jkey ? (*env)->GetStringUTFChars(env, jkey, 0) : 0;
     mpr_obj_remove_prop(mobj, id, ckey);
@@ -1208,7 +1195,7 @@ JNIEXPORT jobject JNICALL Java_mapper_AbstractObject_00024Properties__1remove
     return ret;
 }
 
-JNIEXPORT jint JNICALL Java_mapper_AbstractObject_00024Properties__1size
+JNIEXPORT jint JNICALL Java_mapper_Object_00024Properties__1size
   (JNIEnv *env, jobject jobj, jlong ptr)
 {
     mpr_obj mobj = (mpr_obj) ptr_jlong(ptr);
@@ -1330,16 +1317,15 @@ static jobject get_jobject_from_mpr_obj(mpr_obj mobj)
     return mid ? (*genv)->NewObject(genv, cls, mid, jlong_ptr(mobj)) : NULL;
 }
 
-static void java_graph_cb(mpr_graph g, mpr_obj mobj, mpr_graph_evt evt,
-                          const void *user_data)
+static void java_graph_cb(mpr_graph g, mpr_obj mobj, mpr_status evt, const void *user_data)
 {
     if (bailing || !user_data)
         return;
 
     jobject jobj = get_jobject_from_mpr_obj(mobj);
-    jobject eventobj = get_jobject_from_graph_evt(genv, evt);
+    jobject eventobj = get_jobject_from_evt(genv, evt);
     if (!eventobj) {
-        printf("Error looking up graph event\n");
+        printf("Error looking up event\n");
         return;
     }
 
@@ -1350,15 +1336,15 @@ static void java_graph_cb(mpr_graph g, mpr_obj mobj, mpr_graph_evt evt,
         switch (mpr_obj_get_type(mobj)) {
             case MPR_DEV:
                 mid = (*genv)->GetMethodID(genv, cls, "onEvent",
-                                           "(Lmapper/Device;Lmapper/graph/Event;)V");
+                                           "(Lmapper/Device;Lmapper/object/Event;)V");
                 break;
             case MPR_SIG:
                 mid = (*genv)->GetMethodID(genv, cls, "onEvent",
-                                           "(Lmapper/Signal;Lmapper/graph/Event;)V");
+                                           "(Lmapper/Signal;Lmapper/object/Event;)V");
                 break;
             case MPR_MAP:
                 mid = (*genv)->GetMethodID(genv, cls, "onEvent",
-                                           "(Lmapper/Map;Lmapper/graph/Event;)V");
+                                           "(Lmapper/Map;Lmapper/object/Event;)V");
                 break;
             default:
                 return;
@@ -1429,6 +1415,42 @@ JNIEXPORT jlong JNICALL Java_mapper_Device_mapperDeviceNew
     return jlong_ptr(dev);
 }
 
+void remove_signal_references(JNIEnv *env, mpr_sig sig)
+{
+    if (!env || !sig)
+        return;
+    // do not call instance event callbacks
+    mpr_sig_set_cb(sig, 0, 0);
+
+    // check if we have active instances
+    int i, n = mpr_sig_get_num_inst(sig, MPR_STATUS_ANY);
+    for (i = 0; i < n; i++) {
+        mpr_id id;
+        if (!mpr_sig_get_inst_id(sig, i, MPR_STATUS_ANY, &id)) {
+            printf("ERROR! instance %d of %d not found! (1)\n", i, n);
+            continue;
+        }
+        inst_jni_context ictx = mpr_sig_get_inst_data(sig, id);
+        if (ictx) {
+            if (ictx->inst)
+                (*env)->DeleteGlobalRef(env, ictx->inst);
+            if (ictx->user_ref)
+                (*env)->DeleteGlobalRef(env, ictx->user_ref);
+            free(ictx);
+            mpr_sig_set_inst_data(sig, id, NULL);
+        }
+    }
+    signal_jni_context ctx = (signal_jni_context) mpr_obj_get_prop_as_ptr((mpr_obj)sig, MPR_PROP_DATA, 0);
+    if (ctx) {
+        if (ctx->signal)
+            (*env)->DeleteGlobalRef(env, ctx->signal);
+        if (ctx->listener)
+            (*env)->DeleteGlobalRef(env, ctx->listener);
+        free(ctx);
+        mpr_obj_remove_prop((mpr_obj)sig, MPR_PROP_DATA, NULL);
+    }
+}
+
 JNIEXPORT void JNICALL Java_mapper_Device_mapperDeviceFree
   (JNIEnv *env, jobject obj, jlong jdev)
 {
@@ -1441,33 +1463,7 @@ JNIEXPORT void JNICALL Java_mapper_Device_mapperDeviceFree
     while (sigs) {
         mpr_sig temp = (mpr_sig)*sigs;
         sigs = mpr_list_get_next(sigs);
-        // do not call instance event callbacks
-        mpr_sig_set_cb(temp, 0, 0);
-        // check if we have active instances
-        int i, n = mpr_sig_get_num_inst(temp, MPR_STATUS_ANY);
-        for (i = 0; i < n; i++) {
-            mpr_id id;
-            if (!mpr_sig_get_inst_id(temp, i, MPR_STATUS_ANY, &id)) {
-                printf("ERROR! instance %d of %d not found! (1)\n", i, n);
-                continue;
-            }
-            inst_jni_context ictx = mpr_sig_get_inst_data(temp, id);
-            if (ictx) {
-                if (ictx->inst)
-                    (*env)->DeleteGlobalRef(env, ictx->inst);
-                if (ictx->user_ref)
-                    (*env)->DeleteGlobalRef(env, ictx->user_ref);
-                free(ictx);
-            }
-        }
-        signal_jni_context ctx = (signal_jni_context)signal_user_data(temp);
-        if (ctx) {
-            if (ctx->signal)
-                (*env)->DeleteGlobalRef(env, ctx->signal);
-            if (ctx->listener)
-                (*env)->DeleteGlobalRef(env, ctx->listener);
-            free(ctx);
-        }
+        remove_signal_references(env, temp);
     }
     mpr_dev_free(dev);
 }
@@ -1526,12 +1522,12 @@ JNIEXPORT jobject JNICALL Java_mapper_Device_add_1signal
         return 0;
     }
     if (min) {
-        Java_mapper_AbstractObject_00024Properties__1put(env, sigobj, jlong_ptr(sig),
-                                                         MPR_PROP_MIN, NULL, min, JNI_TRUE);
+        Java_mapper_Object_00024Properties__1put(env, sigobj, jlong_ptr(sig),
+                                                 MPR_PROP_MIN, NULL, min, JNI_TRUE);
     }
     if (max) {
-        Java_mapper_AbstractObject_00024Properties__1put(env, sigobj, jlong_ptr(sig),
-                                                         MPR_PROP_MAX, NULL, max, JNI_TRUE);
+        Java_mapper_Object_00024Properties__1put(env, sigobj, jlong_ptr(sig),
+                                                 MPR_PROP_MAX, NULL, max, JNI_TRUE);
     }
     return sigobj;
 }
@@ -1546,36 +1542,7 @@ JNIEXPORT void JNICALL Java_mapper_Device_remove_1signal
     if (!sig || mpr_sig_get_dev(sig) != dev)
         return;
 
-    // do not call instance event callbacks
-    mpr_sig_set_cb(sig, 0, 0);
-
-    // check if we have active instances
-    int i, n = mpr_sig_get_num_inst(sig, MPR_STATUS_ANY);
-    for (i = 0; i < n; i++) {
-        mpr_id id;
-        if (!mpr_sig_get_inst_id(sig, i, MPR_STATUS_ANY, &id)) {
-            printf("ERROR! instance %d of %d not found! (2)\n", i, n);
-        }
-        inst_jni_context ictx;
-        ictx = mpr_sig_get_inst_data(sig, id);
-        if (ictx) {
-            if (ictx->inst)
-                (*env)->DeleteGlobalRef(env, ictx->inst);
-            if (ictx->user_ref)
-                (*env)->DeleteGlobalRef(env, ictx->user_ref);
-            free(ictx);
-        }
-    }
-
-    signal_jni_context ctx = (signal_jni_context)signal_user_data(sig);
-    if (ctx) {
-        if (ctx->signal)
-            (*env)->DeleteGlobalRef(env, ctx->signal);
-        if (ctx->listener)
-            (*env)->DeleteGlobalRef(env, ctx->listener);
-        free(ctx);
-    }
-
+    remove_signal_references(env, sig);
     mpr_sig_free(sig);
 }
 
@@ -1886,13 +1853,13 @@ JNIEXPORT jobject JNICALL Java_mapper_Signal_00024Instance_setUserReference
 }
 
 JNIEXPORT jint JNICALL Java_mapper_Signal_00024Instance_getStatus
-  (JNIEnv *env, jobject obj)
+  (JNIEnv *env, jobject obj, jboolean clear_volatile)
 {
     mpr_id id;
     mpr_sig sig = get_inst_from_jobject(env, obj, &id);
     if (!sig)
         return 0;
-    return mpr_sig_get_inst_status(sig, id, 0);
+    return mpr_sig_get_inst_status(sig, id, clear_volatile);
 }
 
 /**** mpr_Signal.h ****/

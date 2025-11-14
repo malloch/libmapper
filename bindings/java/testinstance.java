@@ -25,7 +25,7 @@ class testinstance {
 
         Signal inp1 = dev1.addSignal(mapper.signal.Direction.INCOMING, "insig1", 1, Type.INT32, "Hz",
                                      2.0f, null, 10, new mapper.signal.Listener() {
-            public void onEvent(Signal.Instance inst, mapper.signal.Event evt, int val, Time time) {
+            public void onEvent(Signal.Instance inst, mapper.object.Event evt, int val, Time time) {
                 System.out.println(evt + " for " + inst.properties().get("name") + ": "
                                    + val + " at t=" + time);
             }});
@@ -65,7 +65,7 @@ class testinstance {
 
         // Test instances
         out1.setListener(new mapper.signal.Listener() {
-            public void onEvent(Signal.Instance inst, mapper.signal.Event evt, int val, Time time) {
+            public void onEvent(Signal.Instance inst, mapper.object.Event evt, int val, Time time) {
                 System.out.println(evt + " for " + inst.properties().get("name")
                                    + " instance " + inst.id() + ": " + evt);
                 java.lang.Object userObject = inst.getUserReference();
@@ -76,10 +76,10 @@ class testinstance {
                                            + Arrays.toString((int[])userObject));
                     }
                 }
-            }}, mapper.signal.Event.ALL);
+            }}, mapper.object.Event.ANY);
 
         inp1.setListener(new mapper.signal.Listener() {
-            public void onEvent(Signal.Instance inst, mapper.signal.Event evt, int val, Time time) {
+            public void onEvent(Signal.Instance inst, mapper.object.Event evt, int val, Time time) {
                 System.out.println(evt + " for " + inst.properties().get("name")
                                    + " instance " + inst.id() + ": " + inst.getUserReference()
                                    + ", val= " + val);

@@ -491,6 +491,47 @@ namespace mapper {
     /*! Objects provide a generic representation of Devices, Signals, and Maps. */
     class Object
     {
+    public:
+        /*! The set of possible events, used to register and inform callbacks. */
+        enum class Event
+        {
+            NONE               = 0,
+            EXPIRED            = MPR_STATUS_EXPIRED,    /*!< Object record has expired. */
+            NEW                = MPR_STATUS_NEW,        /*!< Object record is new. */
+            MODIFIED           = MPR_STATUS_MODIFIED,   /*!< Object properties have changed. */
+            STAGED             = MPR_STATUS_STAGED,     /*!< Object has been staged. */
+            ACTIVATED          = MPR_STATUS_ACTIVE,     /*!< New object instance was activated. */
+            REMOVED            = MPR_STATUS_REMOVED,    /*!< Object was removed. */
+            HAS_VALUE          = MPR_STATUS_HAS_VALUE,  /*!< Object instance has a value. */
+            NEW_VALUE          = MPR_STATUS_NEW_VALUE,  /*!< Object instance value has changed. */
+            LOCAL_UPDATE       = MPR_STATUS_UPDATE_LOC, /*!< Object instance value has been set locally. */
+            REMOTE_UPDATE      = MPR_STATUS_UPDATE_REM, /*!< Object instance value has been set remotely. */
+            UPSTREAM_RELEASE   = MPR_STATUS_REL_UPSTRM, /*!< Object instance was released upstream. */
+            DOWNSTREAM_RELEASE = MPR_STATUS_REL_DNSTRM, /*!< Object instance was released downstream. */
+            INSTANCE_OVERFLOW  = MPR_STATUS_OVERFLOW,   /*!< No local object instances left. */
+            ANY                = MPR_STATUS_ANY
+        };
+
+        /*! The set of possible statuses for an Object. */
+        enum class Status
+        {
+            UNDEFINED          = MPR_STATUS_UNDEFINED,  /*!< Object status is undefined. */
+            EXPIRED            = MPR_STATUS_EXPIRED,    /*!< Object record has expired. */
+            NEW                = MPR_STATUS_NEW,        /*!< Object record is new. */
+            MODIFIED           = MPR_STATUS_MODIFIED,   /*!< Object properties have changed. */
+            STAGED             = MPR_STATUS_STAGED,     /*!< Object has been staged. */
+            ACTIVE             = MPR_STATUS_ACTIVE,     /*!< Object instance is active. */
+            REMOVED            = MPR_STATUS_REMOVED,    /*!< Object was removed. */
+            HAS_VALUE          = MPR_STATUS_HAS_VALUE,  /*!< Object has a value. */
+            NEW_VALUE          = MPR_STATUS_NEW_VALUE,  /*!< Object value has changed. */
+            LOCAL_UPDATE       = MPR_STATUS_UPDATE_LOC, /*!< Object value was set locally. */
+            REMOTE_UPDATE      = MPR_STATUS_UPDATE_REM, /*!< Object value was set remotely. */
+            UPSTREAM_RELEASE   = MPR_STATUS_REL_UPSTRM, /*!< Object instance was released upstream. */
+            DOWNSTREAM_RELEASE = MPR_STATUS_REL_DNSTRM, /*!< Object instance was released downstream. */
+            INSTANCE_OVERFLOW  = MPR_STATUS_OVERFLOW,   /*!< No local object instances left. */
+            ANY                = MPR_STATUS_ANY
+        };
+
     protected:
         int* _refcount_ptr;
         int incr_refcount()
@@ -516,26 +557,8 @@ namespace mapper {
         friend class PropVal;
 
         mpr_obj _obj;
+
     public:
-        /*! The set of possible statuses for an Object. */
-        enum class Status
-        {
-            UNDEFINED   = MPR_STATUS_UNDEFINED, /*!< Object status is undefined. */
-            EXPIRED     = MPR_STATUS_EXPIRED,   /*!< Object record has expired. */
-            NEW         = MPR_STATUS_NEW,       /*!< Object record is new. */
-            MODIFIED    = MPR_STATUS_MODIFIED,  /*!< Object properties have changed. */
-            STAGED      = MPR_STATUS_STAGED,    /*!< Object has been staged. */
-            ACTIVE      = MPR_STATUS_ACTIVE,    /*!< Object is active. */
-            REMOVED     = MPR_STATUS_REMOVED,   /*!< Object was removed. */
-            HAS_VALUE   = MPR_STATUS_HAS_VALUE, /*!< Object has a value. */
-            NEW_VALUE   = MPR_STATUS_NEW_VALUE, /*!< Object value has changed since last check. */
-            UPDATE_LOC  = MPR_STATUS_UPDATE_LOC,/*!< Object value was set locally since last check. */
-            UPDATE_REM  = MPR_STATUS_UPDATE_REM,/*!< Object value was set remotely since last check. */
-            REL_UPSTRM  = MPR_STATUS_REL_UPSTRM,/*!< Object instance was released upstream since last check. */
-            REL_DNSTRM  = MPR_STATUS_REL_DNSTRM,/*!< Object instance was released downstream since last check. */
-            INST_OFLW   = MPR_STATUS_OVERFLOW,  /*!< No local object instances left. */
-            ANY         = MPR_STATUS_ANY
-        };
 
         Object() { _obj = NULL; _owned = 0; _refcount_ptr = 0; }
         virtual ~Object() {}
@@ -665,9 +688,9 @@ namespace mapper {
         /*! Describes the possible endpoints of a map. */
         enum class Location
         {
-            SRC = MPR_LOC_SRC,              /*!< Source signal(s) for this map. */
-            DST = MPR_LOC_DST,              /*!< Destination signal(s) for this map. */
-            ANY = MPR_LOC_ANY               /*!< Either source or destination signals. */
+            SOURCE      = MPR_LOC_SRC,      /*!< Source signal(s) for this map. */
+            DESTINATION = MPR_LOC_DST,      /*!< Destination signal(s) for this map. */
+            ANY         = MPR_LOC_ANY       /*!< Either source or destination signals. */
         };
 
         /*! Describes the possible network protocols for map communication. */
@@ -826,13 +849,16 @@ namespace mapper {
 
         /*! Get the index of the Map endpoint matching a specific Signal.
          *  \param sig      The Signal to look for.
+         *  \param loc      The map endpoint value, must be `Location::SOURCE` or
+         *                  `Location::DESTINATION`
          *  \return         Index of the signal in this map, or -1 if not found. */
         int signal_idx(signal_type sig, Location loc) const
             { return mpr_map_get_sig_idx(_obj, (mpr_sig)sig, static_cast<mpr_loc>(loc)); }
 
         /*! Retrieve a list of connected Signals for this Map.
-         *  \param loc      `MPR_LOC_SRC` for source signals for this Map,
-         *                  `MPR_LOC_DST` for destinations, or `MPR_LOC_ANY` for both.
+         *  \param loc      `Location::SOURCE` for source signals for this Map,
+         *                  `Location::DESTINATION` for destinations, or `Location::ANY` for both.
+         *                  Default value is `Location::ANY`.
          *  \return         A List of Signals. */
         List<Signal> signals(Location loc = Location::ANY) const
             { return List<Signal>(mpr_map_get_sigs(_obj, static_cast<mpr_loc>(loc))); }
@@ -861,17 +887,6 @@ namespace mapper {
         }
 
     public:
-        /*! The set of possible signal events, used to register and inform callbacks. */
-        enum class Event
-        {
-            NONE        = 0,
-            INST_NEW    = MPR_STATUS_NEW,           /*!< New instance has been created. */
-            UPDATE      = MPR_STATUS_UPDATE_REM,    /*!< Instance value has been set remotely. */
-            REL_UPSTRM  = MPR_STATUS_REL_UPSTRM,    /*!< Instance was released upstream. */
-            REL_DNSTRM  = MPR_STATUS_REL_DNSTRM,    /*!< Instance was released downstream. */
-            INST_OFLW   = MPR_STATUS_OVERFLOW,      /*!< No local instances left. */
-            ALL         = MPR_STATUS_ANY
-        };
 
         /*! The set of possible voice-stealing modes for instances. */
         enum class Stealing
@@ -952,13 +967,12 @@ namespace mapper {
                 { return _id; }
 
             /*! Return the current status for this Instance.
-             *  \param clear    Set to false to read status without clearing dynamic bits.
-             *  \return         The status of the signal instance returned as bitflags. Test the
-             *                  return value against the constants defined in the `Signal::Status`
-             *                  enum class. Each time this function is called it will reset the
-             *                  bitflags for `NEW`, `SET_*`, and `REL_*`. */
-            int status(bool clear=true) const
-                { return mpr_sig_get_inst_status(_sig, _id, (int)clear); }
+             *  \param clear_volatile   Set to false to read status without clearing dynamic bits.
+             *  \return                 The status of the signal instance returned as bitflags.
+             *                          Test the return value against the constants defined in the
+             *                          `Status` enum class. */
+            int get_status(bool clear_volatile=true) const
+                { return mpr_sig_get_inst_status(_sig, _id, (int)clear_volatile); }
 
         private:
             Instance& _set_value(const int *val, unsigned int len)
@@ -1051,16 +1065,16 @@ namespace mapper {
         };
         typedef struct _handler_data {
             union {
-                void (*standard)(Signal&&, Signal::Event, Id, int, Type, const void*, Time&&);
+                void (*standard)(Signal&&, Event, Id, int, Type, const void*, Time&&);
                 void (*simple)(Signal&&, int, Type, const void*, Time&&);
-                void (*inst)(Signal::Instance&&, Signal::Event, int, Type, const void*, Time&&);
+                void (*inst)(Signal::Instance&&, Event, int, Type, const void*, Time&&);
                 void (*sig_int)(Signal&&, int, Time&&);
                 void (*sig_flt)(Signal&&, float, Time&&);
                 void (*sig_dbl)(Signal&&, double, Time&&);
-                void (*inst_int)(Signal::Instance&&, Signal::Event, int, Time&&);
-                void (*inst_flt)(Signal::Instance&&, Signal::Event, float, Time&&);
-                void (*inst_dbl)(Signal::Instance&&, Signal::Event, double, Time&&);
-                void (*inst_evt)(Signal::Instance&&, Signal::Event, Time&&);
+                void (*inst_int)(Signal::Instance&&, Event, int, Time&&);
+                void (*inst_flt)(Signal::Instance&&, Event, float, Time&&);
+                void (*inst_dbl)(Signal::Instance&&, Event, double, Time&&);
+                void (*inst_evt)(Signal::Instance&&, Event, Time&&);
             } handler;
             enum handler_type type;
         } *handler_data;
@@ -1074,14 +1088,14 @@ namespace mapper {
             handler_data hd = (handler_data)od->handler_data;
             switch (hd->type) {
                 case STANDARD:
-                    hd->handler.standard(Signal(sig), Signal::Event(evt), inst, len,
+                    hd->handler.standard(Signal(sig), Event(evt), inst, len,
                                          Type(type), val, Time(time));
                     break;
                 case SIMPLE:
                     hd->handler.simple(Signal(sig), len, Type(type), val, Time(time));
                     break;
                 case INST:
-                    hd->handler.inst(Instance(sig, inst), Signal::Event(evt), len,
+                    hd->handler.inst(Instance(sig, inst), Event(evt), len,
                                      Type(type), val, Time(time));
                     break;
                 case SIG_INT:
@@ -1097,25 +1111,25 @@ namespace mapper {
                         hd->handler.sig_dbl(Signal(sig), *(double*)val, Time(time));
                     break;
                 case INST_INT:
-                    hd->handler.inst_int(Instance(sig, inst), Signal::Event(evt),
+                    hd->handler.inst_int(Instance(sig, inst), Event(evt),
                                          val ? *(int*)val : 0, Time(time));
                     break;
                 case INST_FLT:
-                    hd->handler.inst_flt(Instance(sig, inst), Signal::Event(evt),
+                    hd->handler.inst_flt(Instance(sig, inst), Event(evt),
                                          val ? *(float*)val : 0, Time(time));
                     break;
                 case INST_DBL:
-                    hd->handler.inst_dbl(Instance(sig, inst), Signal::Event(evt),
+                    hd->handler.inst_dbl(Instance(sig, inst), Event(evt),
                                          val ? *(double*)val : 0, Time(time));
                 case INST_EVT:
-                    hd->handler.inst_evt(Instance(sig, inst), Signal::Event(evt), Time(time));
+                    hd->handler.inst_evt(Instance(sig, inst), Event(evt), Time(time));
                     break;
                 default:
                     return;
             }
         }
         void _set_callback(handler_data data,
-                           void (*h)(Signal&&, Signal::Event, Id, int, Type, const void*, Time&&))
+                           void (*h)(Signal&&, Event, Id, int, Type, const void*, Time&&))
         {
             data->type = STANDARD;
             data->handler.standard = h;
@@ -1126,7 +1140,7 @@ namespace mapper {
             data->handler.simple = h;
         }
         void _set_callback(handler_data data,
-                           void (*h)(Signal::Instance&&, Signal::Event, int, Type, const void*, Time&&))
+                           void (*h)(Signal::Instance&&, Event, int, Type, const void*, Time&&))
         {
             data->type = INST;
             data->handler.inst = h;
@@ -1165,7 +1179,7 @@ namespace mapper {
             data->handler.sig_dbl = h;
         }
         void _set_callback(handler_data data,
-                           void (*h)(Signal::Instance&&, Signal::Event, int, Time&&))
+                           void (*h)(Signal::Instance&&, Event, int, Time&&))
         {
             if (mpr_obj_get_prop_as_int32(_obj, MPR_PROP_TYPE, NULL) != MPR_INT32
                 || mpr_obj_get_prop_as_int32(_obj, MPR_PROP_LEN, NULL) != 1) {
@@ -1177,7 +1191,7 @@ namespace mapper {
             data->handler.inst_int = h;
         }
         void _set_callback(handler_data data,
-                           void (*h)(Signal::Instance&&, Signal::Event, float, Time&&))
+                           void (*h)(Signal::Instance&&, Event, float, Time&&))
         {
             if (mpr_obj_get_prop_as_int32(_obj, MPR_PROP_TYPE, NULL) != MPR_FLT
                 || mpr_obj_get_prop_as_int32(_obj, MPR_PROP_LEN, NULL) != 1) {
@@ -1189,7 +1203,7 @@ namespace mapper {
             data->handler.inst_flt = h;
         }
         void _set_callback(handler_data data,
-                           void (*h)(Signal::Instance&&, Signal::Event, double, Time&&))
+                           void (*h)(Signal::Instance&&, Event, double, Time&&))
         {
             if (mpr_obj_get_prop_as_int32(_obj, MPR_PROP_TYPE, NULL) != MPR_DBL
                 || mpr_obj_get_prop_as_int32(_obj, MPR_PROP_LEN, NULL) != 1) {
@@ -1201,7 +1215,7 @@ namespace mapper {
             data->handler.inst_dbl = h;
         }
         void _set_callback(handler_data data,
-                           void (*h)(Signal::Instance&&, Signal::Event, Time&&))
+                           void (*h)(Signal::Instance&&, Event, Time&&))
         {
             data->type = INST_EVT;
             data->handler.inst_evt = h;
@@ -1210,20 +1224,20 @@ namespace mapper {
         /*! Add an Event Callback to a signal.
          *  \param h    Callback function to call on Signal Events.
          *              Function signature can be any of the following:
-         *              * void (Signal&& sig, Signal::Event evt, Id id, unsigned int len, Type type, const void* val, Time&& time);
+         *              * void (Signal&& sig, Event evt, Id id, unsigned int len, Type type, const void* val, Time&& time);
          *              * void (Signal&& sig, unsigned int len, Type type, const void* val, Time&& time);
-         *              * void (Signal::Instance&& inst, Signal::Event evt, unsigned int len, Type type, const void* val, Time&& time);
+         *              * void (Signal::Instance&& inst, Event evt, unsigned int len, Type type, const void* val, Time&& time);
          *              * void (Signal&& sig, int val, Time&& time);
          *              * void (Signal&& sig, float val, Time&& time);
          *              * void (Signal&& sig, double val, Time&& time);
-         *              * void (Signal::Instance&& inst, Signal::Event evt, int val, Time&& time);
-         *              * void (Signal::Instance&& inst, Signal::Event evt, float val, Time&& time);
-         *              * void (Signal::Instance&& inst, Signal::Event evt, double val, Time&& time);
-         *              * void (Signal::Instance&& inst, Signal::Event evt, Time&& time);
+         *              * void (Signal::Instance&& inst, Event evt, int val, Time&& time);
+         *              * void (Signal::Instance&& inst, Event evt, float val, Time&& time);
+         *              * void (Signal::Instance&& inst, Event evt, double val, Time&& time);
+         *              * void (Signal::Instance&& inst, Event evt, Time&& time);
          *  \param events   Types of Events to listen for.
          *  \return         Self. */
         template <typename H>
-        Signal& set_callback(H& h, Signal::Event events = Signal::Event::UPDATE)
+        Signal& set_callback(H& h, Event events = Event::REMOTE_UPDATE)
         {
             object_data od = (object_data)mpr_obj_get_prop_as_ptr(_obj, MPR_PROP_DATA, NULL);
             if (!od) {
@@ -1233,7 +1247,7 @@ namespace mapper {
             handler_data hd = (handler_data)od->handler_data;
             if (hd)
                 free(hd);
-            if (events > Signal::Event::NONE) {
+            if (events > Event::NONE) {
                 hd = (handler_data)malloc(sizeof(struct _handler_data));
                 _set_callback(hd, h);
                 mpr_sig_set_cb(_obj, _generic_handler, static_cast<int>(events));
@@ -1472,8 +1486,8 @@ namespace mapper {
 //         *  \return             Self. */
 //        List& operator-=(const List& rhs)
 //            { RETURN_SELF; }
-
-        /*! Set properties for each Object in the List.
+//
+//        /*! Set properties for each Object in the List.
 //         *  \param vals     The Properties to add of modify.
 //         *  \return         Self. */
 //        template <typename... Values>
@@ -1737,15 +1751,6 @@ namespace mapper {
      *  Devices, Signals, and Maps, which can be queried. */
     class Graph : public Object
     {
-    public:
-        /*! The set of possible graph events, used to inform callbacks. */
-        enum class Event
-        {
-            OBJ_NEW = MPR_OBJ_NEW,  /*!< New record has been added to the graph. */
-            OBJ_MOD = MPR_OBJ_MOD,  /*!< The existing record has been modified. */
-            OBJ_REM = MPR_OBJ_REM,  /*!< The existing record has been removed. */
-            OBJ_EXP = MPR_OBJ_EXP   /*!< The graph has lost contact with the remote entity. */
-        };
     private:
         enum handler_type {
             OBJECT,
@@ -1755,10 +1760,10 @@ namespace mapper {
         };
         typedef struct _handler_data {
             union {
-                void (*object)(Graph&&, Object&&, Graph::Event);
-                void (*device)(Graph&&, Device&&, Graph::Event);
-                void (*signal)(Graph&&, Signal&&, Graph::Event);
-                void (*map)(Graph&&, Map&&, Graph::Event);
+                void (*object)(Graph&&, Object&&, Event);
+                void (*device)(Graph&&, Device&&, Event);
+                void (*signal)(Graph&&, Signal&&, Event);
+                void (*map)(Graph&&, Map&&, Event);
             } handler;
             enum handler_type type;
         } *handler_data;
@@ -1769,50 +1774,50 @@ namespace mapper {
                 case OBJECT:
                     switch (mpr_obj_get_type(o)) {
                         case MPR_DEV:
-                            hd->handler.object(Graph(g), Device(o), Graph::Event(e));
+                            hd->handler.object(Graph(g), Device(o), Event(e));
                             break;
                         case MPR_SIG:
-                            hd->handler.object(Graph(g), Signal(o), Graph::Event(e));
+                            hd->handler.object(Graph(g), Signal(o), Event(e));
                             break;
                         case MPR_MAP:
-                            hd->handler.object(Graph(g), Map(o), Graph::Event(e));
+                            hd->handler.object(Graph(g), Map(o), Event(e));
                             break;
                     }
                     break;
                 case DEVICE:
-                    hd->handler.device(Graph(g), Device(o), Graph::Event(e));
+                    hd->handler.device(Graph(g), Device(o), Event(e));
                     break;
                 case SIGNAL:
-                    hd->handler.signal(Graph(g), Signal(o), Graph::Event(e));
+                    hd->handler.signal(Graph(g), Signal(o), Event(e));
                     break;
                 case MAP:
-                    hd->handler.map(Graph(g), Map(o), Graph::Event(e));
+                    hd->handler.map(Graph(g), Map(o), Event(e));
                     break;
             }
         }
         int _set_callback(handler_data data, mpr_type types,
-                          void (*h)(Graph&&, Object&&, Graph::Event))
+                          void (*h)(Graph&&, Object&&, Event))
         {
             data->type = OBJECT;
             data->handler.object = h;
             return types;
         }
         int _set_callback(handler_data data, mpr_type types,
-                          void (*h)(Graph&&, Device&&, Graph::Event))
+                          void (*h)(Graph&&, Device&&, Event))
         {
             data->type = DEVICE;
             data->handler.device = h;
             return MPR_DEV;
         }
         int _set_callback(handler_data data, mpr_type types,
-                          void (*h)(Graph&&, Signal&&, Graph::Event))
+                          void (*h)(Graph&&, Signal&&, Event))
         {
             data->type = SIGNAL;
             data->handler.signal = h;
             return MPR_SIG;
         }
         int _set_callback(handler_data data, mpr_type types,
-                          void (*h)(Graph&&, Map&&, Graph::Event))
+                          void (*h)(Graph&&, Map&&, Event))
         {
             data->type = MAP;
             data->handler.map = h;
@@ -1963,8 +1968,7 @@ namespace mapper {
          *                  Can be a combination of Type values.
          *  \return         Self. */
         template <typename T>
-        const Graph& add_callback(void (*h)(Graph&&, T&&, Graph::Event),
-                                  Type types = Type::OBJECT)
+        const Graph& add_callback(void (*h)(Graph&&, T&&, Event), Type types = Type::OBJECT)
         {
             handler_data data = (handler_data)malloc(sizeof(struct _handler_data));
             int mtypes = _set_callback(data, static_cast<mpr_type>(types), h);
@@ -1975,7 +1979,7 @@ namespace mapper {
         /*! Remove an Object record callback from the Graph service.
          *  \param h        Callback function.
          *  \return         Self. */
-        const Graph& remove_callback(void (*h)(Graph&&, Object&&, Graph::Event))
+        const Graph& remove_callback(void (*h)(Graph&&, Object&&, Event))
         {
             // need to recover and free data
             void *data = mpr_graph_remove_cb(_obj, _generic_handler, reinterpret_cast<void*>(h));
@@ -2651,9 +2655,9 @@ namespace mapper {
         return static_cast<Type>(static_cast<mpr_type>(l) | static_cast<mpr_type>(r));
     }
 
-    inline constexpr Signal::Event operator|(Signal::Event l, Signal::Event r)
+    inline constexpr Object::Event operator|(Object::Event l, Object::Event r)
     {
-        return static_cast<Signal::Event>(static_cast<mpr_sig_evt>(l) | static_cast<mpr_sig_evt>(r));
+        return static_cast<Object::Event>(static_cast<mpr_sig_evt>(l) | static_cast<mpr_sig_evt>(r));
     }
 
     inline std::ostream& operator<<(std::ostream &os, const Direction& d)
@@ -2670,9 +2674,9 @@ namespace mapper {
     inline std::ostream& operator<<(std::ostream &os, const Map::Location& d)
     {
         switch (d) {
-            case Map::Location::SRC: os << "SRC"; break;
-            case Map::Location::DST: os << "DST"; break;
-            case Map::Location::ANY: os << "ANY"; break;
+            case Map::Location::SOURCE:      os << "SOURCE";      break;
+            case Map::Location::DESTINATION: os << "DESTINATION"; break;
+            case Map::Location::ANY:         os << "ANY";         break;
         }
         return os;
     }
@@ -2689,35 +2693,37 @@ namespace mapper {
     inline std::ostream& operator<<(std::ostream &os, const Object::Status& s)
     {
         switch (s) {
-            case Object::Status::UNDEFINED:     os << "UNDEFINED";  break;
-            case Object::Status::NEW:           os << "NEW";        break;
-            case Object::Status::MODIFIED:      os << "MODIFIED";   break;
-            case Object::Status::REMOVED:       os << "REMOVED";    break;
-            case Object::Status::EXPIRED:       os << "EXPIRED";    break;
-            case Object::Status::STAGED:        os << "STAGED";     break;
-            case Object::Status::ACTIVE:        os << "ACTIVE";     break;
-            case Object::Status::HAS_VALUE:     os << "HAS_VALUE";  break;
-            case Object::Status::NEW_VALUE:     os << "NEW_VALUE";  break;
-            case Object::Status::UPDATE_LOC:    os << "UPDATE_LOC"; break;
-            case Object::Status::UPDATE_REM:    os << "UPDATE_REM"; break;
-            case Object::Status::REL_UPSTRM:    os << "REL_UPSTRM"; break;
-            case Object::Status::REL_DNSTRM:    os << "REL_DNSTRM"; break;
-            case Object::Status::INST_OFLW:     os << "INST_OFLW";  break;
-            case Object::Status::ANY:           os << "ANY";        break;
+            case Object::Status::UNDEFINED:          os << "UNDEFINED";          break;
+            case Object::Status::NEW:                os << "NEW";                break;
+            case Object::Status::MODIFIED:           os << "MODIFIED";           break;
+            case Object::Status::REMOVED:            os << "REMOVED";            break;
+            case Object::Status::EXPIRED:            os << "EXPIRED";            break;
+            case Object::Status::STAGED:             os << "STAGED";             break;
+            case Object::Status::ACTIVE:             os << "ACTIVE";             break;
+            case Object::Status::HAS_VALUE:          os << "HAS_VALUE";          break;
+            case Object::Status::NEW_VALUE:          os << "NEW_VALUE";          break;
+            case Object::Status::LOCAL_UPDATE:       os << "LOCAL_UPDATE";       break;
+            case Object::Status::REMOTE_UPDATE:      os << "REMOTE_UPDATE";      break;
+            case Object::Status::UPSTREAM_RELEASE:   os << "UPSTREAM_RELEASE";   break;
+            case Object::Status::DOWNSTREAM_RELEASE: os << "DOWNSTREAM_RELEASE"; break;
+            case Object::Status::INSTANCE_OVERFLOW:  os << "INSTANCE_OVERFLOW";  break;
+            case Object::Status::ANY:                os << "ANY";                break;
         }
         return os;
     }
 
-    inline std::ostream& operator<<(std::ostream &os, const Signal::Event& e)
+    inline std::ostream& operator<<(std::ostream &os, const Object::Event& e)
     {
         switch (e) {
-            case Signal::Event::NONE:       os << "NONE";       break;
-            case Signal::Event::INST_NEW:   os << "INST_NEW";   break;
-            case Signal::Event::UPDATE:     os << "UPDATE";     break;
-            case Signal::Event::REL_UPSTRM: os << "REL_UPSTRM"; break;
-            case Signal::Event::REL_DNSTRM: os << "REL_DNSTRM"; break;
-            case Signal::Event::INST_OFLW:  os << "INST_OFLW";  break;
-            default:                        os << "unknown";    break;
+            case Object::Event::NONE:               os << "NONE";               break;
+            case Object::Event::NEW:                os << "NEW";                break;
+            case Object::Event::ACTIVATED:          os << "NEW";                break;
+            case Object::Event::LOCAL_UPDATE:       os << "LOCAL_UPDATE";       break;
+            case Object::Event::REMOTE_UPDATE:      os << "REMOTE_UPDATE";      break;
+            case Object::Event::UPSTREAM_RELEASE:   os << "UPSTREAM_RELEASE";   break;
+            case Object::Event::DOWNSTREAM_RELEASE: os << "DOWNSTREAM_RELEASE"; break;
+            case Object::Event::INSTANCE_OVERFLOW:  os << "INSTANCE_OVERFLOW";  break;
+            default:                                os << "unknown";            break;
         }
         return os;
     }
@@ -2846,13 +2852,13 @@ namespace mapper {
 
         // add sources
         os << "[";
-        for (const Signal s : map.signals(Map::Location::SRC))
+        for (const Signal s : map.signals(Map::Location::SOURCE))
             os << s << ", ";
         os << "\b\b] -> ";
 
         // add destinations
         os << "[";
-        for (const Signal s : map.signals(Map::Location::DST))
+        for (const Signal s : map.signals(Map::Location::DESTINATION))
             os << s << ", ";
         os << "\b\b]";
 
