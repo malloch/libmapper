@@ -317,6 +317,11 @@ public class Signal : Mapper.Object
             return null;
     }
 
+    public Mapper.List<Signal.Instance> GetInstances(Status status = Status.Any)
+    {
+        return new Mapper.List<Signal.Instance>(NativePtr, (int)status, mpr_sig_get_num_inst(NativePtr, (int)status));
+    }
+
     // TODO: add handler with Signal Instance object instead of Signal + InstanceId
 
     private unsafe void _handler(IntPtr sig, int evt, ulong inst, int length,
@@ -366,7 +371,11 @@ public class Signal : Mapper.Object
     /// </summary>
     public class Instance : Signal
     {
-        public readonly ulong id;
+        private ulong id;
+
+        public Instance()
+        {
+        }
 
         internal Instance(IntPtr sig, ulong instanceId) : base(sig)
         {
@@ -384,10 +393,11 @@ public class Signal : Mapper.Object
             return this;
         }
 
+        public ulong GetId() => id;
+
         /// <summary>
         /// Gets and then clears status flags attached to this signal instance.
         /// The returned value can be used to see if the signal has been updated remotely.
-        /// <param name="instanceId">Instance id to get status for, default 0</param>
         /// </summary>
         /// <returns>Status flags</returns>
         public new Status GetStatus(bool clear_volatile = false) => GetStatus(id, clear_volatile);
@@ -398,6 +408,18 @@ public class Signal : Mapper.Object
         public void Release()
         {
             mpr_sig_release_inst(NativePtr, id);
+        }
+
+        internal override object SetInstId(int status, int index)
+        {
+            unsafe {
+                ulong temp;
+                if (0 == mpr_sig_get_inst_id(NativePtr, index, status, &temp))
+                    NativePtr = IntPtr.Zero;
+                else
+                    id  = temp;
+            }
+            return this;
         }
     }
 

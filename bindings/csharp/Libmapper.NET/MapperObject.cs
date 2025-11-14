@@ -485,6 +485,11 @@ public abstract class Object
         return new Graph(mpr_obj_get_graph(NativePtr));
     }
 
+    internal virtual object SetInstId(int status, int index)
+    {
+        return this;
+    }
+
     [DllImport("mapper", CharSet = CharSet.Ansi, CallingConvention = CallingConvention.StdCall)]
     private static extern int mpr_obj_get_status(IntPtr obj, int clear_volatile);
 

@@ -5,10 +5,10 @@ namespace Mapper;
 
 public abstract class _List
 {
-    private IntPtr _list;
+    protected IntPtr _list;
     private bool _started;
-    private int _status;
-    private int _idx;
+    protected int _status;
+    protected int _index;
     protected Mapper.Type _type;
 
     public _List()
@@ -31,7 +31,7 @@ public abstract class _List
         _list = sig;
         _started = false;
         _status = status;
-        _idx = num - 1;
+        _index = num;
     }
 
     /* copy constructor */
@@ -123,10 +123,16 @@ public abstract class _List
 
     public bool GetNext()
     {
-        if (_started)
-            _list = mpr_list_get_next(_list);
-        else
-            _started = true;
+        if (0 == _status) {
+            if (_started)
+                _list = mpr_list_get_next(_list);
+            else
+                _started = true;
+        }
+        else {
+            if (--_index < 0)
+                _list = IntPtr.Zero;
+        }
         return _list != IntPtr.Zero;
     }
 
@@ -152,7 +158,13 @@ public class List<T> : _List, IEnumerator, IEnumerable, IDisposable
         get
         {
             var t = new T();
-            t.NativePtr = GetIdx(index);
+            if (typeof(T) == typeof(Mapper.Signal.Instance)) {
+                t.NativePtr = _list;
+                t.SetInstId(_status, index);
+            }
+            else {
+                t.NativePtr = GetIdx(index);
+            }
             return t;
         }
     }
@@ -162,7 +174,13 @@ public class List<T> : _List, IEnumerator, IEnumerable, IDisposable
         get
         {
             var t = new T();
-            t.NativePtr = Deref();
+            if (typeof(T) == typeof(Mapper.Signal.Instance)) {
+                t.NativePtr = _list;
+                t.SetInstId(_status, _index);
+            }
+            else {
+                t.NativePtr = Deref();
+            }
             return t;
         }
     }
@@ -193,16 +211,22 @@ public class List<T> : _List, IEnumerator, IEnumerable, IDisposable
     /* Overload some arithmetic operators */
     public static Mapper.List<T> operator +(Mapper.List<T> a, Mapper.List<T> b)
     {
+        if (typeof(T) == typeof(Mapper.Signal.Instance))
+            throw new NotSupportedException();
         return new Mapper.List<T>(Union(a, b), a._type);
     }
 
     public static Mapper.List<T> operator *(Mapper.List<T> a, Mapper.List<T> b)
     {
+        if (typeof(T) == typeof(Mapper.Signal.Instance))
+            throw new NotSupportedException();
         return new Mapper.List<T>(Intersection(a, b), a._type);
     }
 
     public static Mapper.List<T> operator -(Mapper.List<T> a, Mapper.List<T> b)
     {
+        if (typeof(T) == typeof(Mapper.Signal.Instance))
+            throw new NotSupportedException();
         return new Mapper.List<T>(Difference(a, b), a._type);
     }
 }
