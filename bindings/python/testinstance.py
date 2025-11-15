@@ -84,7 +84,7 @@ outsig.set_property(mpr.Property.EPHEMERAL, True)
 dest = mpr.Device("py.testinstance.dst")
 # reserve 0 instances to start so we can use custom indexes
 insig = dest.add_signal(mpr.Signal.Direction.INCOMING, "insig", 1, mpr.Type.INT32, None, 0, 1, 0, h,
-                        mpr.Signal.Event.ALL)
+                        mpr.Signal.Event.ANY)
 insig.reserve_instances([100, 200, 300])
 insig.set_property(mpr.Property.STEALING, mpr.Signal.Stealing.OLDEST)
 insig.set_property(mpr.Property.EPHEMERAL, True)
