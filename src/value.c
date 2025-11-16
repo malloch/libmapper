@@ -307,7 +307,7 @@ void mpr_value_cpy_next(mpr_value v, unsigned int inst_idx, mpr_time t)
     if (b->pos < 0) {
         mpr_value_incr_idx(v, inst_idx, t);
     }
-    else if (v->mlen > 1 && mpr_bitflags_get_all(b->known)) {
+    else if (mpr_bitflags_get_all(b->known)) {
         s = (char*)b->samps + b->pos * v->vlen * mpr_type_get_size(v->type);
         mpr_value_set_next(v, inst_idx, s, t);
     }
