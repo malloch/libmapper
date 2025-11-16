@@ -7,9 +7,9 @@ print('libmapper version:', mpr.__version__, 'with' if mpr.has_numpy() else 'wit
 
 def h(sig, event, id, val, time):
     try:
-        if event == mpr.Signal.Event.UPDATE:
+        if event == mpr.Signal.Event.REMOTE_UPDATE:
             print('--> destination instance', id, 'got', val)
-        elif event == mpr.Signal.Event.REL_UPSTRM:
+        elif event == mpr.Signal.Event.UPSTREAM_RELEASE:
             print('--> retiring destination instance', id)
             sig.Instance(id).release()
     except:
@@ -18,61 +18,53 @@ def h(sig, event, id, val, time):
 
 def print_instance_ids():
     phrase = 'active /outsig: ['
-    count = outsig.num_instances(mpr.Signal.Status.ACTIVE)
-    for i in range(count):
+    for i in outsig.instances(mpr.Signal.Status.HAS_VALUE):
         phrase += ' '
-        phrase += str(outsig.instance_id(i, mpr.Signal.Status.ACTIVE))
+        phrase += str(i.id)
     phrase += ' ]   '
     phrase += 'active /insig: ['
-    count = insig.num_instances(mpr.Signal.Status.ACTIVE)
-    for i in range(count):
+    for i in insig.instances(mpr.Signal.Status.HAS_VALUE):
         phrase += ' '
-        phrase += str(insig.instance_id(i, mpr.Signal.Status.ACTIVE))
+        phrase += str(i.id)
     phrase += ' ]'
     print(phrase)
 
 def print_instance_values():
     phrase = 'active /outsig: ['
-    count = outsig.num_instances(mpr.Signal.Status.ACTIVE)
-    for i in range(count):
+    for i in outsig.instances(mpr.Object.Status.HAS_VALUE):
         phrase += ' '
-        phrase += str(outsig.Instance(outsig.instance_id(i, mpr.Signal.Status.ACTIVE)).get_value()[0])
+        phrase += str(i.get_value()[0])
     phrase += ' ]   '
     phrase += 'active /insig: ['
-    count = insig.num_instances(mpr.Signal.Status.ACTIVE)
-    for i in range(count):
+    for i in insig.instances(mpr.Object.Status.HAS_VALUE):
         phrase += '   '
-        phrase += str(insig.Instance(insig.instance_id(i, mpr.Signal.Status.ACTIVE)).get_value()[0])
+        phrase += str(i.get_value()[0])
     phrase += ' ]'
     print(phrase)
 
 def print_instance_timetags():
     phrase = 'active /outsig: ['
-    count = outsig.num_instances(mpr.Signal.Status.ACTIVE)
-    for i in range(count):
+    for i in outsig.instances(mpr.Object.Status.HAS_VALUE):
         phrase += ' '
-        phrase += str(outsig.Instance(outsig.instance_id(i, mpr.Signal.Status.ACTIVE)).get_value()[1].get_double())
+        phrase += str(i.get_value()[1].get_double())
     phrase += ' ]   '
     phrase += 'active /insig: ['
-    count = insig.num_instances(mpr.Signal.Status.ACTIVE)
-    for i in range(count):
+    for i in insig.instances(mpr.Object.Status.HAS_VALUE):
         phrase += '   '
-        phrase += str(insig.Instance(insig.instance_id(i, mpr.Signal.Status.ACTIVE)).get_value()[1].get_double())
+        phrase += str(i.get_value()[1].get_double())
     phrase += ' ]'
     print(phrase)
 
 def print_instance_statuses():
     phrase = 'active /outsig: ['
-    count = outsig.num_instances(mpr.Signal.Status.ACTIVE)
-    for i in range(count):
+    for i in outsig.instances(mpr.Object.Status.HAS_VALUE):
         phrase += ' '
-        phrase += str(outsig.Instance(outsig.instance_id(i, mpr.Signal.Status.ACTIVE)).get_status())
+        phrase += str(i.get_status())
     phrase += ' ]   '
     phrase += 'active /insig: ['
-    count = insig.num_instances(mpr.Signal.Status.ACTIVE)
-    for i in range(count):
+    for i in insig.instances(mpr.Object.Status.HAS_VALUE):
         phrase += '   '
-        phrase += str(insig.Instance(insig.instance_id(i, mpr.Signal.Status.ACTIVE)).get_status())
+        phrase += str(i.get_status())
     phrase += ' ]'
     print(phrase)
 

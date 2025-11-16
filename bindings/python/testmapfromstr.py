@@ -13,7 +13,7 @@ insig = dest.add_signal(mpr.Signal.Direction.INCOMING, "insig", 1, mpr.Type.FLOA
                         None, None, None, None,
                         lambda s, e, i, v, t: print('signal', s['name'], 'got value',
                                                     v, 'at time', t.get_double()),
-                        mpr.Signal.Event.UPDATE)
+                        mpr.Signal.Event.REMOTE_UPDATE)
 
 while not src.ready or not dest.ready:
     src.poll(10)
