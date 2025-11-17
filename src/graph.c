@@ -333,11 +333,12 @@ void mpr_graph_free(mpr_graph g)
         mpr_list sigs;
         list = mpr_list_get_next(list);
 
-        sigs = mpr_dev_get_sigs((mpr_dev)dev, MPR_DIR_ANY);
+        sigs = mpr_list_from_data(g->sigs);
         while (sigs) {
             mpr_obj sig = *sigs;
             sigs = mpr_list_get_next(sigs);
-            mpr_graph_remove_sig(g, (mpr_sig)sig, MPR_STATUS_REMOVED);
+            if (dev == (mpr_obj)mpr_sig_get_dev((mpr_sig)sig))
+                mpr_graph_remove_sig(g, (mpr_sig)sig, MPR_STATUS_REMOVED);
         }
         mpr_graph_remove_dev(g, (mpr_dev)dev, MPR_STATUS_REMOVED);
     }
