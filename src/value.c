@@ -280,6 +280,7 @@ int mpr_value_set_next(mpr_value v, unsigned int inst_idx, const void *s, mpr_ti
 {
     int cmp = 1;
     mpr_value_buffer b = GET_BUFFER();
+    void *mem;
     RETURN_ARG_UNLESS(s, 0);
 
     if (mpr_bitflags_get_all(b->known)) {
@@ -292,7 +293,9 @@ int mpr_value_set_next(mpr_value v, unsigned int inst_idx, const void *s, mpr_ti
 
     mpr_value_incr_idx(v, inst_idx, t);
 
-    memcpy(mpr_value_get_value(v, inst_idx, 0), s, v->vlen * mpr_type_get_size(v->type));
+    mem = (void*) mpr_value_get_value(v, inst_idx, 0);
+    if (s != mem)
+        memcpy(mem, s, v->vlen * mpr_type_get_size(v->type));
     memcpy(mpr_value_get_time_internal(v, inst_idx, 0), &t, sizeof(mpr_time));
     update_timing_stats(v, t);
 
