@@ -1319,7 +1319,7 @@ static jobject get_jobject_from_mpr_obj(mpr_obj mobj)
 
 static void java_graph_cb(mpr_graph g, mpr_obj mobj, mpr_status evt, const void *user_data)
 {
-    if (bailing || !user_data)
+    if (bailing || !user_data || !mobj)
         return;
 
     jobject jobj = get_jobject_from_mpr_obj(mobj);
@@ -1594,13 +1594,34 @@ JNIEXPORT jlong JNICALL Java_mapper_Device_signals
 
 /**** mapper_List.h ****/
 
-JNIEXPORT jobject JNICALL Java_mapper_List__1newObject
-  (JNIEnv *env, jobject jobj, jlong listptr)
+JNIEXPORT jobject JNICALL Java_mapper_List__1get
+    (JNIEnv *env, jobject jobj, jlong ptr, jobject sigobj, jint status, jint index)
 {
-    mpr_obj mobj = (mpr_obj)ptr_jlong(listptr);
-    if (!mobj)
+    if (status) {
+        mpr_sig sig = (mpr_sig) ptr_jlong(ptr);
+        if (!sig || MPR_SIG != mpr_obj_get_type((mpr_obj)sig))
+            return NULL;
+        mpr_id id;
+        if (mpr_sig_get_inst_id(sig, index, status, &id)) {
+            // construct a Signal Instance
+            jclass cls = (*env)->GetObjectClass(env, sigobj);
+            if (!cls)
+                return NULL;
+
+            jmethodID mid = (*env)->GetMethodID(env, cls, "instance", "(J)Lmapper/Signal$Instance;");
+            if (mid)
+                return (*env)->CallObjectMethod(env, sigobj, mid, id);
+        }
         return NULL;
-    return get_jobject_from_mpr_obj(mobj);
+    }
+    else {
+        mpr_obj mobj = (mpr_obj) ptr_jlong(ptr);
+        if (!mobj)
+            return NULL;
+
+        // construct an Object
+        return get_jobject_from_mpr_obj(mobj);
+    }
 }
 
 JNIEXPORT jlong JNICALL Java_mapper_List__1copy
@@ -1662,10 +1683,16 @@ JNIEXPORT jlong JNICALL Java_mapper_List__1union
 }
 
 JNIEXPORT jint JNICALL Java_mapper_List__1size
-  (JNIEnv *env, jobject obj, jlong jlist)
+  (JNIEnv *env, jobject obj, jlong ptr, jint status)
 {
-    mpr_list list = (mpr_list) ptr_jlong(jlist);
-    return list ? mpr_list_get_size(list) : 0;
+    if (status) {
+        mpr_sig sig = (mpr_sig) ptr_jlong(ptr);
+        return mpr_sig_get_num_inst(sig, status);
+    }
+    else {
+        mpr_list list = (mpr_list) ptr_jlong(ptr);
+        return list ? mpr_list_get_size(list) : 0;
+    }
 }
 
 JNIEXPORT jlong JNICALL Java_mapper_List__1next
@@ -1908,6 +1935,13 @@ JNIEXPORT void JNICALL Java_mapper_Signal_mapperSignalSetCB
         mpr_sig_set_cb(sig, NULL, 0);
     }
     return;
+}
+
+JNIEXPORT void JNICALL Java_mapper_Signal__1removeListener
+  (JNIEnv *env, jobject obj, jlong jsig)
+{
+    mpr_sig sig = (mpr_sig) ptr_jlong(jsig);
+    mpr_sig_set_cb(sig, NULL, 0);
 }
 
 JNIEXPORT void JNICALL Java_mapper_Signal_mapperSignalReserveInstances

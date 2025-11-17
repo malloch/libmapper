@@ -64,6 +64,12 @@ public class Signal extends mapper.Object
         return this;
     }
 
+    private native void _removeListener(long sig);
+        public Signal removeListener() {
+            _removeListener(_obj);
+            return this;
+        }
+
     private native void mapperSignalReserveInstances(long sig, int num, long[] ids);
     public Signal reserveInstances(int num) {
         mapperSignalReserveInstances(_obj, num, null);
@@ -187,6 +193,13 @@ public class Signal extends mapper.Object
         }
 
         private long _id;
+    }
+
+    /* retrieve a list of instances matching the given status */
+    public mapper.List<mapper.Signal.Instance> instances(Status status)
+    {
+        int num_inst = _num_instances(_obj, status.value());
+        return new mapper.List<mapper.Signal.Instance>(this, _obj, status.value(), num_inst);
     }
 
     /* retrieve associated maps */
