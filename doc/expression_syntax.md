@@ -145,7 +145,7 @@ generated output.
 
 The inputs and outputs of the following functions are expected to be float or double vectors of length 4 with the elements ordered in Hamilton representation, i.e. `[w,x,y,z]`.
 
-* `qconj(q)` – calculate the conjugate of quaternion `x`
+* `qconj(x)` – calculate the conjugate of quaternion `x`
 * `qinv(x)` – calculate the inverse of quaternion `x`
 * `qmult(a, b)` – multiply quaternions `a` and `b`. Note that quaternion multiplication is not commutative.
 * `qslerp(a, b, ratio)` – spherical linear interpolation (SLERP) between quaternions `a` and `b`.
@@ -276,12 +276,10 @@ y = x + y{-1.5};
 
 <h2 id="user-defined-variables">User-Defined Variables</h2>
 
-Up to 8 additional variables can be declared as-needed in the expression. The variable
-names can be any string except for the reserved variable names `x` and `y`.  The values
-of these variables are stored with the map context, either per-instance (if assigned from an instanced signal) or per-signal (if assigned from a singleton signal), and can be accessed in subsequent calls to the evaluator. In the following example, the user-defined variable
-`ema` is used to keep track of the `exponential moving average` of the input signal
-value `x`, *independent* of the output value `y` which is set to give the difference
-between the current sample and the moving average:
+Up to 16 additional variables can be declared as-needed in the expression.
+The variable names can be any string except for the reserved variable names `x` and `y` and reserved constant names `pi` and `e`.
+The values of these variables are stored with the map context, either per-instance (if assigned from an instanced signal) or per-signal (if assigned from a singleton signal), and can be accessed in subsequent calls to the evaluator.
+In the following example, the user-defined variable `ema` is used to keep track of the `exponential moving average` of the input signal value `x`, *independent* of the output value `y` which is set to give the difference between the current sample and the moving average:
 
 <pre style="width:50%;margin:auto">
 ema = ema{-1} * 0.9 + x * 0.1;
@@ -379,7 +377,7 @@ Convergent mapping—in which multiple source signals update a single destinatio
   </tr>
   </tr>
     <tr>
-    <td><strong>convergent maps</strong>: arbitrary combining functions can be defined by creating a single map with multiple sources. Libmapper will automatically reorder the sources alphabetically by name, and source values are referred to in the map expression by the string <code>x$</code>+<code>&lt;source index&gt;</code> as shown in the example to the right. When editing the expression it is crucial to use the correct signal indices which may have been reordered from the array provided to the map constructor; they can be retrieved using the function <code>mpr_map_get_sig_idx()</code> or you can use mpr_map_new_from_str() to have libmapper handle signal index lookup automatically. When a map is selected in the <a href="https://github.com/libmapper/webmapper">Webmapper</a> UI the individual sources are labeled with their index. The most recently updated source can be referenced using <code>x.signal.newest()</code> or the shorthand <code>x$$</code></td>
+    <td><strong>convergent maps</strong>: arbitrary combining functions can be defined by creating a single map with multiple sources. Libmapper will automatically reorder the sources alphabetically by name, and source values are referred to in the map expression by the string <code>x$</code>+<code>&lt;source index&gt;</code> as shown in the example to the right. When editing the expression it is crucial to use the correct signal indices which may have been reordered from the array provided to the map constructor; they can be retrieved using the function <code>mpr_map_get_sig_idx()</code> or you can use the special map constructor <code>mpr_map_new_from_str()</code> to have libmapper handle signal index lookup automatically. When a map is selected in the <a href="https://github.com/libmapper/webmapper">Webmapper</a> UI each source is labeled with its index. The most recently updated source can be referenced using <code>x.signal.newest()</code> or the shorthand <code>x$$</code></td>
     <td>
         <img style="display:block;margin:auto;padding:0px;" src="./images/full_convergent.png">
     </td>
@@ -388,7 +386,7 @@ Convergent mapping—in which multiple source signals update a single destinatio
 
 <h2 id="propagation-management">Propagation Management</h2>
 
-By default, convergent maps will trigger expression evaluation when *any* of the source signals are updated. For example, the convergent map `y=x$0+x$1` will output a new value whenever `x$0` *or* `x$1` are updated. Evaluation can be disabled for a source signal by inserting an underscore `_` symbol before the source name, e.g. `y=x$0+_x$1` will be evaluated only when the source `x$0` is updated, while updates to source `x$1` will be stored but will not trigger evaluation or propagation to the destination signal.
+By default, convergent maps will trigger expression evaluation when *any* of the source signals are updated. For example, the convergent map `y=x$0+x$1` will output a new value whenever `x$0` *or* `x$1` is updated. Evaluation can be disabled for a source signal by inserting an underscore `_` symbol before the source name, e.g. `y=x$0+_x$1` will be evaluated only when the source `x$0` is updated, while updates to source `x$1` will be stored but will not trigger evaluation or propagation to the destination signal.
 
 If desired, the entire expression can be evaluated "silently" so that updates do not propagate to the destination. This is accomplished by manipulating a special variable named `muted`. For maps with singleton destination signals this has an identical effect to manipulating the `alive` variable, but for instanced destinations it enables filtering updates without releasing the associated instance.
 
@@ -485,9 +483,9 @@ There are several special functions that operate across all elements of a signal
 
 Note that the `history` type of reduce function requires an integer argument after `.history` specifying the number of samples to reduce, e.g. `x.history(5).mean()`. The `instance` dimension reduce functions operate over all *currently active* instances of the signal.
 
-These functions accept subexpressions as arguments. For example, we can calculate the linear displacement of input `x` averaged across all of its active instances with the expression `y=(x-x{-1}).instance.mean()`. Similarly, we can calculate the average angular displacement around the center of a bounding box including all active instances:
+These functions accept subexpressions as arguments. For example, we can calculate the linear displacement of input `x` averaged across all of its active instances with the expression `y=(x-x{-1}).instance.mean()`. Similarly, we can calculate the average angular displacement around the center of a bounding box including all active instances of a 2D vector signal:
 
-<pre style="width:50%;margin:auto">
+<pre style="width:60%;margin:auto">
 c0{-1}=x.instance.center();
 c1=x.instance.center();
 y=(angle(x{-1}-c0, x-c1)).instance.mean();
