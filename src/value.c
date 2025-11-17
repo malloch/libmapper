@@ -404,7 +404,7 @@ void mpr_value_incr_idx(mpr_value v, unsigned int inst_idx, mpr_time t)
     mpr_value_buffer b = GET_BUFFER();
     if (b->pos < 0) {
         ++v->num_active_inst;
-        b->start = t;
+        b->start = b->times[0] = t;
     }
     else if (!mpr_bitflags_get_all(b->known)) {
         /* don't advance position until all vector elements are known */

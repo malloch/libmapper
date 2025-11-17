@@ -25,6 +25,8 @@ mpr_dev dst = 0;
 mpr_sig sendsig = 0;
 mpr_sig recvsig = 0;
 
+mpr_time t_last_update = MPR_NOW;
+
 int sent = 0;
 int received = 0;
 
@@ -84,6 +86,7 @@ void handler(mpr_sig sig, mpr_sig_evt event, mpr_id instance, int length,
 
     if (!value || length != vec_len)
         return;
+
     f = (float*)value;
     eprintf("handler: Got [");
     for (i = 0; i < length; i++) {
@@ -91,15 +94,24 @@ void handler(mpr_sig sig, mpr_sig_evt event, mpr_id instance, int length,
         if (f[i] != expected[i])
             value = 0;
     }
-    eprintf("\b\b]\n");
+    eprintf("\b\b]\t ");
+    if (verbose) {
+        mpr_time_print(t);
+        printf("\n");
+    }
+    if (mpr_time_cmp(t, t_last_update) <= 0)
+        value = 0;
     if (value)
         received++;
-    else {
-        eprintf("expected [");
+    else if (verbose) {
+        printf("expected:    [");
         for (i = 0; i < length; i++)
-            eprintf("%f, ", expected[i]);
-        eprintf("\b\b]\n");
+            printf("%f, ", expected[i]);
+        printf("\b\b]\t>");
+        mpr_time_print(t);
+        printf("\n");
     }
+    t_last_update = t;
 }
 
 int setup_dst(mpr_graph g, const char *iface)
