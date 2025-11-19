@@ -19,7 +19,7 @@ if (!(Test-Path "$($scriptDir)\build\liblo\")) {
   (gc config-msvc.h.in) -replace '#define HAVE_UNISTD_H', '//#define HAVE_UNISTD_H' | Out-File -encoding ASCII config-msvc.h.in
   mkdir build
   cd build\
-  cmake .. -DCMAKE_BUILD_TYPE=Release
+  cmake .. -DCMAKE_BUILD_TYPE=Release -DWITH_TOOLS=OFF -DWITH_TESTS=OFF -DWITH_EXAMPLES=OFF -DWITH_CPP_TESTS=OFF
   cmake --build . --target all_build --config Release
 }
 # Build libmapper
