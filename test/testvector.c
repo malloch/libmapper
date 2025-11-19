@@ -25,7 +25,7 @@ mpr_dev dst = 0;
 mpr_sig sendsig = 0;
 mpr_sig recvsig = 0;
 
-mpr_time t_last_update = MPR_NOW;
+mpr_time t_last_update = {0, 1};
 
 int sent = 0;
 int received = 0;

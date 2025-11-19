@@ -448,7 +448,7 @@ static int cmp_parallel_query(const void *ctx_data, const void *list)
 {
     mpr_list_header_t *lh1 = *(mpr_list_header_t**)ctx_data;
     mpr_list_header_t *lh2 = *(mpr_list_header_t**)((char*)ctx_data + sizeof(void*));
-    mpr_op op = *(mpr_op*)((char*)ctx_data + sizeof(void*) * 2);
+    binary_op_t op = *(binary_op_t*)((char*)ctx_data + sizeof(void*) * 2);
     query_info_t *c1 = lh1->query_ctx, *c2 = lh2->query_ctx;
 
     int res1 = c1->query_compare(&c1->data, list);
