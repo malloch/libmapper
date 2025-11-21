@@ -166,8 +166,7 @@ void mpr_link_free(mpr_link link)
     FUNC_IF(free, link->maps);
 }
 
-/* note on memory handling of mpr_link_add_msg():
- * message: will be owned, will be freed when done */
+/* note on memory handling of mpr_link_add_msg(): messages are owned by slot */
 void mpr_link_add_msg(mpr_link link, const char *path, lo_message msg, mpr_time t, mpr_proto proto)
 {
     lo_bundle *b;

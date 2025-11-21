@@ -143,7 +143,7 @@ MPR_INLINE static int check_types(const mpr_type *types, int len, mpr_type sig_t
 {
     int i, vals = 0;
     RETURN_ARG_UNLESS(len >= sig_len, -1);
-    for (i = 0; i < len; i++) {
+    for (i = 0; i < sig_len; i++) {
         if (types[i] == sig_type)
             ++vals;
         else if (types[i] != MPR_NULL)
@@ -155,7 +155,6 @@ MPR_INLINE static int check_types(const mpr_type *types, int len, mpr_type sig_t
 static void process_maps(mpr_local_sig sig, int id_map_idx)
 {
     mpr_id_map id_map = sig->id_maps[id_map_idx].id_map;
-    lo_message msg;
     mpr_sig_inst si;
     mpr_local_map map;
     int i, j, inst_idx;
@@ -209,9 +208,9 @@ static void process_maps(mpr_local_sig sig, int id_map_idx)
                     continue;
 
                 /* send release to upstream */
-                msg = mpr_map_build_msg(map, 0, 0, 0, id_map);
+                mpr_slot_build_msg(src_slot, 0, 0, id_map);
                 /* TODO: consider calling this later for batch releases */
-                mpr_local_slot_send_msg(src_slot, msg, time, mpr_map_get_protocol((mpr_map)map));
+                mpr_local_slot_send_msg(src_slot, NULL, time, mpr_map_get_protocol((mpr_map)map));
             }
         }
         for (i = 0; i < sig->num_maps_out; i++) {
@@ -230,24 +229,22 @@ static void process_maps(mpr_local_sig sig, int id_map_idx)
 
             // TODO: if map expression is reducing we should only send release if num_active_inst goes from >0 -> 0
 
-            /* send release to downstream */
-            if (MPR_LOC_SRC == mpr_map_get_process_loc((mpr_map)map)) {
-                mpr_expr expr = mpr_local_map_get_expr(map);
-                if (mpr_map_get_use_inst((mpr_map)map) && !mpr_expr_get_manages_inst(expr)) {
-                    /* need to send immediately since id_map won't be available later */
-                    /* TODO: use updated bitflags (or released before/after if necessary) to mark release,
-                     * don't send immediately */
-                    msg = mpr_map_build_msg(map, 0, 0, 0, id_map);
-                    mpr_local_slot_send_msg(dst_slot, msg, time, mpr_map_get_protocol((mpr_map)map));
+            if (mpr_map_get_use_inst((mpr_map)map)) {
+                /* send release to downstream */
+                if (MPR_LOC_SRC == mpr_map_get_process_loc((mpr_map)map)) {
+                    mpr_expr expr = mpr_local_map_get_expr(map);
+                    if (!mpr_expr_get_manages_inst(expr)) {
+                        /* need to build msg immediately since id_map won't be available later */
+                        /* TODO: use updated bitflags (or released before/after if necessary) to mark release,
+                         * don't send immediately */
+                        mpr_slot_build_msg(dst_slot, 0, 0, id_map);
+                        mpr_local_map_set_updated(map, inst_idx);
+                    }
                 }
-                else {
-                    mpr_local_map_set_updated(map, inst_idx);
+                else if (mpr_local_map_get_has_scope(map, id_map->GID)) {
+                    /* need to build msg immediately since id_map won't be available later */
+                    mpr_slot_build_msg(src_slot, 0, 0, id_map);
                 }
-            }
-            else if (mpr_local_map_get_has_scope(map, id_map->GID)) {
-                /* need to send immediately since id_map won't be available later */
-                msg = mpr_map_build_msg(map, src_slot, 0, 0, id_map);
-                mpr_local_slot_send_msg(dst_slot, msg, time, mpr_map_get_protocol((mpr_map)map));
             }
         }
         *locked = 0;
@@ -276,10 +273,9 @@ static void process_maps(mpr_local_sig sig, int id_map_idx)
 
         if (MPR_LOC_DST == mpr_map_get_process_loc((mpr_map)map)) {
             /* bypass map processing and bundle value without type coercion */
-            msg = mpr_map_build_msg(map, src_slot, sig->value, inst_idx,
-                                    mpr_sig_get_use_inst((mpr_sig)sig) ? id_map : 0);
-            mpr_local_slot_send_msg((mpr_local_slot)mpr_map_get_dst_slot((mpr_map)map), msg, time,
-                                    mpr_map_get_protocol((mpr_map)map));
+            mpr_slot_build_msg(src_slot, sig->value, inst_idx,
+                               (   mpr_map_get_use_inst((mpr_map)map)
+                                && mpr_sig_get_use_inst((mpr_sig)sig)) ? id_map : 0);
             continue;
         }
 
@@ -324,7 +320,7 @@ static void process_maps(mpr_local_sig sig, int id_map_idx)
  * - Incoming signal values may be scalars or vectors, but much match the length of the target
  *   signal or mapping slot.
  * - Vectors are of homogeneous type (MPR_INT32, MPR_FLT or MPR_DBL) however individual elements
- *   may have no value (type MPR_NULL)
+ *   may have no value (type MPR_NULL) if the map is processed at the source device
  * - A vector consisting completely of nulls indicates a signal instance release
  *   TODO: use more specific message for release?
  * - Updates to a specific signal instance are indicated using the label "@in" followed by a 64bit
@@ -333,6 +329,9 @@ static void process_maps(mpr_local_sig sig, int id_map_idx)
  *   the label "@sl" followed by a single integer slot #
  * - Instance creation and release may also be triggered by expression evaluation. Refer to the
  *   document "Understanding Instanced Signals and Maps" for more information.
+ * - Multiple instance can be updated using a single message, each preceded by the instance id
+ *   as decribed above.
+ * - example: "/mypath" ,sishffhffN "sl" 0 "in" 1234 1.0 2.0 3.0 "in" 5678 4.0 5.0
  */
 /* Current solution for persistent (non-ephemeral) signal instances:
  * - once a signal instance is active it continues using the same id_map
@@ -347,7 +346,7 @@ int mpr_sig_osc_handler(const char *path, const char *types, lo_arg **argv, int 
     mpr_local_dev dev;
     mpr_sig_inst si;
     mpr_net net = mpr_graph_get_net(sig->obj.graph);
-    int i, val_len = 0, vals;
+    int i, offset = 0, val_len = 0, vals;
     int id_map_idx, inst_idx, slot_id = -1, map_manages_inst = 0;
     mpr_id GID = 0;
     mpr_id_map id_map, remote_id_map = 0;
@@ -369,32 +368,34 @@ int mpr_sig_osc_handler(const char *path, const char *types, lo_arg **argv, int 
 
     time = mpr_net_get_bundle_time(net);
 
-    /* We need to consider that there may be properties appended to the msg
+    /* We need to consider that there may be properties prepended to the msg
      * check length and find properties if any */
-    while (val_len < argc && types[val_len] != MPR_STR)
-        ++val_len;
-    i = val_len;
-    while (i < argc) {
-        /* Parse any attached properties (instance ids, slot number) */
-        TRACE_RETURN_UNLESS(types[i] == MPR_STR, 0,
-                            "error in mpr_sig_osc_handler: unexpected argument type.\n")
-        if ((strcmp(&argv[i]->s, "@in") == 0) && argc >= i + 2) {
-            TRACE_RETURN_UNLESS(types[i+1] == MPR_INT64, 0,
-                                "error in mpr_sig_osc_handler: bad arguments for 'instance' prop.\n")
-            GID = argv[i+1]->i64;
-            i += 2;
-        }
-        else if ((strcmp(&argv[i]->s, "@sl") == 0) && argc >= i + 2) {
-            TRACE_RETURN_UNLESS(types[i+1] == MPR_INT32, 0,
+    if (types[0] == MPR_STR) {
+        if ((strcmp(&argv[0]->s, "@sl") == 0) && argc >= 2) {
+            TRACE_RETURN_UNLESS(types[1] == MPR_INT32, 0,
                                 "error in mpr_sig_osc_handler: bad arguments for 'slot' prop.\n")
-            slot_id = argv[i+1]->i32;
-            i += 2;
+            slot_id = argv[1]->i32;
+            trace("  retrieved slot id %d\n", slot_id);
+            offset += 2;
+        }
+    }
+again:
+    if (types[offset] == MPR_STR) {
+        if ((strcmp(&argv[offset]->s, "@in") == 0) && argc >= offset + 2) {
+            TRACE_RETURN_UNLESS(types[offset + 1] == MPR_INT64, 0,
+                                "error in mpr_sig_osc_handler: bad arguments for 'instance' prop.\n")
+            GID = argv[offset + 1]->i64;
+            offset += 2;
         }
         else {
-            trace("error in mpr_sig_osc_handler: unknown property name '%s'.\n", &argv[i]->s);
+            trace("error in mpr_sig_osc_handler: unknown property name '%s'.\n", &argv[offset]->s);
             return 0;
         }
     }
+    val_len = offset;
+    while (val_len < argc && types[val_len] != MPR_STR)
+        ++val_len;
+    val_len -= offset;
 
     if (slot_id >= 0) {
         mpr_expr expr;
@@ -406,20 +407,25 @@ int mpr_sig_osc_handler(const char *path, const char *types, lo_arg **argv, int 
         }
         TRACE_RETURN_UNLESS(slot, 0, "error in mpr_sig_osc_handler: slot %d not found.\n", slot_id);
         slot_sig = mpr_slot_get_sig((mpr_slot)slot);
-        TRACE_RETURN_UNLESS((mpr_obj_get_status((mpr_obj)map, 0) & (MPR_STATUS_ACTIVE | MPR_STATUS_REMOVED)) == MPR_STATUS_ACTIVE, 0,
-                            "error in mpr_sig_osc_handler: map not yet ready.\n");
+        TRACE_RETURN_UNLESS(   (mpr_obj_get_status((mpr_obj)map, 0)
+                             & (MPR_STATUS_ACTIVE | MPR_STATUS_REMOVED)) == MPR_STATUS_ACTIVE,
+                            0, "error in mpr_sig_osc_handler: map not yet ready.\n");
         if ((expr = mpr_local_map_get_expr(map)) && MPR_LOC_BOTH != mpr_map_get_locality((mpr_map)map)) {
-            vals = check_types(types, val_len, slot_sig->type, slot_sig->len);
+            vals = check_types(types + offset, val_len, slot_sig->type, slot_sig->len);
+            val_len = slot_sig->len;
             map_manages_inst = mpr_expr_get_manages_inst(expr);
         }
         else {
             /* value has already been processed at source device */
             map = 0;
-            vals = check_types(types, val_len, sig->type, sig->len);
+            vals = check_types(types + offset, val_len, sig->type, sig->len);
+            val_len = sig->len;
         }
     }
-    else
-        vals = check_types(types, val_len, sig->type, sig->len);
+    else {
+        vals = check_types(types + offset, val_len, sig->type, sig->len);
+        val_len = sig->len;
+    }
     RETURN_ARG_UNLESS(vals >= 0, 0);
 
     /* TODO: optionally discard out-of-order messages
@@ -434,7 +440,7 @@ int mpr_sig_osc_handler(const char *path, const char *types, lo_arg **argv, int 
         if (!id_map->GID) {
             if (!vals) {
                 trace("no map-managed instances available for GUID %"PR_MPR_ID"\n", GID);
-                return 0;
+                goto done;
             }
             /* id_map is currently empty - claim it now */
             id_map->LID = GID;
@@ -442,7 +448,7 @@ int mpr_sig_osc_handler(const char *path, const char *types, lo_arg **argv, int 
         }
         else if (id_map->LID != GID) {
             trace("no map-managed instances available for GUID %"PR_MPR_ID"\n", GID);
-            return 0;
+            goto done;
         }
         trace("remapping instance GUID %"PR_MPR_ID" -> %"PR_MPR_ID"\n", GID, id_map->GID);
         GID = id_map->GID;
@@ -464,7 +470,6 @@ int mpr_sig_osc_handler(const char *path, const char *types, lo_arg **argv, int 
     /* TODO: if dst-processing and the expression is reducing we should enable caching up to slot->num_inst values */
 
     if (GID) {
-        /* don't activate an instance just to release it again */
         remote_id_map = mpr_dev_get_id_map_by_GID(dev, sig->group, GID);
 
         if (remote_id_map && remote_id_map->indirect) {
@@ -474,11 +479,14 @@ int mpr_sig_osc_handler(const char *path, const char *types, lo_arg **argv, int 
         else
             remote_id_map = 0;
 
+        /* only activate a new instance if this message has a value */
         id_map_idx = mpr_sig_get_id_map_with_GID(sig, GID, RELEASED_LOCALLY, time,
                                                  (vals && sig->dir == MPR_DIR_IN));
 
-        TRACE_RETURN_UNLESS(id_map_idx >= 0, 0,
-                            "no instances available for GUID %"PR_MPR_ID"\n", GID);
+        if (id_map_idx < 0) {
+            trace("no instances available for GUID %"PR_MPR_ID"\n", GID);
+            goto done;
+        }
 
         if (sig->id_maps[id_map_idx].status & RELEASED_LOCALLY) {
             /* instance was already released locally, we are only interested in release messages */
@@ -491,10 +499,12 @@ int mpr_sig_osc_handler(const char *path, const char *types, lo_arg **argv, int 
                 }
             }
             trace("instance already released locally\n");
-            return 0;
+            goto done;
         }
-        TRACE_RETURN_UNLESS(sig->id_maps[id_map_idx].inst, 0,
-                            "error in mpr_sig_osc_handler: missing instance!\n");
+        if (!sig->id_maps[id_map_idx].inst) {
+            trace("error in mpr_sig_osc_handler: missing instance!\n");
+            goto done;
+        }
     }
     else {
         /* use the first available instance */
@@ -502,17 +512,40 @@ int mpr_sig_osc_handler(const char *path, const char *types, lo_arg **argv, int 
             if (sig->inst[i]->status & MPR_STATUS_ACTIVE)
                 break;
         }
-        if (i >= sig->num_inst)
+        if (i >= sig->num_inst) {
+            /* no active instances available */
+            if (slot && mpr_map_get_use_inst((mpr_map)map)) {
+                /* GID was not provided but map uses instances, implying this slot has a singleton
+                 * source signal. We will check if another source uses instances, in which case we
+                 * do not want to activate a reserved destination signal instance (or steal an
+                 * active instance) since this will prevent the instanced source(s) from binding
+                 * when they provide a GID. Instead we will simply set the value of instance[0]
+                 * for this slot and quit. */
+                int i, num_src = mpr_map_get_num_src((mpr_map)map);
+                for (i = 0; i < num_src; i++) {
+                    mpr_slot src_slot = mpr_map_get_src_slot((mpr_map)map, i);
+                    if (src_slot != (mpr_slot)slot) {
+                        mpr_sig src_sig = mpr_slot_get_sig(src_slot);
+                        if (src_sig->use_inst) {
+                            mpr_slot_set_value(slot, 0, argv[offset], time);
+                            goto done;
+                        }
+                    }
+                }
+            }
             i = 0;
+        }
+
         id_map_idx = mpr_sig_get_id_map_with_LID(sig, sig->inst[i]->id, RELEASED_REMOTELY, time, 1, 1);
-        RETURN_ARG_UNLESS(id_map_idx >= 0, 0);
+        if (id_map_idx < 0)
+            goto done;
     }
     si = _get_inst_by_id_map_idx(sig, id_map_idx);
     inst_idx = si->idx;
     id_map = sig->id_maps[id_map_idx].id_map;
 
     if (vals == 0) {
-        if (GID && sig->dir == MPR_DIR_IN) {
+        if (GID) {
             if (sig->ephemeral)
                 sig->id_maps[id_map_idx].status |= RELEASED_REMOTELY;
             if (sig->dir == MPR_DIR_IN)
@@ -527,7 +560,9 @@ int mpr_sig_osc_handler(const char *path, const char *types, lo_arg **argv, int 
         }
         /* if user-code has registered callback for release events we will proceed even if the
          * signal is non-ephemeral. Conceptually this matches setting the "released" bitflag. */
-        RETURN_ARG_UNLESS(!map || mpr_map_get_use_inst((mpr_map)map), 0);
+        if (map && !mpr_map_get_use_inst((mpr_map)map)) {
+            goto done;
+        }
 
         /* Try to release instance, but do not call process_maps() here, since we don't
          * know if the local signal instance will actually be released. */
@@ -536,28 +571,25 @@ int mpr_sig_osc_handler(const char *path, const char *types, lo_arg **argv, int 
         else
             mpr_sig_call_handler(sig, MPR_STATUS_REL_DNSTRM, id_map->LID, inst_idx);
 
-        RETURN_ARG_UNLESS(   map
-                          && MPR_LOC_DST == mpr_map_get_process_loc((mpr_map)map)
-                          && sig->dir == MPR_DIR_IN, 0);
-
-        /* Reset memory for corresponding source slot. */
-        mpr_slot_set_value(slot, inst_idx, NULL, time);
-        return 0;
+        if (map && MPR_LOC_DST == mpr_map_get_process_loc((mpr_map)map) && sig->dir == MPR_DIR_IN) {
+            /* Reset memory for corresponding source slot. */
+            mpr_slot_set_value(slot, inst_idx, NULL, time);
+        }
+        goto done;
     }
     else if (sig->dir == MPR_DIR_OUT)
-        return 0;
-
-    /* Partial vector updates are not allowed in convergent maps since the slot value mirrors the
-     * remote signal value. */
-    if (map && vals != slot_sig->len) {
-#ifdef DEBUG
-        trace_dev(dev, "error in mpr_sig_osc_handler: partial vector update "
-                  "applied to convergent mapping slot.");
-#endif
-        return 0;
-    }
+        goto done;
 
     if (map) {
+        if (vals != slot_sig->len) {
+            /* Partial vector updates are not allowed in convergent maps
+             * since the slot value mirrors the remote signal value. */
+#ifdef DEBUG
+            trace_dev(dev, "error in mpr_sig_osc_handler: partial vector update "
+                      "applied to convergent mapping slot.");
+#endif
+            return 0;
+        }
         /* Setting to local timestamp here */
         time = mpr_dev_get_time((mpr_dev)dev);
         /* check if map instance is active */
@@ -567,12 +599,12 @@ int mpr_sig_osc_handler(const char *path, const char *types, lo_arg **argv, int 
         if ((si = _get_inst_by_id_map_idx(sig, id_map_idx)) && (si->status & MPR_STATUS_ACTIVE)) {
             inst_idx = si->idx;
             /* TODO: jitter mitigation etc. */
-            if (mpr_slot_set_value(slot, inst_idx, argv[0], time)) {
+            if (mpr_slot_set_value(slot, inst_idx, argv[offset], time)) {
                 mpr_local_map_set_updated(map, inst_idx);
                 mpr_local_dev_set_receiving(dev);
             }
         }
-        return 0;
+        goto done;
     }
 
     /* If no instance id was included in the message we will apply this update to all instances */
@@ -594,7 +626,7 @@ int mpr_sig_osc_handler(const char *path, const char *types, lo_arg **argv, int 
                 mpr_value_cpy_next(sig->value, si->idx, time);
             }
             /* we can't use mpr_value_set() here since some vector elements may be missing */
-            for (i = 0; i < sig->len; i++) {
+            for (i = offset; i < offset + sig->len; i++) {
                 if (types[i] == MPR_NULL)
                     continue;
                 if (mpr_value_set_element(sig->value, si->idx, i, argv[i]))
@@ -615,6 +647,10 @@ int mpr_sig_osc_handler(const char *path, const char *types, lo_arg **argv, int 
         if (GID)
             break;
     }
+done:
+    offset += val_len;
+    if (offset < argc)
+        goto again;
     return 0;
 }
 
@@ -891,10 +927,13 @@ static int get_inst_by_ids(mpr_local_sig lsig, mpr_id *LID, mpr_id *GID)
         }
     }
 
-    trace("  checking inactive instances...\n");
+    trace("  checking inactive instances... %d active, %d reserved\n",
+          mpr_sig_get_num_inst((mpr_sig)lsig, MPR_STATUS_ACTIVE),
+          mpr_sig_get_num_inst((mpr_sig)lsig, MPR_STATUS_STAGED));
     /* Next we will try to find an inactive instance */
     for (i = 0; i < lsig->num_inst; i++) {
         si = lsig->inst[i];
+        trace("    ...%d:%llu (%sactive)\n", i, si->id, si->status & MPR_STATUS_ACTIVE ? "" : "in");
         if (   (!lsig->ephemeral || !(si->status & MPR_STATUS_ACTIVE))
             && (LID || !mpr_dev_get_id_map_by_LID(lsig->dev, lsig->group, si->id))) {
             trace("    found inactive instance at inst[%d]\n", i);
@@ -1582,10 +1621,7 @@ int mpr_sig_get_num_inst(mpr_sig sig, mpr_status status)
     return j;
 }
 
-// problem here since 0 is a valid instance id
-// instead we need to either pass a success/error result, or a ptr to some instance object
-
-// do we also allow filtering here by HAS_VALUE, NEW_VALUE, etc? Could be useful!
+// TODO: test filtering here by HAS_VALUE, NEW_VALUE, etc.
 
 mpr_status mpr_sig_get_inst_id(mpr_sig sig, int idx, mpr_status status, mpr_id *instance)
 {
@@ -1758,7 +1794,7 @@ void mpr_sig_send_state(mpr_sig sig, net_msg_t cmd)
         lo_message_add_string(msg, sig->name);
 
         /* properties */
-        // only need to add changed props
+        /* TODO: only add props that have been updated since _version_ */
         mpr_obj_add_props_to_msg((mpr_obj)sig, msg);
 
         snprintf(str, BUFFSIZE, "/%s/signal/modify", mpr_dev_get_name(sig->dev));

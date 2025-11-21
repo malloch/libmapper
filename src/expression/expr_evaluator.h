@@ -591,7 +591,7 @@ int mpr_expr_eval(mpr_expr expr, ebuffer buff, mpr_value *v_in, mpr_value *v_var
         }
         case TOK_FN: {
             int i, diff;
-            uint8_t max_len, llen, rlen, arity = fn_tbl[tok->fn.idx].arity;
+            uint8_t max_len, llen, rlen = 0, arity = fn_tbl[tok->fn.idx].arity;
             INCR_STACK_PTR(1 - arity);
             /* TODO: use preprocessor macro or inline func here */
             /* first copy vals[sp] elements if necessary */

@@ -107,6 +107,8 @@ void cleanup_src(void)
 void handler(mpr_sig sig, mpr_sig_evt event, mpr_id inst, int length,
              mpr_type type, const void *value, mpr_time t)
 {
+    if (done)
+        return;
     if (value) {
         float fvalue = *(float*)value;
         if (inst < 0 || inst > NUM_INST - 1)

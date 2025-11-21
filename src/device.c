@@ -455,8 +455,10 @@ void mpr_dev_process_incoming_maps(mpr_local_dev dev)
     while (maps) {
         mpr_map map = (mpr_map)*maps;
         maps = mpr_list_get_next(maps);
-        if (mpr_obj_get_is_local((mpr_obj)map))
+        if (mpr_obj_get_is_local((mpr_obj)map)) {
             mpr_map_receive((mpr_local_map)map, dev->time);
+            mpr_map_clear_slot_msgs((mpr_local_map)map);
+        }
         else {
             /* local maps are always located at the start of the list */
             break;
@@ -480,18 +482,27 @@ static int process_outgoing_maps(mpr_local_dev dev)
     while (list) {
         mpr_map map = (mpr_map)*list;
         list = mpr_list_get_next(list);
-        if (mpr_obj_get_is_local((mpr_obj)map))
-            mpr_map_send((mpr_local_map)map, dev->time);
-        else {
+        if (!mpr_obj_get_is_local((mpr_obj)map)) {
             /* local maps are always located at the start of the list */
             break;
         }
+        mpr_map_send((mpr_local_map)map, dev->time);
     }
     dev->sending = 0;
     list = mpr_graph_get_list(graph, MPR_LINK);
     while (list) {
         msgs += mpr_link_process_bundles((mpr_link)*list, dev->time);
         list = mpr_list_get_next(list);
+    }
+    list = mpr_graph_get_list(graph, MPR_MAP);
+    while (list) {
+        mpr_map map = (mpr_map)*list;
+        list = mpr_list_get_next(list);
+        if (!mpr_obj_get_is_local((mpr_obj)map)) {
+            /* local maps are always located at the start of the list */
+            break;
+        }
+        mpr_map_clear_slot_msgs((mpr_local_map)map);
     }
     dev->polling = 0;
     return msgs != 0;

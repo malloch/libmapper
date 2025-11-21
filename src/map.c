@@ -436,18 +436,18 @@ void mpr_map_free(mpr_map map)
 
         if (lmap->id_map.LID) {
             /* release map-generated instances */
-            lo_message msg = mpr_map_build_msg(lmap, 0, 0, 0, &lmap->id_map);
+            mpr_slot_build_msg(lmap->dst, 0, 0, &lmap->id_map);
             mpr_time time;
             mpr_time_set(&time, MPR_NOW);
             if (lmap->locality & MPR_LOC_DST) {
                 mpr_net_set_bundle_time(mpr_graph_get_net(lmap->obj.graph), time);
+                lo_message msg = mpr_slot_get_msg(lmap->dst);
                 mpr_sig_osc_handler(NULL, lo_message_get_types(msg), lo_message_get_argv(msg),
                                     lo_message_get_argc(msg), msg, (void*)mpr_slot_get_sig(map->dst));
-                lo_message_free(msg);
             }
             else {
                 mpr_local_dev dev = (mpr_local_dev)mpr_sig_get_dev(mpr_slot_get_sig(map->src[0]));
-                mpr_local_slot_send_msg(lmap->dst, msg, time, MPR_PROTO_TCP);
+                mpr_local_slot_send_msg(lmap->dst, NULL, time, MPR_PROTO_TCP);
                 mpr_local_dev_set_sending(dev);
             }
             for (i = 0; i < map->num_src; i++) {
@@ -760,7 +760,6 @@ void mpr_map_send(mpr_local_map m, mpr_time time)
     int i, status;
     mpr_sig_group group;
     mpr_type manage_inst = 0;
-    lo_message msg;
     mpr_local_dev dev;
     mpr_local_slot src_slot;
     mpr_local_sig src_sig;
@@ -768,6 +767,18 @@ void mpr_map_send(mpr_local_map m, mpr_time time)
     mpr_value src_vals[MAX_NUM_MAP_SRC], dst_val;
 
     assert(m->obj.is_local);
+
+    if (MPR_LOC_DST == m->process_loc) {
+        /* send immediately */
+        int i;
+        for (i = 0; i < m->num_src; i++) {
+            /* We need to send message prepared by source slot through destination link */
+            lo_message msg;
+            if ((msg = mpr_slot_get_msg(m->src[i])))
+                mpr_local_slot_send_msg(m->dst, msg, time, m->protocol);
+        }
+        return;
+    }
 
     RETURN_UNLESS(   m->updated && m->expr && !m->muted
                   && MPR_DIR_OUT == mpr_slot_get_dir((mpr_slot)m->src[0]));
@@ -833,9 +844,8 @@ void mpr_map_send(mpr_local_map m, mpr_time time)
 
         /* send instance release if dst is instanced and either src or map is also instanced. */
         if (status & EXPR_RELEASE_BEFORE_UPDATE) {
-            /* build and send release message */
-            msg = mpr_map_build_msg(m, 0, 0, 0, id_map);
-            mpr_local_slot_send_msg(m->dst, msg, time, m->protocol);
+            /* build release message */
+            mpr_slot_build_msg(m->dst, 0, 0, id_map);
 
             if (MPR_MAP == manage_inst && id_map->LID) {
                 /* need to clear id_maps */
@@ -860,16 +870,15 @@ void mpr_map_send(mpr_local_map m, mpr_time time)
                     id_map->GID = tmp->GID;
                 }
             }
-            /* build and send update message */
-            msg = mpr_map_build_msg(m, 0, dst_val, i, id_map);
-            mpr_local_slot_send_msg(m->dst, msg, time, m->protocol);
+            /* build update message */
+            mpr_slot_build_msg(m->dst, dst_val, i, id_map);
         }
 
         /* send instance release if dst is instanced and either src or map is also instanced. */
         if (status & EXPR_RELEASE_AFTER_UPDATE) {
-            /* build and send release message */
-            msg = mpr_map_build_msg(m, 0, 0, 0, id_map);
-            mpr_local_slot_send_msg(m->dst, msg, time, m->protocol);
+            /* build release message */
+            mpr_slot_build_msg(m->dst, 0, 0, id_map);
+
             if (MPR_MAP == manage_inst && id_map->LID) {
                 /* need to clear id_maps */
                 mpr_id_map tmp = mpr_dev_get_id_map_by_LID(dev, group, MPR_DEFAULT_INST_LID);
@@ -883,8 +892,25 @@ void mpr_map_send(mpr_local_map m, mpr_time time)
             break;
     }
 
+    mpr_local_slot_send_msg(m->dst, NULL, time, m->protocol);
     mpr_bitflags_clear(m->updated_inst);
     m->updated = 0;
+}
+
+/* Which slots need to be cleared?
+locality    src processing  dst processing
+local src   clear dst       clear src
+local dst   clear src       clear src
+local both  clear both      clear both
+*/
+
+void mpr_map_clear_slot_msgs(mpr_local_map m)
+{
+    int i;
+    for (i = 0; i < m->num_src; i++) {
+        mpr_slot_clear_msg(m->src[i]);
+    }
+    mpr_slot_clear_msg(m->dst);
 }
 
 /* only called for incoming, destination-processed maps */
@@ -951,39 +977,6 @@ void mpr_map_receive(mpr_local_map m, mpr_time time)
     }
     mpr_bitflags_clear(m->updated_inst);
     m->updated = 0;
-}
-
-/*! Build a value update message for a given map. */
-lo_message mpr_map_build_msg(mpr_local_map m, mpr_local_slot slot, mpr_value val,
-                             unsigned int idx, mpr_id_map id_map)
-{
-    int i;
-    NEW_LO_MSG(msg, return 0);
-
-    if (val) {
-        mpr_value_add_to_msg(val, idx, msg);
-    }
-    else if (m->use_inst) {
-        /* retrieve length from slot */
-        mpr_sig sig = mpr_slot_get_sig((mpr_slot)(slot ? slot : m->dst));
-        int len = mpr_sig_get_len(sig);
-        for (i = 0; i < len; i++)
-            lo_message_add_nil(msg);
-    }
-    else {
-        lo_message_free(msg);
-        return 0;
-    }
-    if (m->use_inst && id_map) {
-        lo_message_add_string(msg, "@in");
-        lo_message_add_int64(msg, id_map->GID);
-    }
-    if (slot) {
-        /* add slot */
-        lo_message_add_string(msg, "@sl");
-        lo_message_add_int32(msg, mpr_slot_get_id((mpr_slot)slot));
-    }
-    return msg;
 }
 
 void mpr_map_alloc_values(mpr_local_map m, int quiet)
@@ -1579,6 +1572,9 @@ int mpr_local_map_update_status(mpr_local_map map)
             map->protocol = use_inst ? MPR_PROTO_TCP : MPR_PROTO_UDP;
             mpr_tbl_set_prop_is_set(tbl, MPR_PROP_PROTOCOL);
         }
+
+        /* initialize slots */
+        mpr_map_clear_slot_msgs(map);
     }
     return map->obj.status;
 }
