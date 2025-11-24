@@ -797,7 +797,7 @@ class Object:
         def __str__(self):
             if self._name_ is not None:
                 return self._name_
-            return '|'.join([str(m._name_ or m._value_) for m in self.__cls__ if m.value & self.value])
+            return '|'.join([str(m._name_ or m._value_) for m in self.__class__ if m.value & self.value])
 
         def __repr__(self):
             return 'libmapper.Object.Status(' + str(self) + ')'
@@ -824,7 +824,7 @@ class Object:
         def __str__(self):
             if self._name_ is not None:
                 return self._name_
-            return '|'.join([str(m._name_ or m._value_) for m in self.__cls__ if m.value & self.value])
+            return '|'.join([str(m._name_ or m._value_) for m in self.__class__ if m.value & self.value])
 
         def __repr__(self):
             return 'libmapper.Object.Status(' + str(self) + ')'
