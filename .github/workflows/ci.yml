@@ -17,7 +17,7 @@ jobs:
     - name: install dependencies
       run: sudo apt-get install g++-9 autoconf-archive curl zlib1g-dev doxygen
     - name: install liblo
-      run: curl -L -O https://github.com/radarsat1/liblo/releases/download/0.34/liblo-0.34.tar.gz && tar -xzf liblo-0.34.tar.gz && cd liblo-0.34 && (./configure --host=$HOST --prefix=$PWD/inst --enable-static --disable-tests --disable-tools --disable-examples --disable-doc || (cat config.log; false)) && make install && find inst && cd ..
+      run: curl -L -O https://github.com/radarsat1/liblo/releases/download/0.34/liblo-0.34.tar.gz && tar -xzf liblo-0.34.tar.gz && cd liblo-0.34 && (./configure --host=$HOST --prefix=$PWD/inst --enable-static --disable-shared --disable-tests --disable-tools --disable-examples --disable-doc || (cat config.log; false)) && make install && find inst && cd ..
     - name: autogen
       run:
         pwd
