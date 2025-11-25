@@ -27,7 +27,7 @@ INST=$TMP/inst
     cd $TMP
     tar -xzf $TAR
     cd liblo-0.34
-    ./configure --host=$HOST --prefix=$INST --disable-tests --disable-tools --disable-examples \
+    ./configure --host=$HOST --prefix=$INST --disable-tests --disable-tools --disable-examples --disable-doc \
         || (cat config.log; echo "Error."; false)
     make clean
     make install -j4
