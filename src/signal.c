@@ -933,7 +933,7 @@ static int get_inst_by_ids(mpr_local_sig lsig, mpr_id *LID, mpr_id *GID)
     /* Next we will try to find an inactive instance */
     for (i = 0; i < lsig->num_inst; i++) {
         si = lsig->inst[i];
-        trace("    ...%d:%llu (%sactive)\n", i, si->id, si->status & MPR_STATUS_ACTIVE ? "" : "in");
+        trace("    ...%d:%"PR_MPR_ID" (%sactive)\n", i, si->id, si->status & MPR_STATUS_ACTIVE ? "" : "in");
         if (   (!lsig->ephemeral || !(si->status & MPR_STATUS_ACTIVE))
             && (LID || !mpr_dev_get_id_map_by_LID(lsig->dev, lsig->group, si->id))) {
             trace("    found inactive instance at inst[%d]\n", i);
