@@ -578,11 +578,11 @@ int expr_parser_build_stack(mpr_expr expr, const char *str,
                                 {FAIL("history reduce requires reference to 'x' or 'y'.");}
 
                             for (i = 0; i < sslen; i++) {
-                                etoken t;
-                                if (TOK_VAR != (estack_peek(out, ESTACK_TOP - i))->toktype)
+                                etoken t_op, t_out = estack_peek(out, ESTACK_TOP - i);
+                                if (TOK_VAR != t_out->toktype)
                                     continue;
-                                t = estack_peek(op, ESTACK_TOP);
-                                mpr_expr_update_mlen(expr, tok.var.idx, t->con.reduce_start);
+                                t_op = estack_peek(op, ESTACK_TOP);
+                                mpr_expr_update_mlen(expr, t_out->var.idx, t_op->con.reduce_start);
                             }
                             GET_NEXT_TOKEN(tok);
                             {FAIL_IF(tok.toktype != TOK_CLOSE_PAREN, "missing close parenthesis. (2)");}

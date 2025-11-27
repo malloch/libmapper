@@ -138,6 +138,8 @@ int setup_maps(void)
 {
     mpr_map map = mpr_map_new(1, &sendsig, 1, &recvsig);
 
+    mpr_obj_set_prop((mpr_obj)map, MPR_PROP_EXPR, NULL, 1, MPR_STR, "y=x.history(25).mean();", 1);
+
     mpr_obj_push((mpr_obj)map);
 
     /* Wait until mapping has been established */
