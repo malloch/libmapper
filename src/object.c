@@ -366,7 +366,7 @@ void mpr_obj_push(mpr_obj o)
     FUNC_IF(mpr_tbl_clear, o->props.staged);
 }
 
-void mpr_obj_print(mpr_obj o, int staged)
+void mpr_obj_print(mpr_obj o, int include_props)
 {
     int i = 0, len, num_props;
     mpr_prop p;
@@ -374,10 +374,11 @@ void mpr_obj_print(mpr_obj o, int staged)
     mpr_type type;
     const void *val;
 
-    RETURN_UNLESS(o && o->props.synced);
+    RETURN_UNLESS(o);
 
     switch (o->type) {
         case MPR_GRAPH:
+            printf("GRAPH: ");
             mpr_graph_print((mpr_graph)o);
             break;
         case MPR_DEV:
@@ -395,6 +396,11 @@ void mpr_obj_print(mpr_obj o, int staged)
         default:
             trace("mpr_obj_print(): unknown object type %d.", o->type);
             return;
+    }
+
+    if (!include_props || !o->props.synced) {
+        printf("\n");
+        return;
     }
 
     num_props = mpr_obj_get_num_props(o, 0);
@@ -433,7 +439,7 @@ void mpr_obj_print(mpr_obj o, int staged)
         else
             mpr_prop_print(len, type, val);
 
-        if (!staged || !o->props.staged)
+        if (!o->props.staged)
             continue;
 
         /* check if staged values exist */

@@ -203,10 +203,10 @@ int mpr_obj_remove_prop(mpr_obj object, mpr_prop property, const char *key);
  *  \param object       The object to operate on. */
 void mpr_obj_push(mpr_obj object);
 
-/*! Helper to print the properties of an object.
+/*! Helper to print the information about an object.
  *  \param object       The object to print.
- *  \param staged       1 to print staged properties, `0` otherwise. */
-void mpr_obj_print(mpr_obj object, int staged);
+ *  \param properties   1 to print the object's detailed properties, `0` otherwise. */
+void mpr_obj_print(mpr_obj object, int properties);
 
 /*** Devices ***/
 

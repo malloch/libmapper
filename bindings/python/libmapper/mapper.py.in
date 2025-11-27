@@ -1200,11 +1200,11 @@ class Object:
         _type = int(mpr.mpr_obj_get_type(self._obj))
         return Type(_type)
 
-    def print(self, staged=0):
-        """Print the properties of an object."""
+    def print(self, properties=0):
+        """Print information about an object."""
 
         mpr.mpr_obj_print.argtypes = [c_void_p, c_int]
-        mpr.mpr_obj_print(self._obj, staged)
+        mpr.mpr_obj_print(self._obj, properties)
         return self
 
     def push(self):

@@ -633,13 +633,16 @@ namespace mapper {
             RETURN_SELF;
         }
 
-        /*! Push "staged" property changes out to the distributed graph.
+        /*! Push "staged" Property changes out to the distributed graph.
          *  \return         Self. */
         virtual const Object& push() const
             { mpr_obj_push(_obj); RETURN_SELF }
 
-        const Object& print(int staged=0) const
-            { mpr_obj_print(_obj, staged); RETURN_SELF }
+        /*! Helper to print the information about an Object.
+         *  \param properties   1 to print the object's detailed properties, `0` otherwise.
+         *  \return             Self. */
+        const Object& print(int properties=0) const
+            { mpr_obj_print(_obj, properties); RETURN_SELF }
 
         /*! Retrieve the number of Properties owned by an Object.
          *  \param staged   Set to true to count properties that have been
