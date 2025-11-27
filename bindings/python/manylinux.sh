@@ -35,14 +35,17 @@ INST=$TMP/inst
 ) || exit 1
 
 echo === Building libmapper
+python3.8 -m ensurepip --upgrade
 mkdir -p $TMP/libmapper
 cd $TMP/libmapper
 PKG_CONFIG_PATH=$INST/lib/pkgconfig $ROOT/configure \
-  --prefix=$INST --disable-tests --disable-audio --disable-java \
+  --prefix=$INST --disable-tests --disable-audio --disable-java --disable-csharp \
   --libdir=$TMP/libmapper/bindings/python/libmapper || bash -i
 make clean
 make install -j4
 
+echo === Building wheel
+python3.8 -m ensurepip --upgrade
 python3.8 -m pip wheel -w $TMP/wheelhouse $TMP/libmapper/bindings/python
 unzip -t $TMP/wheelhouse/*.whl
 for WHL in $TMP/wheelhouse/*.whl; do

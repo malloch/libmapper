@@ -91,10 +91,12 @@ static etoken estack_pop(estack stk)
 
 static etoken estack_peek(estack stk, int idx)
 {
-    if (idx < 0)
-        idx += stk->num_tokens;
-    if (idx >= 0 && idx < stk->num_tokens)
-        return &stk->tokens[idx];
+    if (stk->num_tokens) {
+        while (idx < 0)
+            idx += stk->num_tokens;
+        if (idx >= 0 && idx < stk->num_tokens)
+            return &stk->tokens[idx];
+    }
     return 0;
 }
 

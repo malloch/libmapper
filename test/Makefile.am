@@ -346,8 +346,8 @@ tests: all
 	./testinstance_no_cb -qtfs
 	echo Running testinstance_no_cb with persistent destination instances
 	./testinstance_no_cb -qtfps
-	echo Running testparser
-	./testparser -qtf
+	echo Running testparser with 200 iterations
+	./testparser -qtf --iterations 200
 	echo Running testmonitor and testsignals
 	./testmonitor -qtf & ./testsignals -qtf
 

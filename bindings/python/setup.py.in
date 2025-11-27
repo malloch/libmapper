@@ -11,7 +11,7 @@ import platform
 def ver():
     if platform.uname()[0] == 'Windows':
         # Parse version out of configure.ac
-        versionPattern = re.compile("(?<=\[LIBMAPPER_VERSION],\[)(.*?)(?=])")
+        versionPattern = re.compile("(?<=\\[LIBMAPPER_VERSION],\\[)(.*?)(?=])")
         for i, line in enumerate(open('../../configure.ac')):
             for match in re.finditer(versionPattern, line):
                 version = match.group(0)

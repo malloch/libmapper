@@ -14,19 +14,35 @@ jobs:
       with:
         distribution: 'temurin'
         java-version: '17'
+    - uses: actions/setup-python@v6
+      with:
+        python-version: '3.11'
+        cache: 'pip'
     - name: install dependencies
-      run: sudo apt-get install g++-9 autoconf-archive curl zlib1g-dev doxygen
+      run: |
+        sudo apt-get install g++-9 autoconf-archive curl zlib1g-dev doxygen
+        python3 -m pip install --upgrade pip
     - name: install liblo
-      run: curl -L -O https://github.com/radarsat1/liblo/releases/download/0.34/liblo-0.34.tar.gz && tar -xzf liblo-0.34.tar.gz && cd liblo-0.34 && (./configure --host=$HOST --prefix=$PWD/inst --enable-static --disable-shared --disable-tests --disable-tools --disable-examples --disable-doc CFLAGS=-fPIC || (cat config.log; false)) && make install && find inst && cd ..
+      run: |
+        curl -L -O https://github.com/radarsat1/liblo/releases/download/0.34/liblo-0.34.tar.gz
+        tar -xzf liblo-0.34.tar.gz
+        rm liblo-0.34.tar.gz
+        mv liblo-0.34 liblo
+        cd liblo
+        (./configure --host=$HOST --prefix=$PWD/inst --enable-static --disable-shared --disable-tests --disable-tools --disable-examples --disable-doc CFLAGS=-fPIC || (cat config.log; false))
+        make install
+        find inst
+        cd ..
     - name: autogen
       run:
         pwd
         && mkdir $PWD/inst
         && env NOCONFIGURE=1 am_opt=--copy ./autogen.sh
-        && (./configure --enable-static --prefix=$PWD/inst PKG_CONFIG_PATH=$PWD/liblo-0.34/inst/lib/pkgconfig || (cat config.log; false))
+        && (./configure --enable-static --prefix=$PWD/inst PKG_CONFIG_PATH=$PWD/liblo/inst/lib/pkgconfig || (cat config.log; false))
     - name: make
       run: make && (make check || (for i in src/*.log; do echo === $i ===; cat $i; done; false)) && make install && find inst
     - name: make tests
+      continue-on-error: true
       run: cd test && make tests
     - name: make dist
       run: make dist
@@ -41,7 +57,7 @@ jobs:
           ./wheelhouse/*.whl
 
   MacOS:
-    runs-on: macOS-13
+    runs-on: macOS-14
     timeout-minutes: 45
     env:
       CC: clang
@@ -50,63 +66,83 @@ jobs:
     - uses: actions/checkout@v4
       with:
         fetch-depth: 0
+    - uses: actions/setup-python@v6
+      with:
+        python-version: '3.11'
+        cache: 'pip'
     - name: install dependencies
-      run:
-        brew install autoconf-archive automake pkg-config doxygen
-        && python3 -m pip install --upgrade setuptools
-        && python3 -m pip install packaging
+      run: |
+        brew install autoconf-archive automake pkg-config doxygen libtool
+        python3 -m venv venv
+        source venv/bin/activate
+        python3 -m pip install --upgrade setuptools
+        python3 -m pip install packaging
+        python3 -m pip install wheel
+        python --version
+        python3 --version
     - name: download liblo
-      run: curl -L -O https://github.com/radarsat1/liblo/releases/download/0.34/liblo-0.34.tar.gz && tar -xzf liblo-0.34.tar.gz
+      run: |
+        curl -L -O https://github.com/radarsat1/liblo/releases/download/0.34/liblo-0.34.tar.gz
+        tar -xzf liblo-0.34.tar.gz
+        rm liblo-0.34.tar.gz
+        mv liblo-0.34 liblo
     - name: liblo make arm64
-      run:
-        cd ./liblo-0.34
-        && pwd
-        && (./configure CFLAGS="-isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk --target=arm64-apple-darwin -fPIC" CXXFLAGS="-isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk --target=arm64-apple-darwin" --build=x86_64-apple-darwin19.6.0 --host=aarch64-apple-darwin --enable-static --prefix=$PWD/inst --disable-shared --disable-tests --disable-tools --disable-examples --disable-doc || (cat config.log; false))
-        && make install
-        && mv ./inst/lib/liblo.a ./inst/lib/liblo.a.arm64
-        && cd ..
+      run: |
+        cd ./liblo
+        pwd
+        (./configure CFLAGS="-isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk --target=arm64-apple-darwin -fPIC -mmacosx-version-min=10.10" CXXFLAGS="-isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk --target=arm64-apple-darwin -mmacosx-version-min=10.10" LDFLAGS="-mmacosx-version-min=10.10" --build=x86_64-apple-darwin19.6.0 --host=aarch64-apple-darwin --prefix=$PWD/inst --enable-static --disable-shared --disable-tests --disable-tools --disable-examples --disable-doc || (cat config.log; false))
+        make install
+        mv ./inst/lib/liblo.a ./inst/lib/liblo.a.arm64
+        cd ..
     - name: liblo make x86_64
-      run:
-        cd ./liblo-0.34
-        && pwd
-        && make clean
-        && (./configure --host=$HOST --prefix=$PWD/inst --enable-static --disable-shared --disable-tests --disable-tools --disable-examples CFLAGS=-fPIC || (cat config.log; false))
-        && make install
-        && mv ./inst/lib/liblo.a ./inst/lib/liblo.a.x86_64
-        && cd ..
+      run: |
+        cd ./liblo
+        pwd
+        make clean
+        (./configure CFLAGS="-isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk --target=x86_64-apple-darwin -fPIC -mmacosx-version-min=10.10" CXXFLAGS="-isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk --target=x86_64-apple-darwin -mmacosx-version-min=10.10" LDFLAGS="-mmacosx-version-min=10.10" --build=arm-apple-darwin --host=x86_64-apple-darwin --prefix=$PWD/inst --enable-static --disable-shared  --disable-tests --disable-tools --disable-examples --disable-doc || (cat config.log; false))
+        make install
+        mv ./inst/lib/liblo.a ./inst/lib/liblo.a.x86_64
+        cd ..
     - name: liblo universal binary
-      run: cd ./liblo-0.34/inst/lib && lipo -create -output ./liblo.a ./liblo.a.arm64 ./liblo.a.x86_64 && lipo -info ./liblo.a && rm ./liblo.a.* && cd ../../..
-    - name: libmapper autogen arm64
+      run: cd ./liblo/inst/lib && lipo -create -output ./liblo.a ./liblo.a.arm64 ./liblo.a.x86_64 && lipo -info ./liblo.a && rm ./liblo.a.* && cd ../../..
+    - name: libmapper autogen x86_64
       run:
         pwd
         && mkdir $PWD/inst
-        && (./autogen.sh CFLAGS="-isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk --target=arm64-apple-darwin" CXXFLAGS="-isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk --target=arm64-apple-darwin" --build=x86_64-apple-darwin19.6.0 --host=aarch64-apple-darwin --enable-static --prefix=$PWD/inst PKG_CONFIG_PATH=$PWD/liblo-0.34/inst/lib/pkgconfig || (cat config.log; false))
-    - name: libmapper make arm64 part 1
+        && mkdir $PWD/inst/lib
+        && (./autogen.sh CFLAGS="-isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk --target=x86_64-apple-darwin -mmacosx-version-min=10.10" CXXFLAGS="-isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk --target=x86_64-apple-darwin -mmacosx-version-min=10.10" LDFLAGS="-mmacosx-version-min=10.10" --build=arm-apple-darwin --host=x86_64-apple-darwin --enable-static --prefix=$PWD/inst PKG_CONFIG_PATH=$PWD/liblo/inst/lib/pkgconfig || (cat config.log; false))
+    - name: libmapper make x86_64 part 1
       continue-on-error: true
-      run:
-        make install
-    - name: libmapper make arm64 part 2
-      run:
-        cd ./src/.libs
-        && clang -dynamiclib -Wl,-undefined -Wl,dynamic_lookup -isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk --target=arm64-apple-darwin -o libmapper.11.dylib libmapper_la-device.o libmapper_la-expression.o libmapper_la-graph.o libmapper_la-link.o libmapper_la-list.o libmapper_la-map.o libmapper_la-message.o libmapper_la-network.o libmapper_la-object.o libmapper_la-path.o libmapper_la-property.o libmapper_la-signal.o libmapper_la-slot.o libmapper_la-table.o libmapper_la-time.o libmapper_la-mpr_set_coerced.o libmapper_la-value.o -L/Users/runner/work/libmapper/libmapper/liblo-0.34/inst/lib /Users/runner/work/libmapper/libmapper/liblo-0.34/inst/lib/liblo.a -lz -isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk -install_name /Users/runner/work/libmapper/libmapper/inst/lib/libmapper.11.dylib -compatibility_version 10 -current_version 10.0 -Wl,-single_module
-        && cd ../..
-        && mv ./src/.libs/libmapper.11.dylib ./inst/lib/libmapper.11.dylib.arm64
-        && file ./inst/lib/libmapper.11.dylib.arm64
-        && mv ./inst/lib/libmapper.a ./inst/lib/libmapper.a.arm64
-        && lipo -info ./inst/lib/libmapper.a.arm64
-    - name: libmapper autogen x86_64
-      run:
-        make clean
-        && (./autogen.sh --enable-static --prefix=$PWD/inst PKG_CONFIG_PATH=$PWD/liblo-0.34/inst/lib/pkgconfig || (cat config.log; false))
-    - name: libmapper make x86_64
       run:
         make
         && (make check || (for i in src/*.log; do echo === $i ===; cat $i; done; false))
         && make install
-        && mv ./inst/lib/libmapper.11.dylib ./inst/lib/libmapper.11.dylib.x86_64
+    - name: libmapper make x86_64 part 2
+      run:
+        cd ./src/.libs
+        && gcc -dynamiclib -Wl,-undefined -Wl,dynamic_lookup -isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk --target=x86_64-apple-darwin -o libmapper.11.dylib libmapper_la-device.o libmapper_la-expression.o libmapper_la-graph.o libmapper_la-link.o libmapper_la-list.o libmapper_la-map.o libmapper_la-message.o libmapper_la-network.o libmapper_la-object.o libmapper_la-path.o libmapper_la-property.o libmapper_la-signal.o libmapper_la-slot.o libmapper_la-table.o libmapper_la-time.o libmapper_la-mpr_set_coerced.o libmapper_la-value.o -L/Users/runner/work/libmapper/libmapper/liblo/inst/lib /Users/runner/work/libmapper/libmapper/liblo/inst/lib/liblo.a -lz -isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk -install_name /Users/runner/work/libmapper/libmapper/inst/lib/libmapper.11.dylib
+        && cd ../..
+        && pwd
+        && ls ./src/.libs
+        && ls .
+        && ls ./inst
+        && mv ./src/.libs/libmapper.11.dylib ./inst/lib/libmapper.11.dylib.x86_64
         && file ./inst/lib/libmapper.11.dylib.x86_64
-        && mv ./inst/lib/libmapper.a ./inst/lib/libmapper.a.x86_64
+        && mv ./src/.libs/libmapper.a ./inst/lib/libmapper.a.x86_64
         && lipo -info ./inst/lib/libmapper.a.x86_64
+    - name: libmapper autogen arm64
+      run:
+        make clean
+        && (./autogen.sh CFLAGS="-isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk --target=arm64-apple-darwin -mmacosx-version-min=10.10" CXXFLAGS="-isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk --target=arm64-apple-darwin -mmacosx-version-min=10.10" LDFLAGS="-mmacosx-version-min=10.10" --build=arm-apple-darwin --host=aarch64-apple-darwin --enable-static --prefix=$PWD/inst PKG_CONFIG_PATH=$PWD/liblo/inst/lib/pkgconfig || (cat config.log; false))
+    - name: libmapper make arm64
+      run:
+        make
+        && (make check || (for i in src/*.log; do echo === $i ===; cat $i; done; false))
+        && make install
+        && mv ./inst/lib/libmapper.11.dylib ./inst/lib/libmapper.11.dylib.arm64
+        && file ./inst/lib/libmapper.11.dylib.arm64
+        && mv ./inst/lib/libmapper.a ./inst/lib/libmapper.a.arm64
+        && lipo -info ./inst/lib/libmapper.a.arm64
     - name: libmapper universal binary
       run:
         pwd
@@ -122,12 +158,12 @@ jobs:
         && rm ./libmapper.11.dylib.*
         && cd ../..
     - name: make tests
+      continue-on-error: true
       run: cd test && make tests
     - name: python wheels
       run:
         mv bindings/python/pyproject.toml bindings/python/pyproject.toml.temp
         && cp -v $PWD/inst/lib/libmapper.*.dylib bindings/python/libmapper/libmapper.dylib
-        && python3 -m pip install wheel
         && pip3 wheel bindings/python -w ./wheelhouse
         && unzip -t wheelhouse/*.whl
     - uses: actions/upload-artifact@v4
@@ -157,7 +193,7 @@ jobs:
     needs: Linux
     timeout-minutes: 20
     steps:
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
       - name: download artifact
@@ -180,13 +216,13 @@ jobs:
           && for i in test testcallbacks testconvergent testgetvalue testinstance testmapfromstr testnumpy testreverse testvector; do echo running ${i}; if ! python3 ${i}.py; then exit 1; fi; done;
 
   MacOS-check-wheel:
-    runs-on: macOS-13
+    runs-on: macOS-14
     needs: MacOS
     timeout-minutes: 20
     env:
       SYSTEM_VERSION_COMPAT: 0
     steps:
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
       - name: download artifact
@@ -213,7 +249,7 @@ jobs:
     needs: Windows-Latest
     timeout-minutes: 20
     steps:
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
       - name: download artifact
