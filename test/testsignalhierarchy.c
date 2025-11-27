@@ -99,7 +99,7 @@ int setup_devs(const char *iface)
 			goto error;
         if (!g && iface)
             mpr_graph_set_interface(mpr_obj_get_graph((mpr_obj)devices[i]), iface);
-        eprintf("device %d created using interface %s.\n", i,
+        eprintf("created device %d using interface %s.\n", i,
                 mpr_graph_get_interface(mpr_obj_get_graph((mpr_obj)devices[i])));
 
         /* give each device N inputs and N outputs */
@@ -233,6 +233,7 @@ int main(int argc, char *argv[])
                         printf("testsignalhierarchy.c: possible arguments "
                                "-q quiet (suppress output), "
                                "-t terminate automatically, "
+                               "-s shared (use one mpr_graph only), "
                                "-h help, "
                                "--devices number of devices, "
                                "--iface network interface\n");
@@ -241,6 +242,8 @@ int main(int argc, char *argv[])
                     case 'q':
                         verbose = 0;
                         break;
+                    case 's':
+                        shared_graph = 1;
                     case 't':
                         terminate = 1;
                         break;
@@ -285,6 +288,15 @@ int main(int argc, char *argv[])
   done:
     {
         mpr_graph g = mpr_obj_get_graph((mpr_obj)devices[0]);
+        if (verbose) {
+            int i;
+            for (i = 0; i < num_devs; i++) {
+                mpr_graph g_i = mpr_obj_get_graph((mpr_obj)devices[i]);
+                mpr_obj_print((mpr_obj)g_i, 1);
+                if (shared_graph)
+                    break;
+            }
+        }
         cleanup_devs();
         free(devices);
         if (shared_graph) mpr_graph_free(g);
