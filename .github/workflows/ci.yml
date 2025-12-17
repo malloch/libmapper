@@ -120,14 +120,10 @@ jobs:
     - name: libmapper make x86_64 part 2
       run:
         cd ./src/.libs
-        && gcc -dynamiclib -Wl,-undefined -Wl,dynamic_lookup -isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk --target=x86_64-apple-darwin -o libmapper.11.dylib libmapper_la-device.o libmapper_la-expression.o libmapper_la-graph.o libmapper_la-link.o libmapper_la-list.o libmapper_la-map.o libmapper_la-message.o libmapper_la-network.o libmapper_la-object.o libmapper_la-path.o libmapper_la-property.o libmapper_la-signal.o libmapper_la-slot.o libmapper_la-table.o libmapper_la-time.o libmapper_la-mpr_set_coerced.o libmapper_la-value.o -L/Users/runner/work/libmapper/libmapper/liblo/inst/lib /Users/runner/work/libmapper/libmapper/liblo/inst/lib/liblo.a -lz -isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk -install_name /Users/runner/work/libmapper/libmapper/inst/lib/libmapper.11.dylib
+        && gcc -dynamiclib -Wl,-undefined -Wl,dynamic_lookup -isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk --target=x86_64-apple-darwin -o libmapper.15.dylib libmapper_la-device.o libmapper_la-expression.o libmapper_la-graph.o libmapper_la-link.o libmapper_la-list.o libmapper_la-map.o libmapper_la-message.o libmapper_la-network.o libmapper_la-object.o libmapper_la-path.o libmapper_la-property.o libmapper_la-signal.o libmapper_la-slot.o libmapper_la-table.o libmapper_la-time.o libmapper_la-mpr_set_coerced.o libmapper_la-value.o -L/Users/runner/work/libmapper/libmapper/liblo/inst/lib /Users/runner/work/libmapper/libmapper/liblo/inst/lib/liblo.a -lz -isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk -install_name /Users/runner/work/libmapper/libmapper/inst/lib/libmapper.15.dylib
         && cd ../..
-        && pwd
-        && ls ./src/.libs
-        && ls .
-        && ls ./inst
-        && mv ./src/.libs/libmapper.11.dylib ./inst/lib/libmapper.11.dylib.x86_64
-        && file ./inst/lib/libmapper.11.dylib.x86_64
+        && mv ./src/.libs/libmapper.15.dylib ./inst/lib/libmapper.15.dylib.x86_64
+        && file ./inst/lib/libmapper.15.dylib.x86_64
         && mv ./src/.libs/libmapper.a ./inst/lib/libmapper.a.x86_64
         && lipo -info ./inst/lib/libmapper.a.x86_64
     - name: libmapper autogen arm64
@@ -139,13 +135,8 @@ jobs:
         make
         && (make check || (for i in src/*.log; do echo === $i ===; cat $i; done; false))
         && make install
-        && pwd
-        && ls ./src/.libs
-        && ls .
-        && ls ./inst
-        && ls ./inst/lib
-        && mv ./src/.libs/libmapper.11.dylib ./inst/lib/libmapper.11.dylib.arm64
-        && file ./inst/lib/libmapper.11.dylib.arm64
+        && mv ./inst/lib/libmapper.15.dylib ./inst/lib/libmapper.15.dylib.arm64
+        && file ./inst/lib/libmapper.15.dylib.arm64
         && mv ./inst/lib/libmapper.a ./inst/lib/libmapper.a.arm64
         && lipo -info ./inst/lib/libmapper.a.arm64
     - name: libmapper universal binary
@@ -156,11 +147,11 @@ jobs:
         && lipo -create -output ./libmapper.a ./libmapper.a.arm64 ./libmapper.a.x86_64
         && lipo -info ./libmapper.a
         && rm ./libmapper.a.*
-        && file ./libmapper.11.dylib.arm64
-        && file ./libmapper.11.dylib.x86_64
-        && lipo -create -output ./libmapper.11.dylib ./libmapper.11.dylib.arm64 ./libmapper.11.dylib.x86_64
-        && file ./libmapper.11.dylib
-        && rm ./libmapper.11.dylib.*
+        && file ./libmapper.15.dylib.arm64
+        && file ./libmapper.15.dylib.x86_64
+        && lipo -create -output ./libmapper.15.dylib ./libmapper.15.dylib.arm64 ./libmapper.15.dylib.x86_64
+        && file ./libmapper.15.dylib
+        && rm ./libmapper.15.dylib.*
         && cd ../..
     - name: make tests
       continue-on-error: true
