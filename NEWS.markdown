@@ -1,5 +1,71 @@
 # libmapper NEWS
 
+version 2.5
+--------------
+
+We are pleased to announce the release of version 2.5 of libmapper, an open-source, cross-platform software library for declaring data signals on a shared network and enabling arbitrary connections to be made between them. The main focus of libmapper development is to provide tools for creating and using systems for interactive control of media synthesis.
+
+This release is focused on bugfixes, optimizations, improvements to the expression engine.
+
+Dependencies:
+
+- Update to liblo 0.34.
+- Remove variable-length array from RtAudio library used in optional examples.
+
+API changes:
+
+- Added endpoint location argument to `mpr_map_get_sig_idx()` so we can specify whether we are searching for a map source or destination. This change supports future work on _divergent_ and _complex_ maps.
+- Revised function `mpr_sig_get_inst_id()` to return instance status rather than id since the previous version had no way to indicate failure (since 0, -1 etc are valid instance ids). A location to receive the id may be passed as an optional argument.
+- Added argument to `mpr_obj_get_status()` for explicity clearing volatile status bits.
+- Removed `mpr_obj_reset_status()` from public API.
+
+Bug fixes and improvements
+
+- Use new message-reuse capability in liblo to reduce runtime memory allocations.
+- Pack multiple instance updates in each update message.
+- Allow retrieving instance 0 status and id from uninstanced signals.
+- Do not include signals/maps marked for removal in query results.
+- Fixed regression in `mpr_value_cpy_next()` that was preventing timetag updates from being properly stored.
+- Fixed bugs in instance retrieval affecting the results of non-callback instance management.
+- Fix memory leak and a memcpy overlap error.
+- Copy timetag when incrementing value position to initial state.
+
+Expression engine
+- Added several specialized quaternion functions to the expression parser and evaluator.
+  - `qconj(x)` – quaternion conjugate.
+  - `qinv(x)` – quaternion inverse.
+  - `qmult(a, b)` – quaternion multiplication.
+  - `qslerp(a, b, ratio)` – quaternion spherical linear interpolation (SLERP).
+- Added `normal()` function – sample from normal distribution.
+- Added `edge()` and `diff()` functions.
+- Added prime notation for `diff()` function.
+- Fixed behaviour of `emd()` function.
+- Ensure weight argument for `ema()` and `emd()` functions is positive.
+- Fixed bug determining map slot memory length in parser.
+- Fixed possible name-collision bug by removing automatic names from internal function memory variables.
+- Fixes for brittle function lexing.
+- Improved debugging output.
+- Refactoring.
+
+Bindings:
+
+- OO bindings (C++, Python, Java, C#):
+    - Cleanup of enum classes.
+    - Added a List class specialization for iterating over lists of signal instances returned from queries.
+- Python bindings:
+    - Fixed status enum values.
+    - Fixed `Map.index()` arguments; fixed bad enum value in testinstance.py.
+    - Fixed enum `__str__()` functions.
+    - Updated manylinux script to disable liblo documentation.
+- C Sharp:
+    - Simplified file naming.
+
+Testing suite:
+
+- Added simple timetag test to testvector.
+- Added shared-graph mode to testsignalhierarchy.
+- Added some automation for running Valgrind tests.
+
 version 2.4.14
 --------------
 

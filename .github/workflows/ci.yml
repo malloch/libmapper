@@ -122,10 +122,6 @@ jobs:
         cd ./src/.libs
         && gcc -dynamiclib -Wl,-undefined -Wl,dynamic_lookup -isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk --target=x86_64-apple-darwin -o libmapper.11.dylib libmapper_la-device.o libmapper_la-expression.o libmapper_la-graph.o libmapper_la-link.o libmapper_la-list.o libmapper_la-map.o libmapper_la-message.o libmapper_la-network.o libmapper_la-object.o libmapper_la-path.o libmapper_la-property.o libmapper_la-signal.o libmapper_la-slot.o libmapper_la-table.o libmapper_la-time.o libmapper_la-mpr_set_coerced.o libmapper_la-value.o -L/Users/runner/work/libmapper/libmapper/liblo/inst/lib /Users/runner/work/libmapper/libmapper/liblo/inst/lib/liblo.a -lz -isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk -install_name /Users/runner/work/libmapper/libmapper/inst/lib/libmapper.11.dylib
         && cd ../..
-        && pwd
-        && ls ./src/.libs
-        && ls .
-        && ls ./inst
         && mv ./src/.libs/libmapper.11.dylib ./inst/lib/libmapper.11.dylib.x86_64
         && file ./inst/lib/libmapper.11.dylib.x86_64
         && mv ./src/.libs/libmapper.a ./inst/lib/libmapper.a.x86_64
@@ -259,7 +255,7 @@ jobs:
       - name: install wheel
         run:
           ls
-          && python3 -m pip install libmapper-2.4.14-py3-none-win_amd64.whl
+          && python3 -m pip install libmapper-2.5-py3-none-win_amd64.whl
       - name: checkout
         uses: actions/checkout@v4
         with:
