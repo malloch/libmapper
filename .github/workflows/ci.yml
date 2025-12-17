@@ -139,7 +139,12 @@ jobs:
         make
         && (make check || (for i in src/*.log; do echo === $i ===; cat $i; done; false))
         && make install
-        && mv ./inst/lib/libmapper.11.dylib ./inst/lib/libmapper.11.dylib.arm64
+        && pwd
+        && ls ./src/.libs
+        && ls .
+        && ls ./inst
+        && ls ./inst/lib
+        && mv ./src/.libs/libmapper.11.dylib ./inst/lib/libmapper.11.dylib.arm64
         && file ./inst/lib/libmapper.11.dylib.arm64
         && mv ./inst/lib/libmapper.a ./inst/lib/libmapper.a.arm64
         && lipo -info ./inst/lib/libmapper.a.arm64
