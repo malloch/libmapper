@@ -16,7 +16,7 @@ uninstall-hook:
 
 EXTRA_DIST = libmapper/__init__.py test.py testcallbacks.py testconvergent.py testgetvalue.py \
              testinstance.py testmapfromstr.py testmonitor.py testnumpy.py testrefcount.py \
-             testreverse.py testvector.py tkgui.py pyproject.toml
+             testreverse.py testvector.py tkgui.py pyproject.toml README.md
 
 test_all_ordered = test testcallbacks testconvergent testgetvalue testinstance testmapfromstr \
                    testnumpy testreverse testvector

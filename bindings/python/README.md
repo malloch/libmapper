@@ -1,10 +1,10 @@
 # libmapper
 
-_libmapper_ is an open-source cross-platform software library for participating in a distributed network of input and output signals which can be dynamically connected together ("mapped").
+[_libmapper_](http://libmapper.github.io/) is an open-source cross-platform software library for participating in a distributed network of input and output signals which can be dynamically connected together ("mapped").
 
 A "mapping" represents a data-streaming association between one or more source signals and a destination signal, in which data is transported using either shared memory or Open Sound Control (OSC) streams over a network. In addition to traffic management, libmapper automatically handles address and datatype translation, and enables the use of arbitrary mathematical expressions for conditioning, combining and transforming the source values as desired. This can be used for example to connect a set of sensors to a synthesizer's input parameters.
 
-This document concerns the Python bindings. The library is written in C, and there are also bindings for C++, C#, Java, SuperCollider, Max, and Pure Data.
+This document concerns the Python bindings. The library is written in C, and there are also bindings for C++, C#, Python, Java, Rust, SuperCollider, Max, and Pure Data.
 
 ## Installation
 
@@ -14,9 +14,9 @@ Simply run `pip install libmapper` in your Python environment of choice.
 
 Once you have libmapper installed, it can be imported into your program:
 
-~~~python
+```python
 import libmapper as mpr
-~~~
+```
 
 ## Overview of the API organization
 
@@ -46,15 +46,17 @@ parameters, such as specifying the name of the network interface to use.
 
 An example of creating a device:
 
-~~~python
-dev = mpr.Device("my_device")
-~~~
+```python
+mydev = mpr.Device("my_device")
+```
 
 ## Polling the device
 
 The device lifecycle looks like this:
 
-<img style="display:block;margin:auto;padding:0px;width:75%" src="./images/device_lifecycle.png">
+    creation --> poll --+--> destruction
+                  |     |
+                  +--<--+
 
 In other words, after a device is created, it must be continuously polled during
 its lifetime.
@@ -71,15 +73,15 @@ your application to behave.  It takes a number of milliseconds during which it
 should do some work, or 0 if it should check for any immediate actions and then
 return without waiting:
 
-~~~python
-dev.poll(block_ms)
-~~~
+```python
+mydev.poll(block_ms)
+```
 
 An example of calling it with non-blocking behaviour:
 
-~~~python
-dev.poll(0)
-~~~
+```python
+mydev.poll(0)
+```
 
 If your polling is in the middle of a processing function or in response to a
 GUI event for example, non-blocking behaviour is desired.  On the other hand if
@@ -111,9 +113,9 @@ libmapper enables arbitrary connections between _any_ declared signals, we still
 find it helpful to distinguish between two type of signals: `inputs` and
 `outputs`. 
 
-- `outputs` signals are _sources_ of data, updated locally by their parent
+- `output` signals are _sources_ of data, updated locally by their parent
 device
-- `inputs` signals are _consumers_ of data and are **not** generally
+- `input` signals are _consumers_ of data and are **not** generally
 updated locally by their parent device.
 
 This can become a bit confusing, since the "reverb" parameter of a sound
@@ -142,13 +144,13 @@ for input signals there is an additional argument:
 
 examples:
 
-~~~python
+```python
 sig_in = dev.add_signal(mpr.Signal.Direction.INCOMING, "my_input", 1,
                         mpr.Type.FLOAT, "m/s", -10, 10, None, h)
 
 sig_out = dev.add_signal(mpr.Signal.Direction.OUTGOING, "my_output", 4,
                          mpr.Type.INT32, None, 0, 1000)
-~~~
+```
 
 The only _required_ parameters here are the signal "length", its name, and data
 type.  Signals are assumed to be vectors of values, so for usual single-valued
@@ -172,40 +174,40 @@ by an incoming message.  It is passed in the `handler` parameter.
 An example of creating a "barebones" `int` scalar output signal with no unit,
 minimum, or maximum information:
 
-~~~python
-outA = dev.add_signal(mpr.Signal.Direction.OUTGOING, "outA", 1,
-                      mpr.Type.INT32, None, None, None)
-~~~
+```python
+outA = mydev.add_signal(mpr.Signal.Direction.OUTGOING, "outA", 1,
+                        mpr.Type.INT32, None, None, None)
+```
 
 or omitting some arguments:
 
-~~~python
-outA = dev.add_signal(mpr.Signal.Direction.OUTGOING, "outA", 1,
-                      mpr.Type.INT32)
-~~~
+```python
+outA = mydev.add_signal(mpr.Signal.Direction.OUTGOING, "outA", 1,
+                        mpr.Type.INT32)
+```
 
 An example of a `float` signal where some more information is provided:
 
-~~~python
-sensor1 = dev.add_signal(mpr.Signal.Direction.OUTGOING, "sensor1",
-                         1, mpr.Type.FLOAT, "V", 0.0, 5.0)
-~~~
+```python
+sensor1 = mydev.add_signal(mpr.Signal.Direction.OUTGOING, "sensor1",
+                           1, mpr.Type.FLOAT, "V", 0.0, 5.0)
+```
 
 So far we know how to create a device and to specify an output signal for it.
 To recap, let's review the code so far:
 
-~~~python
+```python
 import libmapper as mpr
 
-dev = mpr.Device("test_sender")
-sensor1 = dev.add_signal(mpr.Signal.Direction.OUTGOING, "sensor1",
-                         1, mpr.Type.FLOAT, "V", 0.0, 5.0)
+mydev = mpr.Device("test_sender")
+sensor1 = mydev.add_signal(mpr.Signal.Direction.OUTGOING, "sensor1",
+                           1, mpr.Type.FLOAT, "V", 0.0, 5.0)
     
 while 1:
-    dev.poll(50)
+    mydev.poll(50)
     # ... do stuff ...
     # ... update signals ...
-~~~
+```
 
 It is possible to retrieve a device's inputs or outputs by name or by index at a
 later time using the functions `get_signal_by_<name/index>`.
@@ -221,20 +223,20 @@ be sent to other devices if that signal is mapped.
 
 This is accomplished by the `set_value` function:
 
-~~~python
-<sig>.set_value(value)
-~~~
+```python
+mysig.set_value(value)
+```
 
 So in the "sensor 1 voltage" example, assuming in `do_stuff()` we have some code
 which reads sensor 1's value into a float variable called `v1`, the loop
 becomes:
 
-~~~python
+```python
 while 1:
-    dev.poll(50)
+    mydev.poll(50)
     v1 = do_stuff()
     sensor1.set_value(v1)
-~~~
+```
 
 This is about all that is needed to expose sensor 1's voltage to the network as
 a mappable parameter.  The _libmapper_ GUI can now be used to create a mapping
@@ -294,7 +296,7 @@ one parameter: the frequency of the sine.
 
 We need to create a handler function for libmapper to update the pyo synth:
 
-~~~python
+```python
 def frequency_handler(sig, event, inst, val, time):
     try:
         if event == mpr.Signal.Event.UPDATE:
@@ -302,11 +304,11 @@ def frequency_handler(sig, event, inst, val, time):
     except:
         print('exception')
         print(sig, val)
-~~~
+```
 
 Then our program will look like this:
 
-~~~python
+```python
 from pyo import *
 import libmapper as mpr
 
@@ -322,20 +324,20 @@ def freq_handler(sig, event, id, val, timetag):
         print('exception')
         print(sig, val)
 
-dev = mpr.Device('pyo_example')
-dev.add_signal(mpr.Signal.Direction.INCOMING, 'frequency', 1,
-               mpr.Type.FLOAT, 'Hz', 20, 2000, None, freq_handler)
+mydev = mpr.Device('pyo_example')
+mydev.add_signal(mpr.Signal.Direction.INCOMING, 'frequency', 1,
+                 mpr.Type.FLOAT, 'Hz', 20, 2000, None, freq_handler)
 
 while True:
-    dev.poll( 100 )
+    mydev.poll( 100 )
 
 synth.stop()
-~~~
+```
 
 Alternately, we can simplify our code by using a [lambda expression](https://docs.python.org/3/tutorial/controlflow.html#lambda-expressions) instead of a
 separate handler:
 
-~~~python
+```python
 from pyo import *
 import libmapper as mpr
 
@@ -343,17 +345,17 @@ import libmapper as mpr
 synth = Server().boot().start()
 sine = Sine(freq=200, mul=0.5).out()
 
-dev = mpr.Device('pyo_example')
-dev.add_signal(mpr.Signal.Direction.INCOMING, 'frequency', 1,
-               mpr.Type.FLOAT, "Hz", 20, 2000, None,
-               lambda s, e, i, f, t: sine.setFreq(f),
-               mpr.Signal.Event.UPDATE)
+mydev = mpr.Device('pyo_example')
+mydev.add_signal(mpr.Signal.Direction.INCOMING, 'frequency', 1,
+                 mpr.Type.FLOAT, "Hz", 20, 2000, None,
+                 lambda s, e, i, f, t: sine.setFreq(f),
+                 mpr.Signal.Event.UPDATE)
 
 while True:
-    dev.poll(100)
+    mydev.poll(100)
 
 synth.stop()
-~~~
+```
 
 
 ## Working with timetags
@@ -369,9 +371,9 @@ the case of sequenced or algorithimically-generated signals).
 Creating a new `Time` without arguments causes it to be initialized with the
 current system time:
 
-~~~python
+```python
 now = mpr.Time()
-~~~
+```
 
 ## Working with signal instances
 
@@ -396,15 +398,15 @@ understanding of the relatonships between instances when they are mapped.
 All signals possess one instance by default. If you would like to reserve more
 instances you can use:
 
-~~~python
-<sig>.reserve_instances(num)
-~~~
+```python
+mysig.reserve_instances(num)
+```
 
 After reserving instances you can update a specific instance:
 
-~~~python
-<sig>.instance(id).set_value(value)
-~~~
+```python
+mysig.instance(id).set_value(value)
+```
 
 The `id` argument does not have to be considered as an array index - it can be
 any integer that is convenient for labelling your instance.  _libmapper_ will
@@ -417,14 +419,12 @@ You might have noticed earlier that the handler function called when a signal
 update is received has a argument called `id`. Here is the function prototype
 again:
 
-~~~python
+```python
 def frequency_handler(signal, event, id, value, time):
-~~~
+```
 
-Under normal usage, the `id` argument will have a value (0 <= n <=
-num_instances) and can be used as an array index. Remember that you will need to
-reserve instances for your input signal using `<sig>.reserve_instances()` if you
-want to receive instance updates.
+Remember that you will need to reserve instances for your input signal using
+`reserve_instances()` if you want to receive instanced updates.
 
 ### Instance Stealing
 
@@ -433,9 +433,9 @@ receiver signal, the _instance allocation mode_ can be set for an input signal
 to set an action to take in case all allocated instances are in use and a
 previously unseen instance id is received. Use the function:
 
-~~~python
-<sig>.set_property(mpr.Property.STEALING, mode);
-~~~
+```python
+mysig.set_property(mpr.Property.STEALING, mode);
+```
 
 The argument `mode` can have one of the following values:
 
@@ -450,7 +450,7 @@ If you want to use another method for determining which active instance to
 release (e.g. the sound with the lowest volume), you can subscribe to "instance
 overflow" events and insert your own logic in the signal callback handler:
 
-~~~python
+```python
 import random
 
 def my_handler(sig, event, id, event, timetag):
@@ -460,14 +460,14 @@ def my_handler(sig, event, id, event, timetag):
 
         # release the chosen instance
         sig.instance(id).release()
-~~~
+```
 
 For this function to be called when instance stealing is necessary, we need to
 register it for `mpr.Signal.Event.INST_OFLW` events:
 
-~~~python
-<sig>.set_callback(my_handler, mpr.Signal.Event.UPDATE | mpr.Signal.Event.INST_OFLW)
-~~~
+```python
+mysig.set_callback(my_handler, mpr.Signal.Event.UPDATE | mpr.Signal.Event.INST_OFLW)
+```
 
 ## Publishing metadata
 
@@ -489,11 +489,11 @@ OSC-compatible type.  (So, numbers and strings, etc.)
 
 The property interface is through the functions,
 
-~~~python
-<object>.set_property(key, value)
-<object>.get_property(key, value)
-<object>.remove_property(key, value)
-~~~
+```python
+myobject.set_property(key, value)
+myobject.get_property(key, value)
+myobject.remove_property(key, value)
+```
 
 where the `key` can be either a member of the Property enum class or a string
 specifying the name of the property, and the value can any OSC-compatible type.
@@ -502,49 +502,49 @@ These functions can be called for any libmapper object, including Devices, Signa
 For example, to store a `float` indicating the X position of a device `dev`, you
 can call it like this:
 
-~~~python
-dev.set_property("x", 12.5)
-~~~
+```python
+mydev.set_property("x", 12.5)
+```
 
 To specify a string property of a signal:
 
-~~~python
-sig.set_property("sensingMethod", "resistive")
-~~~
+```python
+mysig.set_property("sensingMethod", "resistive")
+```
 
-In the case of `get_property()` the `key` can also be a numerical index, enabling sequential recovery of all of an objects properties along with their keys. In this case it may be easier to simply retrieve all metadata as a Python `dict`:
+In the case of `get_property()` the `key` can also be a numerical index, enabling sequential recovery of all of an object's properties along with their keys. In this case it may be easier to simply retrieve all metadata as a Python `dict`:
 
-~~~python
+```python
 # returns a dict containing all object properties
-<object>.properties()
-~~~
+myobject.properties()
+```
 
 The return type of `get_property()` function depends on how it was called:
 
-~~~python
-# if the property exists, returns the <value> associated with key 'min'
+```python
+# if the property exists, returns the value associated with key 'min'
 # otherwise returns None
-obj.get_property('min')
+myobj.get_property('min')
 
-# if the property exists, returns the <value> associated with key Property.MIN
+# if the property exists, returns the value associated with key Property.MIN
 # otherwise returns None
-obj.get_property(Property.MIN)
+myobj.get_property(Property.MIN)
 
-# returns a tuple containing (<key>, <value>) for the 0th property
-obj.get_property(0)
-~~~
+# returns a tuple containing (key, value) for the 0th property
+myobj.get_property(0)
+```
 
 ### Objects as Associative Arrays
 
 Finally, you can also access object metadata by indexing the object itself as an associative array (`dict` in Python):
 
-~~~python
+```python
 # set object property 'foo' to the value 'bar'
-obj['foo'] = bar
+myobj['foo'] = bar
 
 # print the object property 'foo'
-print(obj['foo'])
-~~~
+print(myobj['foo'])
+```
 
 As before, retrieving a property using an index will return a tuple if the property exists.
 

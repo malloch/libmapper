@@ -35,17 +35,24 @@ INST=$TMP/inst
 ) || exit 1
 
 echo === Building libmapper
-python3.8 -m ensurepip --upgrade
 mkdir -p $TMP/libmapper
 cd $TMP/libmapper
 PKG_CONFIG_PATH=$INST/lib/pkgconfig $ROOT/configure \
-  --prefix=$INST --disable-tests --disable-audio --disable-java --disable-csharp \
+  --prefix=$INST --disable-tests --disable-audio --disable-java --disable-csharp --disable-python \
   --libdir=$TMP/libmapper/bindings/python/libmapper || bash -i
 make clean
 make install -j4
+make clean
+PKG_CONFIG_PATH=$INST/lib/pkgconfig $ROOT/configure \
+  --prefix=$INST --disable-tests --disable-audio --disable-java --disable-csharp \
+  --libdir=$TMP/libmapper/bindings/python/libmapper || bash -i
+make
+echo === copying README.md
+cp $ROOT/bindings/python/README.md $TMP/libmapper/bindings/python/README.md
 
 echo === Building wheel
 python3.8 -m ensurepip --upgrade
+ls $TMP/libmapper/bindings/python
 python3.8 -m pip wheel -w $TMP/wheelhouse $TMP/libmapper/bindings/python
 unzip -t $TMP/wheelhouse/*.whl
 for WHL in $TMP/wheelhouse/*.whl; do

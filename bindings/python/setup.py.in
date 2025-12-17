@@ -45,10 +45,14 @@ try:
 except ImportError:
     bdist_wheel = None
 
+with open("README.md", "rb") as fh:
+    long_description = fh.read().decode("UTF-8")
+
 if platform.uname()[0] == 'Windows':
     packages = ["libmapper.dll", "liblo.dll", "zlib.dll"]
 else:
     packages = ["libmapper.@SO_EXT@"]
+
 setup (name         = 'libmapper',
        version      = ver(),
        author       = "libmapper.org",
@@ -56,6 +60,7 @@ setup (name         = 'libmapper',
        url          = "http://libmapper.org",
        description  = "A library for representing input and output signals on a network and allowing arbitrary 'mappings' to be dynamically created between them.",
        long_description_content_type = "text/markdown",
+       long_description = long_description,
        readme       = "README.md",
        license      = "GNU LGPL version 2.1 or later",
        packages     = ["libmapper"],
