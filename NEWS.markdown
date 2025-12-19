@@ -1,5 +1,12 @@
 # libmapper NEWS
 
+version 2.5.1
+-------------
+
+We are pleased to announce the release of version 2.5.1 of libmapper, an open-source, cross-platform software library for declaring data signals on a shared network and enabling arbitrary connections to be made between them. The main focus of libmapper development is to provide tools for creating and using systems for interactive control of media synthesis.
+
+This version focuses only on tooling for building Python wheels and continuous integration.
+
 version 2.5
 --------------
 

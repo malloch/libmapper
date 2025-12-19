@@ -52,7 +52,6 @@ cp $ROOT/bindings/python/README.md $TMP/libmapper/bindings/python/README.md
 
 echo === Building wheel
 python3.8 -m ensurepip --upgrade
-ls $TMP/libmapper/bindings/python
 python3.8 -m pip wheel -w $TMP/wheelhouse $TMP/libmapper/bindings/python
 unzip -t $TMP/wheelhouse/*.whl
 for WHL in $TMP/wheelhouse/*.whl; do
