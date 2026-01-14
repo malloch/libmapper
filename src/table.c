@@ -146,7 +146,7 @@ mpr_tbl_record mpr_tbl_get_record(mpr_tbl t, mpr_prop prop, const char *key)
 {
     mpr_tbl_record_t tmp;
     mpr_tbl_record rec = 0;
-    RETURN_ARG_UNLESS(key || (MPR_PROP_UNKNOWN != prop && MPR_PROP_EXTRA != prop), 0);
+    RETURN_ARG_UNLESS(key || (MPR_PROP_EXTRA != prop), 0);
     tmp.prop = prop;
     tmp.key = key;
     rec = bsearch(&tmp, t->rec, t->count, sizeof(mpr_tbl_record_t), compare_rec);
@@ -237,12 +237,12 @@ int mpr_tbl_remove_record(mpr_tbl t, mpr_prop prop, const char *key, int flags)
 
     do {
         mpr_tbl_record rec = mpr_tbl_get_record(t, prop, key);
-        RETURN_ARG_UNLESS(rec && (rec->flags & MOD_ANY) && rec->val, ret);
+        RETURN_ARG_UNLESS(rec && (flags & rec->flags & MOD_ANY) && rec->val, ret);
         prop = MASK_PROP_BITFLAGS(prop);
         if (   prop != MPR_PROP_EXTRA && prop != MPR_PROP_LINKED
             && prop != MPR_PROP_MAX && prop != MPR_PROP_MIN) {
-            /* set value to null rather than removing */
             if (rec->flags & INDIRECT) {
+                /* set value to null rather than removing */
                 if (rec->val && *rec->val && rec->type != MPR_PTR) {
                     free(*rec->val);
                     *rec->val = 0;

@@ -289,7 +289,7 @@ int mpr_obj_remove_prop(mpr_obj o, mpr_prop p, const char *s)
 
     if (MPR_PROP_DATA == p || o->is_local)
         updated = mpr_tbl_remove_record(o->props.synced, p, s, MOD_LOCAL);
-    else if (MPR_PROP_EXTRA == p) {
+    else if (MPR_PROP_UNKNOWN == p || MPR_PROP_EXTRA == p) {
         if (s)
             p = mpr_tbl_get_record_by_key(o->props.synced, s, NULL, NULL, NULL, &public);
         else
