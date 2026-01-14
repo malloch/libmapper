@@ -379,7 +379,7 @@ void mpr_obj_print(mpr_obj o, int include_props)
     switch (o->type) {
         case MPR_GRAPH:
             printf("GRAPH: ");
-            mpr_graph_print((mpr_graph)o);
+            mpr_graph_print((mpr_graph)o, include_props);
             break;
         case MPR_DEV:
             printf("DEVICE: ");

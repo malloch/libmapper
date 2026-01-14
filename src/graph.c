@@ -841,7 +841,7 @@ void mpr_graph_remove_map(mpr_graph g, mpr_map m, mpr_graph_evt e)
     mpr_list_free_item(m);
 }
 
-void mpr_graph_print(mpr_graph g)
+void mpr_graph_print(mpr_graph g, int properties)
 {
     mpr_list devs = mpr_list_from_data(g->devs);
     mpr_list sigs = mpr_list_from_data(g->sigs);
@@ -852,13 +852,13 @@ void mpr_graph_print(mpr_graph g)
     mpr_list_free(sigs);
     while (devs) {
         printf(" └─ ");
-        mpr_obj_print(*devs, 0);
+        mpr_obj_print(*devs, properties);
         sigs = mpr_dev_get_sigs((mpr_dev)*devs, MPR_DIR_ANY);
         while (sigs) {
             mpr_sig sig = (mpr_sig)*sigs;
             sigs = mpr_list_get_next(sigs);
             printf("    %s ", sigs ? "├─" : "└─");
-            mpr_obj_print((mpr_obj)sig, 0);
+            mpr_obj_print((mpr_obj)sig, properties);
         }
         devs = mpr_list_get_next(devs);
     }
@@ -870,7 +870,7 @@ void mpr_graph_print(mpr_graph g)
         mpr_map map = (mpr_map)*maps;
         if (((mpr_obj)map)->status >= MPR_STATUS_STAGED) {
             printf(" └─ ");
-            mpr_obj_print((mpr_obj)map, 0);
+            mpr_obj_print((mpr_obj)map, properties);
             sigs = mpr_map_get_sigs(map, MPR_LOC_SRC);
             while (sigs) {
                 mpr_sig sig = (mpr_sig)*sigs;

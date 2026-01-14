@@ -76,7 +76,7 @@ void mpr_graph_remove_map(mpr_graph g, mpr_map map, mpr_graph_evt evt);
 
 /*! Print graph contents to the screen.  Useful for debugging, only works when
  *  compiled in debug mode. */
-void mpr_graph_print(mpr_graph g);
+void mpr_graph_print(mpr_graph g, int properties);
 
 int mpr_graph_subscribed_by_sig(mpr_graph g, const char *name);
 
