@@ -41,6 +41,10 @@ MPR_INLINE static int _min(int a, int b) { return a < b ? a : b; }
 mpr_value mpr_value_new(unsigned int vlen, mpr_type type, unsigned int mlen, unsigned int num_inst)
 {
     mpr_value v = (mpr_value) calloc(1, sizeof(mpr_value_t));
+    if (!vlen)
+        vlen = 1;
+    if (!type)
+        type = MPR_INT32;
     mpr_value_realloc(v, vlen, type, mlen, num_inst, 0);
     v->period = -1;
     return v;
@@ -53,7 +57,7 @@ void mpr_value_free(mpr_value v) {
         mpr_value_buffer b = &v->inst[i];
         FUNC_IF(free, b->samps);
         FUNC_IF(free, b->times);
-        mpr_bitflags_free(b->known);
+        FUNC_IF(mpr_bitflags_free, b->known);
     }
     free(v->inst);
     free(v);
@@ -182,7 +186,7 @@ int mpr_value_remove_inst(mpr_value v, unsigned int idx)
     b = &v->inst[idx];
     free(b->samps);
     free(b->times);
-    mpr_bitflags_free(b->known);
+    FUNC_IF(mpr_bitflags_free, b->known);
     if (b->pos >= 0)
         --v->num_active_inst;
     for (i = idx + 1; i < v->num_inst; i++) {
