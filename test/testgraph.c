@@ -72,8 +72,6 @@ int main(int argc, char **argv)
     }
     lo_message_add_string(lom, "@port");
     lo_message_add_int32(lom, 1234);
-    lo_message_add_string(lom, "@host");
-    lo_message_add_string(lom, "localhost");
     lo_message_add_string(lom, "@num_inputs");
     lo_message_add_int32(lom, 2);
     lo_message_add_string(lom, "@num_outputs");
@@ -87,7 +85,7 @@ int main(int argc, char **argv)
         goto done;
     }
 
-    mpr_graph_add_dev(graph, "testgraph.1", props, 1);
+    mpr_graph_add_dev(graph, "testgraph.1", props, "localhost", 1);
 
     mpr_msg_free(props);
     lo_message_free(lom);
@@ -99,8 +97,6 @@ int main(int argc, char **argv)
     }
     lo_message_add_string(lom, "@port");
     lo_message_add_int32(lom, 1234);
-    lo_message_add_string(lom, "@host");
-    lo_message_add_string(lom, "localhost");
     lo_message_add_string(lom, "@num_inputs");
     lo_message_add_int32(lom, 2);
     lo_message_add_string(lom, "@num_outputs");
@@ -114,7 +110,7 @@ int main(int argc, char **argv)
         goto done;
     }
 
-    mpr_graph_add_dev(graph, "testgraph__.2", props, 1);
+    mpr_graph_add_dev(graph, "testgraph__.2", props, "localhost", 1);
 
     mpr_msg_free(props);
     lo_message_free(lom);
@@ -126,8 +122,6 @@ int main(int argc, char **argv)
     }
     lo_message_add_string(lom, "@port");
     lo_message_add_int32(lom, 3000);
-    lo_message_add_string(lom, "@host");
-    lo_message_add_string(lom, "192.168.0.100");
 
     if (!(props = mpr_msg_parse_props(lo_message_get_argc(lom),
                                       lo_message_get_types(lom),
@@ -137,7 +131,7 @@ int main(int argc, char **argv)
         goto done;
     }
 
-    mpr_graph_add_dev(graph, "testgraph.3", props, 1);
+    mpr_graph_add_dev(graph, "testgraph.3", props, "192.168.0.100", 1);
 
     mpr_msg_free(props);
     lo_message_free(lom);
@@ -149,8 +143,6 @@ int main(int argc, char **argv)
     }
     lo_message_add_string(lom, "@port");
     lo_message_add_int32(lom, 5678);
-    lo_message_add_string(lom, "@host");
-    lo_message_add_string(lom, "192.168.0.100");
 
     if (!(props = mpr_msg_parse_props(lo_message_get_argc(lom),
                                       lo_message_get_types(lom),
@@ -160,7 +152,7 @@ int main(int argc, char **argv)
         goto done;
     }
 
-    mpr_graph_add_dev(graph, "testgraph__.4", props, 1);
+    mpr_graph_add_dev(graph, "testgraph__.4", props, "192.168.0.100", 1);
 
     mpr_msg_free(props);
     lo_message_free(lom);

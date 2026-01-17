@@ -38,10 +38,12 @@ mpr_link mpr_graph_add_link(mpr_graph g, mpr_dev dev1, mpr_dev dev2);
 /*! Add or update a device entry in the graph using parsed message parameters.
  *  \param g            The graph to operate on.
  *  \param dev_name     The name of the device.
- *  \param msg          The parsed message parameters containing new metadata.
+ *  \param props        The parsed properties extracted from the msg.
+ *  \param host         The host name extracted from received messages.
  *  \param force        1 to force addition of device, 0 to follow autosubscribe flags
  *  \return             Pointer to the device. */
-mpr_dev mpr_graph_add_dev(mpr_graph g, const char *dev_name, mpr_msg msg, int force);
+mpr_dev mpr_graph_add_dev(mpr_graph g, const char *dev_name, mpr_msg props,
+                          const char *host, int force);
 
 /*! Add or update a signal entry in the graph using parsed message parameters.
  *  \param g            The graph to operate on.

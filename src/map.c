@@ -645,7 +645,7 @@ static int add_scope(mpr_map m, const char *name)
         }
     }
     else {
-        d = mpr_graph_add_dev(m->obj.graph, name, 0, 1);
+        d = mpr_graph_add_dev(m->obj.graph, name, NULL, NULL, 1);
         for (i = 0; i < m->num_scopes; i++) {
             if (m->scopes[i] && mpr_obj_get_id((mpr_obj)m->scopes[i]) == mpr_obj_get_id((mpr_obj)d))
                 return 0;

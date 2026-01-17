@@ -977,7 +977,7 @@ static int mpr_dev_update_linked(mpr_dev dev, mpr_msg_atom a)
         /* Add any new links */
         for (i = 0; i < num; i++) {
             mpr_dev rem;
-            if ((rem = mpr_graph_add_dev(dev->obj.graph, &link_list[i]->s, 0, 1)))
+            if ((rem = mpr_graph_add_dev(dev->obj.graph, &link_list[i]->s, NULL, NULL, 1)))
                 updated += mpr_dev_add_link(dev, rem);
         }
     }
@@ -993,6 +993,10 @@ int mpr_dev_set_from_msg(mpr_dev dev, mpr_msg m)
     for (i = 0; i < num; i++) {
         mpr_msg_atom a = mpr_msg_get_atom(m, i);
         switch (MASK_PROP_BITFLAGS(mpr_msg_atom_get_prop(a))) {
+            case MPR_PROP_HOST: {
+                /* ignore self-reported IP addresses */
+                break;
+            }
             case MPR_PROP_LINKED: {
                 if (!dev->obj.is_local)
                     updated += mpr_dev_update_linked(dev, a);

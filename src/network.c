@@ -493,7 +493,7 @@ void mpr_net_add_dev(mpr_net net, mpr_local_dev dev)
     mpr_obj_set_prop((mpr_obj)dev, MPR_PROP_PORT, NULL, 1, MPR_INT32, &port, 1);
     url = lo_server_get_url(net->servers[server_idx]);
     host = lo_url_get_hostname(url);
-    mpr_obj_set_prop((mpr_obj)dev, MPR_PROP_HOST, NULL, 1, MPR_STR, host, 1);
+    mpr_obj_set_prop((mpr_obj)dev, MPR_PROP_HOST, NULL, 1, MPR_STR, host, 0);
     // TODO: check this on windows!
     free(host);
 
@@ -1188,8 +1188,14 @@ static int handler_dev(const char *path, const char *types, lo_arg **av, int ac,
 
     trace_net(net);
 
+    /* Find the sender's hostname */
+    a = lo_message_get_source(msg);
+    host = lo_address_get_hostname(a);
+
+    /* Extract message properties */
     props = mpr_msg_parse_props(ac-1, &types[1], &av[1]);
-    remote = mpr_graph_add_dev(graph, name, props, 0);
+
+    remote = mpr_graph_add_dev(graph, name, props, host, 0);
     if (!remote || !net->devs)
         goto done;
     TRACE_NET_RETURN_UNLESS(!mpr_obj_get_is_local((mpr_obj)remote), 0,
@@ -1218,14 +1224,12 @@ static int handler_dev(const char *path, const char *types, lo_arg **av, int ac,
         mpr_list_free(cpy);
     }
 
-    a = lo_message_get_source(msg);
     if (!a) {
         trace("  can't perform /linkTo, address unknown\n");
         goto done;
     }
 
-    /* Find the sender's hostname */
-    host = lo_address_get_hostname(a);
+    /* Find the sender's port */
     admin_port = lo_address_get_port(a);
     if (!host) {
         trace("  can't perform /linkTo, host unknown\n");

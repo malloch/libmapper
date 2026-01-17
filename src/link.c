@@ -133,7 +133,6 @@ void mpr_link_connect(mpr_link link, const char *host, int admin_port, int data_
     if (!link->is_local_only) {
         char str[16];
         mpr_tbl tbl = mpr_obj_get_prop_tbl((mpr_obj)link->devs[LINK_REMOTE_DEV]);
-        mpr_tbl_add_record(tbl, MPR_PROP_HOST, NULL, 1, MPR_STR, host, MOD_REMOTE);
         mpr_tbl_add_record(tbl, MPR_PROP_PORT, NULL, 1, MPR_INT32, &data_port, MOD_REMOTE);
         sprintf(str, "%d", data_port);
         link->addr.udp = lo_address_new(host, str);

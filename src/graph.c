@@ -485,7 +485,7 @@ static mpr_subscription get_subscription(mpr_graph g, mpr_dev d)
     return 0;
 }
 
-mpr_dev mpr_graph_add_dev(mpr_graph g, const char *name, mpr_msg msg, int force)
+mpr_dev mpr_graph_add_dev(mpr_graph g, const char *name, mpr_msg props, const char *host, int force)
 {
     const char *no_slash = mpr_path_skip_slash(name);
     mpr_dev dev = mpr_graph_get_dev_by_name(g, no_slash);
@@ -518,14 +518,17 @@ mpr_dev mpr_graph_add_dev(mpr_graph g, const char *name, mpr_msg msg, int force)
 
         if (!mpr_dev_get_is_subscribed(dev) && g->autosub)
             mpr_graph_subscribe(g, dev, g->autosub, -1);
-        if (!msg) {
+        if (!props) {
             /* this is a local device, wait for graph_housekeeping to call any callbacks */
             return dev;
         }
     }
 
     if (dev) {
-        updated = mpr_dev_set_from_msg(dev, msg);
+        updated = mpr_dev_set_from_msg(dev, props);
+        if (host) {
+            mpr_obj_set_prop((mpr_obj)dev, MPR_PROP_HOST, NULL, 1, MPR_STR, host, 0);
+        }
 #ifdef DEBUG
         if (!rc) {
             trace_graph(g, "updated %d props for device ", updated);
@@ -608,7 +611,7 @@ mpr_sig mpr_graph_add_sig(mpr_graph g, const char *name, const char *dev_name, m
             return sig;
     }
     else
-        dev = mpr_graph_add_dev(g, dev_name, 0, 1);
+        dev = mpr_graph_add_dev(g, dev_name, NULL, NULL, 1);
 
     if (!sig) {
         int num_inst = 1;
