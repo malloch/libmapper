@@ -78,7 +78,12 @@ def setup(d):
     print('signal status:', sig.get_status())
 
     # try adding a signal with the same name
-    sig = d.add_signal(mpr.Signal.Direction.INCOMING, "outsig", 4, mpr.Type.FLOAT)
+    sig2 = d.add_signal(mpr.Signal.Direction.INCOMING, "outsig", 4, mpr.Type.FLOAT)
+
+    print('Should be true:', sig == sig2)
+
+    sig = d.add_signal(mpr.Signal.Direction.INCOMING, "removeme", 1, mpr.Type.INT32)
+    d.remove_signal(sig)
 
     print('setup done!')
 

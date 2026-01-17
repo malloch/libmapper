@@ -7,8 +7,10 @@
 
 from pyo import *
 import math
+import signal
 try:
     import libmapper as mpr
+    print('Using installed libmapper module.')
 except:
     try:
         # Try the "bindings/python" directory, relative to the location of this
@@ -17,10 +19,20 @@ except:
                         os.path.join(os.path.join(os.getcwd(),
                                                   os.path.dirname(sys.argv[0])),
                                      '../bindings/python'))
+        print('Using repository libmapper module.')
         import libmapper as mpr
     except:
         print('Error importing libmapper module.')
         sys.exit(1)
+
+done = False
+
+def handler_done(signum, frame):
+    global done
+    done = True
+
+signal.signal(signal.SIGINT, handler_done)
+signal.signal(signal.SIGTERM, handler_done)
 
 s = Server().boot()
 s.start()
@@ -43,27 +55,31 @@ ampSig = None
 dutySig = None
 
 def release_instance(i):
+    print('releasing instance', i)
     amp[i].setValue(0)
-    freqSig.release_instance(i)
-    ampSig.release_instance(i)
-    dutySig.release_instance(i)
+    freqSig.Instance(i).release()
+    ampSig.Instance(i).release()
+    dutySig.Instance(i).release()
 
 def freqHandler(s, e, i, v, t):
-    if e == mpr.Signal.Event.UPDATE:
+    if e == mpr.Object.Event.REMOTE_UPDATE:
         freq[i].setValue(v)
-    elif e == mpr.Signal.Event.REL_UPSTRM or e == mpr.Signal.Event.INST_OFLW:
+    elif e == mpr.Object.Event.UPSTREAM_RELEASE or e == mpr.Object.Event.OVERFLOW:
+        amp[i].setValue(0)
         release_instance(i)
 
 def ampHandler(s, e, i, v, t):
-    if e == mpr.Signal.Event.UPDATE:
+    if e == mpr.Object.Event.REMOTE_UPDATE:
         amp[i].setValue(v)
-    elif e == mpr.Signal.Event.REL_UPSTRM or e == mpr.Signal.Event.INST_OFLW:
+    elif e == mpr.Object.Event.UPSTREAM_RELEASE or e == mpr.Object.Event.OVERFLOW:
+        amp[i].setValue(0)
         release_instance(i)
 
 def dutyHandler(s, e, i, v, t):
-    if e == mpr.Signal.Event.UPDATE:
+    if e == mpr.Object.Event.REMOTE_UPDATE:
         duty[i].setValue(v)
-    elif e == mpr.Signal.Event.REL_UPSTRM or e == mpr.Signal.Event.INST_OFLW:
+    elif e == mpr.Object.Event.UPSTREAM_RELEASE or e == mpr.Object.Event.OVERFLOW:
+        amp[i].setValue(0)
         release_instance(i)
 
 try:
@@ -72,9 +88,12 @@ try:
     ampSig = dev.add_signal(mpr.Signal.Direction.INCOMING, "amplitude", 1, mpr.Type.FLOAT, "normalized", 0, 1, numInst, ampHandler)
     dutySig = dev.add_signal(mpr.Signal.Direction.INCOMING, "duty", 1, mpr.Type.FLOAT, "normalized", 0, 1, numInst, dutyHandler)
 
-    while True:
+    while not done:
         dev.poll(5)
 
 finally:
+    print('stopping pyo server...')
     s.stop()
-    del dev
+    print('freeing libmapper device...')
+    dev.free()
+    print('done')

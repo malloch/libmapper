@@ -7,6 +7,7 @@
 
 from pyo import *
 import math
+import signal
 try:
     import libmapper as mpr
 except:
@@ -21,6 +22,15 @@ except:
     except:
         print('Error importing libmapper module.')
         sys.exit(1)
+
+done = False
+
+def handler_done(signum, frame):
+    global done
+    done = True
+
+signal.signal(signal.SIGINT, handler_done)
+signal.signal(signal.SIGTERM, handler_done)
 
 s = Server().boot()
 s.start()
@@ -38,9 +48,9 @@ try:
     dev.add_signal(mpr.Signal.Direction.INCOMING, "amplitude", 1, mpr.Type.FLOAT, "normalized", 0, 1, None, lambda s,e,i,v,t: amp.setValue(v))
     dev.add_signal(mpr.Signal.Direction.INCOMING, "duty", 1, mpr.Type.FLOAT, "normalized", 0, 1, None, lambda s,e,i,v,t: duty.setValue(v))
 
-    while True:
+    while not done:
         dev.poll(5)
 
 finally:
     s.stop()
-    del dev
+    dev.free()

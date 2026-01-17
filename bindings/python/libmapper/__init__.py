@@ -17,13 +17,12 @@ For more information please visit [libmapper.org](libmapper.org)
 Classes and subclasses:
     Object: A generic representation of libmapper objects (Devices, Signals, Maps, and Graphs).
         Status (Enum): Describes the possible statuses for a libmapper object.
+        Event (IntFlag): The set of possible object events.
 
     Device: A named collection of Signals (and possibly other metadata).
 
     Signal: A named datastream; an input or output for a Device.
         Direction (IntFlag): The set of possible Signal directions, used for querying.
-        Event (IntFlag): The set of possible signal events.
-        InstanceStatus (IntFlag): The set of possible status flags for a signal instance.
         Stealing (Enum): The set of possible instance-stealing modes.
 
     Map: A dataflow configuration defined between a set of signals.
@@ -31,7 +30,6 @@ Classes and subclasses:
         Protocol (Enum): The set of possible network protocols used by a Map.
 
     Graph: A queriable representation of the distributed network of libmapper peers.
-        Event (Enum): The set of possible graph events, used to inform callbacks.
 
     Time: An NTP timetag used for communication and synchronization.
     List: A list of Objects (Devices, Signals, or Maps) resulting from a query.
