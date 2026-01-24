@@ -226,7 +226,7 @@ int mpr_slot_alloc_values(mpr_local_slot slot, unsigned int num_inst, int hist_s
     RETURN_ARG_UNLESS(type && len, 0);
 
 #ifdef DEBUG
-    trace("(re)allocating value memory for slot ");
+    printf("(re)allocating value memory for slot ");
     mpr_prop_print(1, MPR_SIG, slot->sig);
     printf("\n");
 #endif

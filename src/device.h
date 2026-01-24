@@ -143,4 +143,7 @@ void mpr_dev_remove_id_map(mpr_local_dev dev, int group, mpr_id_map rem);
 void mpr_local_dev_print_id_maps(mpr_local_dev dev);
 #endif
 
+double mpr_dev_get_offset(mpr_dev dev);
+double mpr_dev_set_offset(mpr_dev dev, double offset, double weight);
+
 #endif /* __MPR_DEVICE_H__ */

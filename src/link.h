@@ -53,4 +53,6 @@ int mpr_link_housekeeping(mpr_link link, mpr_time now);
 
 int mpr_link_get_dev_dir(mpr_link link, mpr_dev dev);
 
+void mpr_link_update_offset(mpr_link link, double diff);
+
 #endif /* __MPR_LINK_H__ */

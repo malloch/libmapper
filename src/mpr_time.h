@@ -11,7 +11,7 @@ typedef lo_timetag mpr_time;
 /*! Get the current time. */
 double mpr_get_current_time(void);
 
-/*! Return the difference in seconds between two mpr_times.
+/*! Return the difference in seconds between two `mpr_time` values.
  *  \param minuend      The minuend.
  *  \param subtrahend   The subtrahend.
  *  \return             The difference a-b in seconds. */

@@ -30,12 +30,11 @@ typedef struct _mpr_sync_time_t {
 
 typedef struct _mpr_sync_clock_t {
     double rate;
-    double offset;
     double latency;
     double jitter;
     mpr_sync_time_t sent;
     mpr_sync_time_t rcvd;
-    int new;
+    double weight;
 } mpr_sync_clock_t, *mpr_sync_clock;
 
 typedef struct _mpr_link {
@@ -107,10 +106,14 @@ void mpr_link_init(mpr_link link, mpr_graph g, mpr_dev dev1, mpr_dev dev2)
     }
     else {
         mpr_time t;
-        link->clock.new = 1;
+        link->clock.weight = 1.0;
+        link->clock.rate = 1;
+        link->clock.latency = 0;
+        link->clock.jitter = 0;
         link->clock.sent.msg_id = 0;
         link->clock.rcvd.msg_id = -1;
         mpr_time_set(&t, MPR_NOW);
+        mpr_time_add_dbl(&t, mpr_dev_get_offset(link->devs[LINK_LOCAL_DEV]));
         link->clock.rcvd.time.sec = t.sec + 10;
     }
     /* request missing metadata */
@@ -148,6 +151,12 @@ void mpr_link_connect(mpr_link link, const char *host, int admin_port, int data_
     }
     memset(link->bundles, 0, sizeof(mpr_bundle_t) * NUM_BUNDLES);
     mpr_dev_add_link(link->devs[LINK_LOCAL_DEV], link->devs[LINK_REMOTE_DEV]);
+
+    {
+        mpr_time now;
+        mpr_time_set(&now, MPR_NOW);
+        mpr_link_housekeeping(link, now);
+    }
 }
 
 void mpr_link_free(mpr_link link)
@@ -169,11 +178,26 @@ void mpr_link_free(mpr_link link)
 void mpr_link_add_msg(mpr_link link, const char *path, lo_message msg, mpr_time t, mpr_proto proto)
 {
     lo_bundle *b;
-    uint8_t idx = link->bundle_idx;
+    uint8_t bundle_idx = link->bundle_idx;
     RETURN_UNLESS(msg);
 
+    /* add offset to timetag */
+    /* retrieve clock offset for remote device */
+    double offset = mpr_dev_get_offset(link->devs[LINK_REMOTE_DEV]);
+    if (link->is_local_only) {
+        offset -= mpr_dev_get_offset(link->devs[LINK_LOCAL_DEV]);
+        if (MPR_PROTO_UDP == proto) {
+            offset *= -1;
+        }
+    }
+
+    /* TODO: consider adding jitter compensation here */
+    /* offset += link->clock.jitter; */
+
+    mpr_time_add_dbl(&t, offset);
+
     /* add message to existing bundles */
-    b = (proto == MPR_PROTO_UDP) ? &link->bundles[idx].udp : &link->bundles[idx].tcp;
+    b = (proto == MPR_PROTO_UDP) ? &link->bundles[bundle_idx].udp : &link->bundles[bundle_idx].tcp;
     if (!(*b))
         *b = lo_bundle_new(t);
     lo_bundle_add_message(*b, path, msg);
@@ -284,9 +308,14 @@ static void send_ping(mpr_link link, mpr_time now)
     if (link->addr.admin) {
         mpr_sync_clock clk = &link->clock;
         mpr_net net = mpr_graph_get_net(link->obj.graph);
-        double elapsed = (clk->rcvd.time.sec ? mpr_time_get_diff(now, clk->rcvd.time) : 0);
+        double elapsed;
         NEW_LO_MSG(msg, ;);
-        mpr_net_use_mesh(net, link->addr.admin);
+
+        elapsed = (clk->rcvd.time.sec ? mpr_time_get_diff(now, clk->rcvd.time) : 0);
+        if (elapsed < 0)
+            elapsed = 0;
+
+        mpr_net_use_mesh(net, link->addr.admin, &now);
         lo_message_add_int64(msg, mpr_obj_get_id((mpr_obj)link->devs[LINK_LOCAL_DEV]));
         if (++clk->sent.msg_id < 0)
             clk->sent.msg_id = 0;
@@ -317,6 +346,7 @@ void mpr_link_add_map(mpr_link link, mpr_map map)
     else {
         mpr_time time;
         mpr_time_set(&time, MPR_NOW);
+        mpr_time_add_dbl(&time, mpr_dev_get_offset(link->devs[LINK_LOCAL_DEV]));
         send_ping(link, time);
     }
     mpr_tbl_set_is_dirty(link->obj.props.synced, 1);
@@ -336,58 +366,78 @@ void mpr_link_remove_map(mpr_link link, mpr_map map)
     --link->num_maps;
     link->maps = realloc(link->maps, link->num_maps * sizeof(mpr_map));
 
-    if (link->is_local_only && !link->num_maps)
+    if (link->is_local_only && !link->num_maps) {
         mpr_time_set(&link->clock.rcvd.time, MPR_NOW);
+        mpr_time_add_dbl(&link->clock.rcvd.time, mpr_dev_get_offset(link->devs[LINK_LOCAL_DEV]));
+    }
 }
 
-void mpr_link_update_clock(mpr_link link, mpr_time then, mpr_time now,
+void mpr_link_update_clock(mpr_link link, mpr_time time_remote, mpr_time time_local,
                            int msg_id, int sent_id, double elapsed_remote)
 {
     mpr_sync_clock clk = &link->clock;
-    if (sent_id == clk->sent.msg_id) {
-        /* total elapsed time since ping sent */
-        double elapsed_local = mpr_time_get_diff(now, clk->sent.time);
-        /* assume symmetrical latency */
-        double latency = (elapsed_local - elapsed_remote) * 0.5;
-        /* difference between remote and local clocks (latency compensated) */
-        double offset = mpr_time_get_diff(now, then) - latency;
 
+    /* add local clock offset */
+    mpr_time_add_dbl(&time_local, mpr_dev_get_offset(link->devs[LINK_LOCAL_DEV]));
+
+    if (1.0 == clk->weight && elapsed_remote <= 0.0) {
+        /* link pings have not yet been exchanged */
+        /* store approximate device clock offset without symmetric latency estimate */
+        double offset = mpr_time_get_diff(time_remote, time_local);
+        mpr_dev_set_offset(link->devs[LINK_REMOTE_DEV], offset, 1.0);
+    }
+    else if (sent_id == clk->sent.msg_id && (elapsed_remote < 10)) {
+        double offset, elapsed_local, latency;
+
+        /* total elapsed time since ping sent */
+        elapsed_local = mpr_time_get_diff(time_local, clk->sent.time);
+
+        /* assume symmetrical latency */
+        latency = (elapsed_local - elapsed_remote) * 0.5;
         if (latency < 0) {
             trace("error: link latency %f cannot be < 0.\n", latency);
             latency = 0;
         }
 
-        if (1 == clk->new) {
-            clk->offset = offset;
-            clk->latency = latency;
-            clk->jitter = 0;
-            clk->new = 0;
-        }
-        else {
-            clk->jitter = (clk->jitter * 0.9 + fabs(clk->latency - latency) * 0.1);
-            if (offset > clk->offset) {
-                /* remote time is in the future */
-                clk->offset = offset;
-            }
-            else if (   latency < clk->latency + clk->jitter
-                     && latency > clk->latency - clk->jitter) {
-                clk->offset = clk->offset * 0.9 + offset * 0.1;
-                clk->latency = clk->latency * 0.9 + latency * 0.1;
-            }
-        }
+        /* difference between remote and local clocks (latency compensated) */
+        offset = mpr_time_get_diff(time_remote, time_local) - latency;
+
+        clk->jitter += (clk->jitter - fabs(clk->latency - latency)) * clk->weight;
+        clk->latency += (clk->latency - latency) * clk->weight;
+        if (mpr_dev_set_offset(link->devs[LINK_REMOTE_DEV], offset, clk->weight) < clk->jitter)
+            clk->weight *= 2.0;
+        else
+            clk->weight *= 0.5;
+        if (clk->weight > 1.0)
+            clk->weight = 1.0;
+        if (clk->weight < 0.01)
+            clk->weight = 0.01;
     }
 
     /* update sync status */
     if (link->is_local_only)
         return;
-    mpr_time_set(&clk->rcvd.time, now);
+    mpr_time_set(&clk->rcvd.time, time_local);
     clk->rcvd.msg_id = msg_id;
+}
+
+void mpr_link_update_offset(mpr_link link, double diff)
+{
+    mpr_sync_clock clk = &link->clock;
+    /* adjust clock ping times */
+    if (clk->sent.time.sec)
+        mpr_time_add_dbl(&clk->sent.time, diff);
+    if (clk->rcvd.time.sec)
+        mpr_time_add_dbl(&clk->rcvd.time, diff);
 }
 
 int mpr_link_housekeeping(mpr_link link, mpr_time now)
 {
     mpr_sync_clock clk = &link->clock;
-    double elapsed = (clk->rcvd.time.sec ? mpr_time_get_diff(now, clk->rcvd.time) : 0);
+    double elapsed;
+
+    mpr_time_add_dbl(&now, mpr_dev_get_offset(link->devs[LINK_LOCAL_DEV]));
+    elapsed = (clk->rcvd.time.sec ? mpr_time_get_diff(now, clk->rcvd.time) : 0);
 
     if (elapsed > TIMEOUT_SEC) {
         if (clk->rcvd.msg_id > 0) {

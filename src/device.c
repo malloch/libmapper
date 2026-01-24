@@ -29,6 +29,7 @@ extern const char* net_msg_strings[NUM_MSG_STRINGS];
     mpr_dev *linked;                                                    \
     char *name;         /*!< The full name for this device, or zero. */ \
     mpr_time synced;    /*!< Timestamp of last sync. */                 \
+    double clk_offset;  /*!< Clock offset in seconds */                 \
     int prefix_len;     /*!< Length of the prefix string. */            \
     int ordinal;                                                        \
     int num_inputs;     /*!< Number of associated input signals. */     \
@@ -561,20 +562,34 @@ int mpr_dev_stop_polling(mpr_dev dev)
 
 mpr_time mpr_dev_get_time(mpr_dev dev)
 {
-    RETURN_ARG_UNLESS(dev && dev->obj.is_local, MPR_NOW);
-    if (((mpr_local_dev)dev)->time_is_stale)
-        mpr_dev_set_time(dev, MPR_NOW);
-    return ((mpr_local_dev)dev)->time;
+    mpr_time t;
+
+    mpr_time_set(&t, MPR_NOW);
+    mpr_time_add_dbl(&t, dev->clk_offset);
+
+    if (dev->obj.is_local && ((mpr_local_dev)dev)->time_is_stale)
+        mpr_dev_set_time(dev, t);
+    return t;
 }
 
 void mpr_dev_set_time(mpr_dev dev, mpr_time time)
 {
     mpr_local_dev ldev = (mpr_local_dev)dev;
+    mpr_time now;
+    mpr_time_set(&now, MPR_NOW);
+
     RETURN_UNLESS(dev && dev->obj.is_local && memcmp(&time, &(ldev)->time, sizeof(mpr_time)));
+
+    mpr_dev_set_offset(dev, mpr_time_as_dbl(time) - mpr_time_as_dbl(now),
+                       dev->clk_offset ? 0.1 : 1.0);
+
     if (!ldev->polling)
         process_outgoing_maps(ldev);
-    mpr_time_set(&ldev->time, time);
-    ldev->time_is_stale = 0;
+
+    if (((mpr_obj)dev)->is_local) {
+        mpr_time_set(&ldev->time, time);
+        ldev->time_is_stale = 0;
+    }
 }
 
 void mpr_dev_reserve_id_map(mpr_local_dev dev)
@@ -1036,6 +1051,7 @@ void mpr_dev_manage_subscriber(mpr_local_dev dev, lo_address addr, int flags,
     const char *port = lo_address_get_port(addr);
     RETURN_UNLESS(ip && port);
     mpr_time_set(&t, MPR_NOW);
+    mpr_time_add_dbl(&t, dev->clk_offset);
 
     if (timeout_sec >= 0) {
         while (*s) {
@@ -1089,7 +1105,7 @@ void mpr_dev_manage_subscriber(mpr_local_dev dev, lo_address addr, int flags,
 
     /* bring new subscriber up to date */
     net = mpr_graph_get_net(dev->obj.graph);
-    mpr_net_use_mesh(net, addr);
+    mpr_net_use_mesh(net, addr, NULL);
     mpr_dev_send_state((mpr_dev)dev, MSG_DEV);
     mpr_net_send(net);
 
@@ -1099,7 +1115,7 @@ void mpr_dev_manage_subscriber(mpr_local_dev dev, lo_address addr, int flags,
             dir |= MPR_DIR_IN;
         if (flags & MPR_SIG_OUT)
             dir |= MPR_DIR_OUT;
-        mpr_net_use_mesh(net, addr);
+        mpr_net_use_mesh(net, addr, NULL);
         mpr_dev_send_sigs(dev, dir, 1);
         mpr_net_send(net);
     }
@@ -1109,7 +1125,7 @@ void mpr_dev_manage_subscriber(mpr_local_dev dev, lo_address addr, int flags,
             dir |= MPR_DIR_IN;
         if (flags & MPR_MAP_OUT)
             dir |= MPR_DIR_OUT;
-        mpr_net_use_mesh(net, addr);
+        mpr_net_use_mesh(net, addr, NULL);
         mpr_dev_send_maps(dev, dir, MSG_MAPPED);
         mpr_net_send(net);
     }
@@ -1173,28 +1189,30 @@ void mpr_local_dev_send_to_subscribers(mpr_local_dev dev, lo_bundle bundle,
 {
     mpr_subscriber *sub = &dev->subscribers;
     mpr_time t;
-    if (*sub)
+    if (*sub) {
         mpr_time_set(&t, MPR_NOW);
-    while (*sub) {
-        if ((*sub)->lease_exp < t.sec || !(*sub)->flags) {
-            /* subscription expired, remove from subscriber list */
+        mpr_time_add_dbl(&t, dev->clk_offset);
+        while (*sub) {
+            if ((*sub)->lease_exp < t.sec || !(*sub)->flags) {
+                /* subscription expired, remove from subscriber list */
 #ifdef DEBUG
-            char *addr = lo_address_get_url((*sub)->addr);
-            trace_dev(dev, "removing expired subscription from %s\n", addr);
+                char *addr = lo_address_get_url((*sub)->addr);
+                trace_dev(dev, "removing expired subscription from %s\n", addr);
 #ifndef WIN32
-            /* For some reason Windows thinks return of lo_address_get_url() should not be freed */
-            free(addr);
+                /* For some reason Windows thinks return of lo_address_get_url() should not be freed */
+                free(addr);
 #endif /* WIN32 */
 #endif /* DEBUG */
-            mpr_subscriber temp = *sub;
-            *sub = temp->next;
-            FUNC_IF(lo_address_free, temp->addr);
-            free(temp);
-            continue;
+                mpr_subscriber temp = *sub;
+                *sub = temp->next;
+                FUNC_IF(lo_address_free, temp->addr);
+                free(temp);
+                continue;
+            }
+            if ((*sub)->flags & msg_type)
+                lo_send_bundle_from((*sub)->addr, from, bundle);
+            sub = &(*sub)->next;
         }
-        if ((*sub)->flags & msg_type)
-            lo_send_bundle_from((*sub)->addr, from, bundle);
-        sub = &(*sub)->next;
     }
 }
 
@@ -1290,4 +1308,27 @@ void mpr_local_dev_handler_logout(mpr_local_dev dev, mpr_dev remote, const char 
         if (diff >= 0 && diff < 8)
             dev->ordinal_allocator.hints[diff] = 0;
     }
+}
+
+double mpr_dev_get_offset(mpr_dev dev)
+{
+    return dev->clk_offset;
+}
+
+double mpr_dev_set_offset(mpr_dev dev, double offset, double weight)
+{
+    mpr_list links;
+    double diff = (offset - dev->clk_offset);
+
+    dev->clk_offset += diff * weight;
+
+    if (dev->obj.is_local) {
+        /* update ping records for each link */
+        links = mpr_dev_get_links(dev, MPR_DIR_UNDEFINED);
+        while (links) {
+            mpr_link_update_offset((mpr_link)*links, diff);
+            links = mpr_list_get_next(links);
+        }
+    }
+    return diff;
 }

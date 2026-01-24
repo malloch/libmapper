@@ -53,7 +53,7 @@ void mpr_net_use_local(mpr_net n);
 
 void mpr_net_use_bus(mpr_net n);
 
-void mpr_net_use_mesh(mpr_net n, lo_address addr);
+void mpr_net_use_mesh(mpr_net n, lo_address addr, mpr_time *time);
 
 void mpr_net_use_subscribers(mpr_net net, mpr_local_dev dev, int type);
 

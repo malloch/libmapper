@@ -440,13 +440,16 @@ void mpr_map_free(mpr_map map)
             mpr_time time;
             mpr_time_set(&time, MPR_NOW);
             if (lmap->locality & MPR_LOC_DST) {
+                mpr_sig sig = mpr_slot_get_sig(map->dst);
+                mpr_time_add_dbl(&time, mpr_dev_get_offset(mpr_sig_get_dev(sig)));
                 mpr_net_set_bundle_time(mpr_graph_get_net(lmap->obj.graph), time);
                 lo_message msg = mpr_slot_get_msg(lmap->dst);
                 mpr_sig_osc_handler(NULL, lo_message_get_types(msg), lo_message_get_argv(msg),
-                                    lo_message_get_argc(msg), msg, (void*)mpr_slot_get_sig(map->dst));
+                                    lo_message_get_argc(msg), msg, (void*)sig);
             }
             else {
                 mpr_local_dev dev = (mpr_local_dev)mpr_sig_get_dev(mpr_slot_get_sig(map->src[0]));
+                mpr_time_add_dbl(&time, mpr_dev_get_offset((mpr_dev)dev));
                 mpr_local_slot_send_msg(lmap->dst, NULL, time, MPR_PROTO_TCP);
                 mpr_local_dev_set_sending(dev);
             }
@@ -1087,13 +1090,13 @@ void mpr_map_alloc_values(mpr_local_map m, int quiet)
         mpr_net net = mpr_graph_get_net(m->obj.graph);
         if (MPR_DIR_OUT == mpr_slot_get_dir((mpr_slot)m->dst)) {
             /* Inform remote destination */
-            mpr_net_use_mesh(net, mpr_link_get_admin_addr(mpr_slot_get_link((mpr_slot)m->dst)));
+            mpr_net_use_mesh(net, mpr_link_get_admin_addr(mpr_slot_get_link((mpr_slot)m->dst)), NULL);
             mpr_map_send_state((mpr_map)m, -1, MSG_MAPPED, 0);
         }
         else {
             /* Inform remote sources */
             for (i = 0; i < m->num_src; i++) {
-                mpr_net_use_mesh(net, mpr_link_get_admin_addr(mpr_slot_get_link((mpr_slot)m->src[i])));
+                mpr_net_use_mesh(net, mpr_link_get_admin_addr(mpr_slot_get_link((mpr_slot)m->src[i])), NULL);
                 i = mpr_map_send_state((mpr_map)m, i, MSG_MAPPED, 0);
             }
         }
