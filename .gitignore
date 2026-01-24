@@ -95,6 +95,7 @@ test/testsignals
 test/testspeed
 test/teststealing
 test/testthread
+test/test_time_sync
 test/testunmap
 test/testvector
 ### VisualStudio ###
