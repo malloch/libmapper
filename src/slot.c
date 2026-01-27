@@ -94,10 +94,13 @@ void mpr_slot_free(mpr_slot slot)
         FUNC_IF(mpr_value_free, lslot->val);
         if (mpr_obj_get_is_local((mpr_obj)slot->sig))
             mpr_local_sig_remove_slot((mpr_local_sig)slot->sig, lslot, lslot->dir);
-        if (lslot->sending)
+        if (lslot->sending) {
+            /* message has already been added to a bundle */
             lo_message_decref(lslot->msg);
-        else
+        }
+        else {
             lo_message_free(lslot->msg);
+        }
     }
     free(slot);
 }
@@ -378,16 +381,17 @@ int mpr_slot_get_status(mpr_local_slot slot)
 
 void mpr_local_slot_send_msg(mpr_local_slot slot, lo_message msg, mpr_time time, mpr_proto proto)
 {
-    if (!msg) {
-        if (slot->num_msg > 0) {
-            msg = slot->msg;
-            slot->sending = 1;
+    if (slot->link) {
+        if (!msg) {
+            if (slot->num_msg > 0 && !slot->sending) {
+                msg = slot->msg;
+                slot->sending = 1;
+            }
+            else
+                return;
         }
-        else
-            return;
-    }
-    if (slot->link)
         mpr_link_add_msg(slot->link, mpr_sig_get_path((mpr_sig)slot->sig), msg, time, proto);
+    }
 }
 
 int mpr_slot_compare_names(mpr_slot l, mpr_slot r)

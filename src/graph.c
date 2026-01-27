@@ -664,7 +664,7 @@ void mpr_graph_remove_sig(mpr_graph g, mpr_sig s, mpr_graph_evt e)
 
 /**** Link records ****/
 
-mpr_link mpr_graph_add_link(mpr_graph g, mpr_dev dev1, mpr_dev dev2)
+mpr_link mpr_graph_add_link(mpr_graph g, mpr_dev dev1, mpr_dev dev2, int is_local)
 {
     mpr_link link;
     RETURN_ARG_UNLESS(dev1 && dev2, 0);
@@ -672,7 +672,7 @@ mpr_link mpr_graph_add_link(mpr_graph g, mpr_dev dev1, mpr_dev dev2)
     if (link)
         return link;
 
-    link = (mpr_link)mpr_list_add_item((void**)&g->links, mpr_link_get_struct_size(), 0);
+    link = (mpr_link)mpr_list_add_item((void**)&g->links, mpr_link_get_struct_size(), is_local);
     mpr_obj_init((mpr_obj)link, g, MPR_LINK);
     if (mpr_obj_get_is_local((mpr_obj)dev2))
         mpr_link_init(link, g, dev2, dev1);
@@ -760,8 +760,8 @@ mpr_map mpr_graph_add_map(mpr_graph g, mpr_id id, int num_src, const char **src_
         for (i = 0; i < num_src; i++) {
             src_sigs[i] = add_sig_from_whole_name(g, src_names[i]);
             RETURN_ARG_UNLESS(src_sigs[i], 0);
-            mpr_graph_add_link(g, mpr_sig_get_dev(dst_sig), mpr_sig_get_dev(src_sigs[i]));
             is_local += mpr_obj_get_is_local((mpr_obj)src_sigs[i]);
+            mpr_graph_add_link(g, mpr_sig_get_dev(dst_sig), mpr_sig_get_dev(src_sigs[i]), is_local);
         }
         is_local += mpr_obj_get_is_local((mpr_obj)dst_sig);
 
@@ -830,6 +830,7 @@ mpr_map mpr_graph_add_map(mpr_graph g, mpr_id id, int num_src, const char **src_
 void mpr_graph_remove_map(mpr_graph g, mpr_map m, mpr_graph_evt e)
 {
     RETURN_UNLESS(m);
+    mpr_map_process_before_free(m);
     mpr_list_remove_item((void**)&g->maps, m);
     if (mpr_obj_get_status((mpr_obj)m, 0) & MPR_STATUS_ACTIVE)
         mpr_graph_call_cbs(g, (mpr_obj)m, MPR_MAP, e);

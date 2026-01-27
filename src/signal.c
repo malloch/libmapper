@@ -181,6 +181,7 @@ static void process_maps(mpr_local_sig sig, int id_map_idx)
         RETURN_UNLESS(sig->use_inst);
         *locked = 1;
         for (i = 0; i < sig->num_maps_in; i++) {
+            mpr_proto proto;
             mpr_local_slot dst_slot = sig->slots_in[i];
             map = (mpr_local_map)mpr_slot_get_map((mpr_slot)dst_slot);
             if (   (mpr_obj_get_status((mpr_obj)map, 0) & (MPR_STATUS_ACTIVE | MPR_STATUS_REMOVED))
@@ -196,6 +197,13 @@ static void process_maps(mpr_local_sig sig, int id_map_idx)
             /* reset associated output memory */
             mpr_slot_set_value(dst_slot, inst_idx, NULL, time);
 
+            proto = mpr_map_get_protocol((mpr_map)map);
+            if (MPR_LOC_BOTH == mpr_map_get_locality((mpr_map)map)) {
+                /* sending upstream to should choose opposite link direction */
+                /* UDP -> TCP; TCP -> UDP */
+                proto = (MPR_NUM_PROTO - proto);
+            }
+
             for (j = 0; j < mpr_map_get_num_src((mpr_map)map); j++) {
                 mpr_local_slot src_slot = (mpr_local_slot)mpr_map_get_src_slot((mpr_map)map, j);
 
@@ -210,7 +218,7 @@ static void process_maps(mpr_local_sig sig, int id_map_idx)
                 /* send release to upstream */
                 mpr_slot_build_msg(src_slot, 0, 0, id_map);
                 /* TODO: consider calling this later for batch releases */
-                mpr_local_slot_send_msg(src_slot, NULL, time, mpr_map_get_protocol((mpr_map)map));
+                mpr_local_slot_send_msg(src_slot, NULL, time, proto);
             }
         }
         for (i = 0; i < sig->num_maps_out; i++) {

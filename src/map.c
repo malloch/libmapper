@@ -426,13 +426,12 @@ static void release_local_inst(mpr_local_map map, mpr_dev scope)
 
 }
 
-void mpr_map_free(mpr_map map)
+void mpr_map_process_before_free(mpr_map map)
 {
-    int i;
-    mpr_link link;
-
     if (map->obj.is_local) {
         mpr_local_map lmap = (mpr_local_map)map;
+        mpr_dev dst_dev = NULL;
+        int i;
 
         if (lmap->id_map.LID) {
             /* release map-generated instances */
@@ -477,6 +476,34 @@ void mpr_map_free(mpr_map map)
         else if (lmap->use_inst && (MPR_LOC_DST & lmap->locality))
             release_local_inst(lmap, NULL);
 
+        if (MPR_LOC_DST & lmap->locality) {
+            /* need to clear outgoing bundle since it may reference slot-owned lo_messages */
+            dst_dev = mpr_sig_get_dev(mpr_slot_get_sig(map->dst));
+            if (mpr_obj_get_is_local((mpr_obj)dst_dev)) {
+                mpr_dev_update_maps(dst_dev);
+            }
+        }
+        if (MPR_LOC_SRC & lmap->locality) {
+            /* need to clear outgoing bundle since it may reference slot-owned lo_messages */
+            int i;
+            for (i = 0; i < map->num_src; i++) {
+                mpr_dev src_dev = mpr_sig_get_dev(mpr_slot_get_sig(map->src[i]));
+                if (src_dev != dst_dev && mpr_obj_get_is_local((mpr_obj)src_dev)) {
+                    mpr_dev_update_maps(src_dev);
+                    break;
+                }
+            }
+        }
+    }
+}
+
+void mpr_map_free(mpr_map map)
+{
+    int i;
+    mpr_link link;
+
+    if (map->obj.is_local) {
+        mpr_local_map lmap = (mpr_local_map)map;
         /* one more case: if map is local only need to decrement num_maps in local map */
         /* map could still involve multiple local devices and links */
         if (MPR_LOC_BOTH == lmap->locality) {
@@ -2262,8 +2289,6 @@ mpr_loc mpr_local_map_get_process_loc_from_msg(mpr_local_map map, mpr_msg msg)
 
 mpr_proto mpr_map_get_protocol(mpr_map map)
 {
-    if (mpr_obj_get_is_local((mpr_obj)map) && ((mpr_local_map)map)->locality == MPR_LOC_BOTH)
-        return MPR_PROTO_UDP; /* TODO: add MPR_PROTO_NONE? */
     return map->protocol;
 }
 

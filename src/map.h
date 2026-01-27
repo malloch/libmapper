@@ -42,6 +42,8 @@ int mpr_map_send_state(mpr_map map, int slot, net_msg_t cmd, int version);
 
 void mpr_map_init(mpr_map map, int num_src, mpr_sig *src, mpr_sig dst, int is_local);
 
+void mpr_map_process_before_free(mpr_map map);
+
 void mpr_map_free(mpr_map map);
 
 void mpr_map_add_src(mpr_map map, mpr_sig sig, mpr_dir dir, int is_local);

@@ -482,28 +482,33 @@ static int process_outgoing_maps(mpr_local_dev dev)
     list = mpr_graph_get_list(graph, MPR_MAP);
     while (list) {
         mpr_map map = (mpr_map)*list;
-        list = mpr_list_get_next(list);
         if (!mpr_obj_get_is_local((mpr_obj)map)) {
             /* local maps are always located at the start of the list */
             break;
         }
         mpr_map_send((mpr_local_map)map, dev->time);
+        list = mpr_list_get_next(list);
     }
     dev->sending = 0;
     list = mpr_graph_get_list(graph, MPR_LINK);
     while (list) {
-        msgs += mpr_link_process_bundles((mpr_link)*list, dev->time);
+        mpr_link link = (mpr_link)*list;
+        if (!mpr_obj_get_is_local((mpr_obj)link)) {
+            /* local links are always located at the start of the list */
+            break;
+        }
+        msgs += mpr_link_process_bundles(link, dev->time);
         list = mpr_list_get_next(list);
     }
     list = mpr_graph_get_list(graph, MPR_MAP);
     while (list) {
         mpr_map map = (mpr_map)*list;
-        list = mpr_list_get_next(list);
         if (!mpr_obj_get_is_local((mpr_obj)map)) {
             /* local maps are always located at the start of the list */
             break;
         }
         mpr_map_clear_slot_msgs((mpr_local_map)map);
+        list = mpr_list_get_next(list);
     }
     dev->polling = 0;
     return msgs != 0;

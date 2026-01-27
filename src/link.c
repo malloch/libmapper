@@ -64,7 +64,10 @@ size_t mpr_link_get_struct_size(void)
 
 mpr_link mpr_link_new(mpr_local_dev local_dev, mpr_dev remote_dev)
 {
-    return mpr_graph_add_link(mpr_obj_get_graph((mpr_obj)local_dev), (mpr_dev)local_dev, remote_dev);
+    int is_local = (   mpr_obj_get_is_local((mpr_obj)local_dev)
+                    || mpr_obj_get_is_local((mpr_obj)remote_dev));
+    return mpr_graph_add_link(mpr_obj_get_graph((mpr_obj)local_dev), (mpr_dev)local_dev,
+                              remote_dev, is_local);
 }
 
 int mpr_link_get_is_ready(mpr_link link)

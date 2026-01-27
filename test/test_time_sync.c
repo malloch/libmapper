@@ -21,7 +21,7 @@ int period = 100;
 int sent = 0;
 int received = 0;
 
-double offset1, offset2;
+double offset1, offset2, diff1, diff2;
 
 mpr_dev dev1 = 0;
 mpr_dev dev2 = 0;
@@ -58,6 +58,7 @@ void handler(mpr_sig sig, mpr_sig_evt event, mpr_id instance, int length,
         }
         else
             ++received;
+        diff1 = diff - offset1;
     }
     else if (id == mpr_obj_get_prop_as_int64((mpr_obj)dev2, MPR_PROP_ID, NULL)) {
         /* time should be offset2 seconds */
@@ -67,9 +68,11 @@ void handler(mpr_sig sig, mpr_sig_evt event, mpr_id instance, int length,
         }
         else
             ++received;
+        diff2 = diff - offset2;
     }
     else {
         printf("error: unknown device\n");
+        done = 1;
     }
 }
 
@@ -166,9 +169,9 @@ void loop(void)
 
         if (!verbose) {
             if (received > 1)
-                printf("\r  Sent: %4i, Received: %4i   ", sent, received);
+                printf("\r  Synced  (%3i)... Offsets: [%+4.2f, %+4.2f]   ", received, diff1, diff2);
             else
-                printf("\r  Waiting for sync...   %4i   ", i);
+                printf("\r  Syncing (%3i)... Offsets: [%+4.2f, %+4.2f]   ", i, diff1, diff2);
             fflush(stdout);
         }
     }

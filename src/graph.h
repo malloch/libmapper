@@ -33,7 +33,7 @@ void mpr_graph_cleanup(mpr_graph g);
 
 void mpr_graph_housekeeping(mpr_graph g);
 
-mpr_link mpr_graph_add_link(mpr_graph g, mpr_dev dev1, mpr_dev dev2);
+mpr_link mpr_graph_add_link(mpr_graph g, mpr_dev dev1, mpr_dev dev2, int is_local);
 
 /*! Add or update a device entry in the graph using parsed message parameters.
  *  \param g            The graph to operate on.
