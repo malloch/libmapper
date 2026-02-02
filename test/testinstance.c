@@ -32,8 +32,9 @@ mpr_sig monosend2 = 0;
 mpr_sig monorecv = 0;
 
 int ephemeral = 1;
-int test_counter = 0;
-int received = 0;
+int count_received = 0;
+int count_expected = 0;
+int count_epsilon = 0;
 int done = 0;
 
 static void eprintf(const char *format, ...)
@@ -52,7 +53,7 @@ const char *instance_type_names[] = { "", "SINGLETON", "INSTANCED" };
 typedef enum {
     NONE = 0x00,
     SNGL = 0x01,   /* singleton */
-    INST = 0x02,   /* instanced */
+    INST = 0x02    /* instanced */
     // TODO: convergent with different source devices?
 } instance_type;
 
@@ -62,7 +63,7 @@ typedef enum {
     NO_ACTION = MPR_STEAL_NONE,
     STEAL_OLD = MPR_STEAL_OLDEST,
     STEAL_NEW = MPR_STEAL_NEWEST,
-    ADD_INST = 3
+    ADD_INST  = 3
 } oflw_action;
 
 typedef struct _test_config {
@@ -222,6 +223,7 @@ test_config test_configs[] = {
     /* instanced ==> instanced; instance reduce expression */
     // TODO: currently each update is a new instance, should be a stream of one map-managed instance
     // TODO: ensure all src instances are released periodically; check that dst is also released
+    // or at least check for update-triggered release at end of test?
     { 57, INST, NONE, INST, INST, MPR_LOC_SRC, NO_ACTION, EXPR2, 1.0,  1.0,  1.0,  1.0,  0.0,   1 },
     { 58, INST, NONE, INST, INST, MPR_LOC_DST, NO_ACTION, EXPR2, 1.0,  1.0,  1.0,  1.0,  0.0,   1 },
 
@@ -267,7 +269,7 @@ int setup_src(mpr_graph g, const char *iface)
                              &mn, &mx, &num_inst, NULL, 0);
     multisend2 = mpr_sig_new(src, MPR_DIR_OUT, "multisend2", 1, MPR_FLT, NULL,
                              &mn, &mx, &num_inst, NULL, 0);
-    if (!monosend1 || !monosend2 || !multisend1 || !multisend2)
+    if (!(monosend1 && monosend2 && multisend1 && multisend2))
         goto error;
 
     mpr_obj_set_prop((mpr_obj)multisend1, MPR_PROP_STEAL_MODE, NULL, 1, MPR_INT32, &stl, 1);
@@ -315,7 +317,7 @@ void handler(mpr_sig sig, mpr_sig_evt e, mpr_id inst, int len, mpr_type type,
     }
     else if (val) {
         eprintf("--> destination %s instance %i got %f\n", name, (int)inst, (*(float*)val));
-        ++received;
+        ++count_received;
     }
     else {
         eprintf("--> destination %s instance %i got NULL\n", name, (int)inst);
@@ -448,7 +450,7 @@ int loop(test_config *config)
     int i = 0, j, num_parallel_inst = 5, ret = 0;
     float valf = 0;
     mpr_id inst = 0;
-    received = 0;
+    count_received = 0;
 
     eprintf("-------------------- GO ! --------------------\n");
 
@@ -502,11 +504,11 @@ int loop(test_config *config)
         mpr_dev_poll(dst, period);
         i++;
 
-        if (config->dst_type & INST) {
+        if (INST == config->dst_type) {
             /* check values */
             int num_inst = mpr_sig_get_num_inst(multirecv, MPR_STATUS_ACTIVE);
             /* if dst signal is not ephemeral there may be values from a previous configuration */
-            if (num_inst > 1 && (ephemeral || received > i)) {
+            if (num_inst > 1 && (ephemeral || count_received > i)) {
                 mpr_id id;
                 mpr_sig_get_inst_id(multirecv, 0, MPR_STATUS_ACTIVE, &id);
                 float *val0 = (float*)mpr_sig_get_value(multirecv, id, 0);
@@ -579,7 +581,8 @@ int loop(test_config *config)
             printf("\n");
         }
         else {
-            printf("\r  Iteration: %4d, Received: %4d", i, received);
+            printf("\r  Iteration: %4d, Received: %4d/%4d (+/-%d)", i, count_received,
+                   count_expected, count_epsilon);
             fflush(stdout);
         }
     }
@@ -618,8 +621,8 @@ void ctrlc(int sig)
 int run_test(test_config *config)
 {
     mpr_sig srcs[2], *dst_ptr;
-    int num_src = 1, stl, evt = MPR_SIG_UPDATE | MPR_SIG_REL_UPSTRM, use_inst, compare_count;
-    int result = 0, active_count = 0, reserve_count = 0, count_epsilon;
+    int num_src = 1, stl, evt = MPR_SIG_UPDATE | MPR_SIG_REL_UPSTRM, use_inst;
+    int result = 0, active_count = 0, reserve_count = 0;
     mpr_map map;
 
     printf("Configuration %d: ", config->test_id);
@@ -720,27 +723,27 @@ int run_test(test_config *config)
     mpr_dev_poll(src, 100);
     mpr_dev_poll(dst, 100);
 
-    if (INST & config->dst_type) {
+    if (INST == config->dst_type) {
         /* activate 2 destination instances */
         eprintf("activating 2 destination instances\n");
         mpr_sig_activate_inst(multirecv, 2);
         mpr_sig_activate_inst(multirecv, 6);
     }
 
-    result += loop(config);
-
     if (ephemeral) {
         if (shared_graph)
-            compare_count = ((float)iterations * config->count_mult_ephemeral_shared);
+            count_expected = ((float)iterations * config->count_mult_ephemeral_shared);
         else
-            compare_count = ((float)iterations * config->count_mult_ephemeral);
+            count_expected = ((float)iterations * config->count_mult_ephemeral);
     }
     else {
         if (shared_graph)
-            compare_count = ((float)iterations * config->count_mult_persistent_shared);
+            count_expected = ((float)iterations * config->count_mult_persistent_shared);
         else
-            compare_count = ((float)iterations * config->count_mult_persistent);
+            count_expected = ((float)iterations * config->count_mult_persistent);
     }
+
+    result += loop(config);
 
     release_active_instances(multisend1);
     release_active_instances(multisend2);
@@ -768,7 +771,7 @@ int run_test(test_config *config)
 
     if (mpr_local_sig_get_num_id_maps((mpr_local_sig)multisend1) > 8) {
         printf("Error: multisend1 using %d id maps (should be %d)\n",
-               mpr_local_sig_get_num_id_maps((mpr_local_sig)multisend2), 8);
+               mpr_local_sig_get_num_id_maps((mpr_local_sig)multisend1), 8);
         ++result;
     }
     if (mpr_local_sig_get_num_id_maps((mpr_local_sig)multisend2) > 8) {
@@ -806,19 +809,16 @@ int run_test(test_config *config)
         ++result;
     }
 
-    count_epsilon = ceil((float)compare_count * config->count_epsilon);
+    count_epsilon = ceil((float)count_expected * config->count_epsilon);
 
-    eprintf("Received %d of %d +/- %d updates\n", received, compare_count, count_epsilon);
+    eprintf("Received %d of %d +/- %d updates\n", count_received, count_expected, count_epsilon);
 
-    result += abs(compare_count - received) > count_epsilon;
+    result += abs(count_expected - count_received) > count_epsilon;
 
     eprintf("Configuration %d %s\n", config->test_id, result ? "FAILED" : "PASSED");
 
     if (!verbose) {
-        if (result)
-            printf(" (expected %4d ± %2d) \x1B[31mFAILED\x1B[0m.\n", compare_count, count_epsilon);
-        else
-            printf(" (expected) ......... \x1B[32mPASSED\x1B[0m.\n");
+        printf(" ........ \x1B[32m%s\x1B[0m.\n", result ? "FAILED" : "PASSED");
     }
 
     return result;

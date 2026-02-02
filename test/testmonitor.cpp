@@ -124,7 +124,7 @@ int main(int argc, char **argv)
             printf("Network Interface: %s\n", graph.iface().c_str());
 
             // print current state of graph
-            graph.print();
+            graph.print(1);
         }
         else {
             printf("\r[%s] Devices: %4i, Signals: %4i, Maps: %4i", graph.iface().c_str(),

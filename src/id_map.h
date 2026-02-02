@@ -2,7 +2,9 @@
 #ifndef __MPR_ID_MAP_H__
 #define __MPR_ID_MAP_H__
 
+#include <stdio.h>
 #include <stdint.h>
+#include "util/mpr_debug.h"
 #include "util/mpr_inline.h"
 
 /*! Bit flags for indicating instance id_map status. */
@@ -20,6 +22,7 @@ typedef struct _mpr_id_map {
     int16_t LID_refcount;
     int16_t GID_refcount;
     uint8_t indirect;
+    uint8_t remapped;
 } mpr_id_map_t, *mpr_id_map;
 
 MPR_INLINE static void mpr_id_map_incr_local_refcount(mpr_id_map id_map)
@@ -40,6 +43,16 @@ MPR_INLINE static int mpr_id_map_get_local_refcount(mpr_id_map id_map)
 MPR_INLINE static int mpr_id_map_get_global_refcount(mpr_id_map id_map)
 {
     return id_map->GID_refcount;
+}
+
+MPR_INLINE static void mpr_id_map_print(mpr_id_map id_map)
+{
+    printf("  %p: %"PR_MPR_ID" (%d) -> %"PR_MPR_ID"%s ", id_map, id_map->LID,
+           id_map->LID_refcount, id_map->GID, id_map->indirect ? "*" : "");
+    if (id_map->remapped)
+        printf("(*)\n");
+    else
+        printf("(%d)\n", id_map->GID_refcount);
 }
 
 #endif /* __MPR_ID_MAP_H__ */

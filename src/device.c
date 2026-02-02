@@ -621,9 +621,7 @@ void mpr_local_dev_print_id_maps(mpr_local_dev dev)
     printf("ID MAPS for %s:\n", dev->name);
     mpr_id_map *id_maps = &dev->id_maps.active[0];
     while (*id_maps) {
-        mpr_id_map id_map = *id_maps;
-        printf("  %p: %"PR_MPR_ID" (%d) -> %"PR_MPR_ID"%s (%d)\n", id_map, id_map->LID,
-               id_map->LID_refcount, id_map->GID, id_map->indirect ? "*" : "", id_map->GID_refcount);
+        mpr_id_map_print(*id_maps);
         id_maps = &(*id_maps)->next;
     }
 }
@@ -695,6 +693,13 @@ int mpr_dev_GID_decref(mpr_local_dev dev, int group, mpr_id_map id_map)
     if (id_map->GID_refcount <= 0) {
         id_map->GID_refcount = 0;
         if (id_map->LID_refcount <= id_map->indirect) {
+            if (id_map->indirect) {
+                mpr_id_map tmp = mpr_dev_get_id_map_by_GID(dev, group, id_map->LID);
+                if (tmp) {
+                    tmp->remapped = 0;
+                    mpr_dev_GID_decref(dev, group, tmp);
+                }
+            }
             mpr_dev_remove_id_map(dev, group, id_map);
             return 1;
         }
@@ -736,7 +741,7 @@ mpr_id_map mpr_dev_get_id_map_GID_free(mpr_local_dev dev, int group, mpr_id last
         id_map = id_map->next;
     }
     while (id_map) {
-        if (id_map->GID_refcount <= 0)
+        if (!id_map->remapped && id_map->GID_refcount <= 0)
             return id_map;
         id_map = id_map->next;
     }

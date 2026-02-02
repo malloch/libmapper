@@ -367,7 +367,7 @@ int mpr_sig_osc_handler(const char *path, const char *types, lo_arg **argv, int 
     dev = sig->dev;
 
 #ifdef DEBUG
-    printf("'%s:%s' received update: ", mpr_dev_get_name((mpr_dev)dev), sig->name);
+    trace("'%s:%s' received update: ", mpr_dev_get_name((mpr_dev)dev), sig->name);
     lo_message_pp(msg);
 #endif
 
@@ -383,7 +383,7 @@ int mpr_sig_osc_handler(const char *path, const char *types, lo_arg **argv, int 
             TRACE_RETURN_UNLESS(types[1] == MPR_INT32, 0,
                                 "error in mpr_sig_osc_handler: bad arguments for 'slot' prop.\n")
             slot_id = argv[1]->i32;
-            trace("  retrieved slot id %d\n", slot_id);
+            trace("retrieved slot id %d\n", slot_id);
             offset += 2;
         }
     }
@@ -393,6 +393,7 @@ again:
             TRACE_RETURN_UNLESS(types[offset + 1] == MPR_INT64, 0,
                                 "error in mpr_sig_osc_handler: bad arguments for 'instance' prop.\n")
             GID = argv[offset + 1]->i64;
+            trace("retrieved GUID %"PR_MPR_ID"\n", GID);
             offset += 2;
         }
         else {
@@ -458,7 +459,7 @@ again:
             trace("no map-managed instances available for GUID %"PR_MPR_ID"\n", GID);
             goto done;
         }
-        trace("remapping instance GUID %"PR_MPR_ID" -> %"PR_MPR_ID"\n", GID, id_map->GID);
+        trace("creating new instance GUID remap: %"PR_MPR_ID" -> %"PR_MPR_ID"\n", GID, id_map->GID);
         GID = id_map->GID;
         if (!vals) {
             trace("releasing map-managed instance id_map\n");
@@ -481,7 +482,7 @@ again:
         remote_id_map = mpr_dev_get_id_map_by_GID(dev, sig->group, GID);
 
         if (remote_id_map && remote_id_map->indirect) {
-            trace("remapping instance GUID %"PR_MPR_ID" -> %"PR_MPR_ID"\n", GID, remote_id_map->LID);
+            trace("remapping GUID %"PR_MPR_ID" -> %"PR_MPR_ID"\n", GID, remote_id_map->LID);
             GID = remote_id_map->LID;
         }
         else
@@ -492,25 +493,27 @@ again:
                                                  (vals && sig->dir == MPR_DIR_IN));
 
         if (id_map_idx < 0) {
-            trace("no instances available for GUID %"PR_MPR_ID"\n", GID);
+            trace("  no instances available for GUID\n");
             goto done;
         }
 
         if (sig->id_maps[id_map_idx].status & RELEASED_LOCALLY) {
             /* instance was already released locally, we are only interested in release messages */
             if (0 == vals) {
-                /* we can clear signal's reference to map */
-                mpr_dev_GID_decref(dev, sig->group, sig->id_maps[id_map_idx].id_map);
-                sig->id_maps[id_map_idx].id_map = 0;
                 if (remote_id_map) {
                     mpr_dev_GID_decref(dev, sig->group, remote_id_map);
                 }
+                else {
+                    mpr_dev_GID_decref(dev, sig->group, sig->id_maps[id_map_idx].id_map);
+                }
+                /* we can clear signal's reference to map */
+                sig->id_maps[id_map_idx].id_map = 0;
             }
-            trace("instance already released locally\n");
+            trace("  instance already released locally\n");
             goto done;
         }
         if (!sig->id_maps[id_map_idx].inst) {
-            trace("error in mpr_sig_osc_handler: missing instance!\n");
+            trace("  error in mpr_sig_osc_handler: missing instance!\n");
             goto done;
         }
     }
@@ -883,7 +886,7 @@ static int get_inst_by_ids(mpr_local_sig lsig, mpr_id *LID, mpr_id *GID)
     mpr_id_map id_map = 0, remote_id_map = 0;
 
 #ifdef DEBUG
-    printf("recovering instance with ids [");
+    trace("recovering instance with ids [");
     if (LID)
         printf("%"PR_MPR_ID", ", *LID);
     else
@@ -899,7 +902,7 @@ static int get_inst_by_ids(mpr_local_sig lsig, mpr_id *LID, mpr_id *GID)
         id_map = mpr_dev_get_id_map_by_LID(lsig->dev, lsig->group, *LID);
         /* try to find existing instance with this id */
         if ((si = _find_inst_by_id(lsig, *LID))) {
-            trace("found existing match...\n");
+            trace("  found existing match...\n");
             goto done;
         }
     }
@@ -907,10 +910,10 @@ static int get_inst_by_ids(mpr_local_sig lsig, mpr_id *LID, mpr_id *GID)
         /* check if the device already has an id_map for this global id */
         id_map = mpr_dev_get_id_map_by_GID(lsig->dev, lsig->group, *GID);
         if (id_map) {
-            trace("found existing id_map for GID\n");
+            trace("  found existing id_map for GID\n");
             remote_id_map = mpr_dev_get_id_map_by_LID(lsig->dev, lsig->group, *GID);
             if ((si = _find_inst_by_id(lsig, id_map->LID))) {
-                trace("found existing match...\n");
+                trace("    found existing match...\n");
                 goto done;
             }
         }
@@ -955,16 +958,17 @@ static int get_inst_by_ids(mpr_local_sig lsig, mpr_id *LID, mpr_id *GID)
     trace("  checking instances with no upstream...\n");
     for (i = 0; i < lsig->num_id_maps; i++) {
         id_map = lsig->id_maps[i].id_map;
-        if (id_map && (id_map->GID_refcount > 0)) {
+        if (id_map && (id_map->remapped || (id_map->GID_refcount > 0))) {
             continue;
         }
         if ((si = lsig->id_maps[i].inst)) {
-            trace("  found instance at id_maps[%d]\n", i);
+            trace("    found instance at id_maps[%d]\n", i);
             if (id_map && GID) {
                 /* set up indirect id_map to refer to old_id_map */
-                trace("  setting up id_map indirection: %"PR_MPR_ID" -> %"PR_MPR_ID" : %"PR_MPR_ID"\n",
+                trace("      setting up id_map indirection: %"PR_MPR_ID" -> %"PR_MPR_ID" : %"PR_MPR_ID"\n",
                       *GID, id_map->GID, id_map->LID);
                 mpr_id_map indirect = mpr_dev_add_id_map(lsig->dev, lsig->group, id_map->GID, *GID, 1);
+                id_map->remapped = 1;
 
                 /* increment global id refcounts for both id_maps */
                 mpr_id_map_incr_global_refcount(indirect);
@@ -978,15 +982,18 @@ static int get_inst_by_ids(mpr_local_sig lsig, mpr_id *LID, mpr_id *GID)
     }
 
     {
+        trace("  checking id_maps with freed GID\n");
         mpr_id last = 0;
         while ((id_map = mpr_dev_get_id_map_GID_free(lsig->dev, lsig->group, last))) {
-            trace("  found freed id_map %"PR_MPR_ID" (%d) : %"PR_MPR_ID" (%d)\n", id_map->LID,
+            trace("    found freed id_map %"PR_MPR_ID" (%d) : %"PR_MPR_ID" (%d)\n", id_map->LID,
                   id_map->LID_refcount, id_map->GID, id_map->GID_refcount);
             if ((si = _find_inst_by_id(lsig, id_map->LID))) {
                 /* set up indirect id_map to refer to old_id_map */
-                trace("  setting up id_map indirection: %"PR_MPR_ID" -> %"PR_MPR_ID" : %"PR_MPR_ID"\n",
+                trace("      setting up id_map indirection: %"PR_MPR_ID" -> %"PR_MPR_ID" : %"PR_MPR_ID"\n",
                       *GID, id_map->GID, id_map->LID);
                 mpr_id_map indirect = mpr_dev_add_id_map(lsig->dev, lsig->group, id_map->GID, *GID, 1);
+
+                id_map->remapped = 1;
 
                 /* increment global id refcounts for new id_map */
                 mpr_id_map_incr_global_refcount(indirect);
