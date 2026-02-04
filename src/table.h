@@ -1,7 +1,6 @@
 
 #ifndef __MPR_TABLE_H__
 #define __MPR_TABLE_H__
-#define __MPR_TYPES_H__
 
 typedef struct _mpr_tbl *mpr_tbl;
 typedef struct _mpr_tbl_record *mpr_tbl_record;
