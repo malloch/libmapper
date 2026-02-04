@@ -301,7 +301,6 @@ int mpr_value_set_next(mpr_value v, unsigned int inst_idx, const void *s, mpr_ti
     if (s != mem)
         memcpy(mem, s, v->vlen * mpr_type_get_size(v->type));
     memcpy(mpr_value_get_time_internal(v, inst_idx, 0), &t, sizeof(mpr_time));
-    update_timing_stats(v, t);
 
     return cmp != 0;
 }
@@ -384,7 +383,6 @@ int mpr_value_set_next_coerced(mpr_value v, unsigned int inst_idx, unsigned int 
         mpr_value_buffer b = GET_BUFFER();
         mpr_bitflags_set_all(b->known);
         memcpy(mpr_value_get_time_internal(v, inst_idx, 0), &t, sizeof(mpr_time));
-        update_timing_stats(v, t);
     }
     return status;
 }
@@ -421,6 +419,7 @@ void mpr_value_incr_idx(mpr_value v, unsigned int inst_idx, mpr_time t)
         b->pos = 0;
         b->full |= 1;
     }
+    update_timing_stats(v, t);
 }
 
 void mpr_value_decr_idx(mpr_value v, unsigned int inst_idx)
@@ -488,6 +487,13 @@ void mpr_value_add_to_msg(mpr_value v, unsigned int inst_idx, lo_message msg)
         default:
             break;
     }
+}
+
+void mpr_value_link_to_tbl(mpr_value val, mpr_tbl tbl)
+{
+    mpr_tbl_link_value(tbl, MPR_PROP_PERIOD, 1, MPR_FLT, &val->period, MOD_NONE | PROP_SET);
+    mpr_tbl_link_value(tbl, MPR_PROP_JITTER, 1, MPR_FLT, &val->jitter, MOD_NONE | PROP_SET);
+    mpr_tbl_sort(tbl);
 }
 
 #ifdef DEBUG

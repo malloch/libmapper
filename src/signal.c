@@ -727,31 +727,6 @@ void mpr_sig_init(mpr_sig sig, mpr_dev dev, int is_local, mpr_dir dir, const cha
     sig->obj.type = MPR_SIG;
     sig->obj.props.synced = mpr_tbl_new();
 
-    if (sig->obj.is_local) {
-        mpr_local_sig lsig = (mpr_local_sig)sig;
-        sig->num_inst = 0;
-        lsig->updated_inst = 0;
-        if (num_inst) {
-            mpr_sig_reserve_inst((mpr_sig)lsig, *num_inst, 0, 0);
-            /* default to ephemeral */
-            lsig->ephemeral = 1;
-        }
-        else {
-            mpr_sig_reserve_inst((mpr_sig)lsig, 1, 0, 0);
-            lsig->use_inst = 0;
-        }
-
-        /* Reserve one instance id map */
-        lsig->num_id_maps = 1;
-        lsig->id_maps = calloc(1, sizeof(struct _mpr_sig_id_map));
-    }
-    else {
-        sig->num_inst = 1;
-        sig->use_inst = 0;
-        sig->obj.props.staged = mpr_tbl_new();
-        sig->obj.status = MPR_STATUS_NEW;
-    }
-
     tbl = sig->obj.props.synced;
 
     /* these properties need to be added in alphabetical order */
@@ -782,6 +757,33 @@ void mpr_sig_init(mpr_sig sig, mpr_dev dev, int is_local, mpr_dir dir, const cha
 
     mpr_tbl_add_record(tbl, MPR_PROP_IS_LOCAL, NULL, 1, MPR_BOOL, &sig->obj.is_local,
                        LOCAL_ACCESS | MOD_NONE);
+
+    if (sig->obj.is_local) {
+        mpr_local_sig lsig = (mpr_local_sig)sig;
+        sig->num_inst = 0;
+        lsig->updated_inst = 0;
+        lsig->value = mpr_value_new(lsig->len, lsig->type, 1, 0);
+        if (num_inst) {
+            mpr_sig_reserve_inst((mpr_sig)lsig, *num_inst, 0, 0);
+            /* default to ephemeral */
+            lsig->ephemeral = 1;
+        }
+        else {
+            mpr_sig_reserve_inst((mpr_sig)lsig, 1, 0, 0);
+            lsig->use_inst = 0;
+        }
+        mpr_value_link_to_tbl(lsig->value, tbl);
+
+        /* Reserve one instance id map */
+        lsig->num_id_maps = 1;
+        lsig->id_maps = calloc(1, sizeof(struct _mpr_sig_id_map));
+    }
+    else {
+        sig->num_inst = 1;
+        sig->use_inst = 0;
+        sig->obj.props.staged = mpr_tbl_new();
+        sig->obj.status = MPR_STATUS_NEW;
+    }
 }
 
 void mpr_sig_free(mpr_sig sig)
@@ -1351,10 +1353,7 @@ int mpr_sig_reserve_inst(mpr_sig sig, int num, mpr_id *ids, void **data)
     if (highest != -1)
         realloc_maps(lsig, highest + 1);
 
-    if (!lsig->value)
-        lsig->value = mpr_value_new(lsig->len, lsig->type, 1, lsig->num_inst);
-    else
-        mpr_value_realloc(lsig->value, lsig->len, lsig->type, 1, lsig->num_inst, 0);
+    mpr_value_realloc(lsig->value, lsig->len, lsig->type, 1, lsig->num_inst, 0);
 
     mpr_obj_incr_version((mpr_obj)lsig);
 

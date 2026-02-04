@@ -65,6 +65,11 @@ mpr_tbl mpr_tbl_new(void)
     return t;
 }
 
+void mpr_tbl_sort(mpr_tbl t)
+{
+    qsort(t->rec, t->count, sizeof(mpr_tbl_record_t), compare_rec);
+}
+
 void mpr_tbl_clear(mpr_tbl t)
 {
     int i, j, free_vals = 1;
@@ -414,7 +419,7 @@ static int set_internal(mpr_tbl t, mpr_prop prop, const char *key, int len,
             update_elements(rec, len, type, val);
         else
             rec->prop |= PROP_REMOVE;
-        qsort(t->rec, t->count, sizeof(mpr_tbl_record_t), compare_rec);
+        mpr_tbl_sort(t);
         updated = t->dirty = 1;
     }
     return updated;
@@ -531,7 +536,7 @@ int mpr_tbl_add_record_from_msg_atom(mpr_tbl t, mpr_msg_atom atom, int flags)
             return 0;
         rec->val = 0;
         update_elements_osc(rec, len, types, mpr_msg_atom_get_values(atom));
-        qsort(t->rec, t->count, sizeof(mpr_tbl_record_t), compare_rec);
+        mpr_tbl_sort(t);
         updated = t->dirty = 1;
     }
     return updated;

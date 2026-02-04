@@ -22,6 +22,9 @@ typedef struct _mpr_tbl_record *mpr_tbl_record;
 /*! Create a new string table. */
 mpr_tbl mpr_tbl_new(void);
 
+/*! Sort a string table. */
+void mpr_tbl_sort(mpr_tbl t);
+
 /*! Clear the contents of a string table.
  * \param tbl Table to free. */
 void mpr_tbl_clear(mpr_tbl tbl);

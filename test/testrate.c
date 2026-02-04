@@ -29,8 +29,8 @@ int sent = 0;
 int received = 0;
 
 float expected;
-float send_period;
-float send_jitter;
+float period_send;
+float jitter_send;
 
 static void eprintf(const char *format, ...)
 {
@@ -79,21 +79,23 @@ void handler(mpr_sig sig, mpr_sig_evt event, mpr_id instance, int len,
              mpr_type type, const void *val, mpr_time t)
 {
     const char *name;
+    float period_recv = mpr_obj_get_prop_as_flt((mpr_obj)sig, MPR_PROP_PERIOD, NULL);
+    float period_diff = period_recv - (polltime * 0.001);
 
     if (!val)
         return;
 
     name = mpr_obj_get_prop_as_str((mpr_obj)sig, MPR_PROP_NAME, NULL);
     if (verbose) {
-        float recv_period = mpr_obj_get_prop_as_flt((mpr_obj)sig, MPR_PROP_PERIOD, NULL);
-        float recv_jitter = mpr_obj_get_prop_as_flt((mpr_obj)sig, MPR_PROP_JITTER, NULL);
-        printf("%s rec'ved %f (period: %f, jitter: %f, diff: %f)\n", name, *(float*)val,
-               recv_period, recv_jitter, send_period - recv_period);
+        float jitter_recv = mpr_obj_get_prop_as_flt((mpr_obj)sig, MPR_PROP_JITTER, NULL);
+        printf("%s rec'ved %g (period: %gms, jitter: %g, diff: %g)\n", name, *(float*)val,
+               period_recv * 1000, jitter_recv, period_diff);
     }
-    if (*(float*)val == expected)
+
+    if (*(float*)val == expected && fabsf(period_diff) < 0.01)
         ++received;
     else
-        eprintf("  expected %f\n", expected);
+        eprintf("  expected value %g, period %gms\n", expected, polltime);
 }
 
 /*! Creation of a local destination. */
@@ -114,7 +116,7 @@ int setup_dst(mpr_graph g, const char *iface)
 
     /* This signal is expected to be updated at 100 Hz */
     rate = 100.f;
-    mpr_obj_set_prop((mpr_obj)recvsig, MPR_PROP_RATE, NULL, 1, MPR_FLT, &rate, 1);
+    printf("rate updated? %d\n", mpr_obj_set_prop((mpr_obj)recvsig, MPR_PROP_RATE, NULL, 1, MPR_FLT, &rate, 1));
 
     eprintf("Input signal 'insig' registered.\n");
 
@@ -172,9 +174,9 @@ void loop(void)
     while ((!terminate || i < 50) && !done) {
         fval = (float)i;
         mpr_sig_set_value(sendsig, 0, 1, MPR_FLT, &fval);
-        send_period = mpr_obj_get_prop_as_flt((mpr_obj)sendsig, MPR_PROP_PERIOD, NULL);
-        send_jitter = mpr_obj_get_prop_as_flt((mpr_obj)sendsig, MPR_PROP_JITTER, NULL);
-        eprintf("Sending update (period: %f; jitter: %f)\n", send_period, send_jitter);
+        period_send = mpr_obj_get_prop_as_flt((mpr_obj)sendsig, MPR_PROP_PERIOD, NULL);
+        jitter_send = mpr_obj_get_prop_as_flt((mpr_obj)sendsig, MPR_PROP_JITTER, NULL);
+        eprintf("Sending update (period: %gms; jitter: %g)\n", period_send * 1000, jitter_send);
         ++sent;
         expected = fval * 0.1f;
         mpr_dev_poll(src, 0);

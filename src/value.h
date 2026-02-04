@@ -3,6 +3,7 @@
 #define __MPR_VALUE_H__
 
 #include <string.h>
+#include "table.h"
 #include "util/mpr_inline.h"
 #include "mpr_type.h"
 #include "bitflags.h"
@@ -70,6 +71,8 @@ mpr_type mpr_value_get_type(mpr_value v);
 int mpr_value_cmp(mpr_value v, unsigned int inst_idx, int hist_idx, const void *ptr);
 
 void mpr_value_add_to_msg(mpr_value val, unsigned int inst_idx, lo_message msg);
+
+void mpr_value_link_to_tbl(mpr_value val, mpr_tbl tbl);
 
 #ifdef DEBUG
 void mpr_value_print(mpr_value v);
