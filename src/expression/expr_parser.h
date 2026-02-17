@@ -460,7 +460,7 @@ int expr_parser_build_stack(mpr_expr expr, const char *str,
                         GET_NEXT_TOKEN(newtok);
                         {FAIL_IF(newtok.toktype != TOK_OPEN_PAREN, "missing open parenthesis. (1)");}
                     }
-                    int memory = vfn_tbl[t->fn.idx].memory;
+                    int memory = vfn_tbl[tok.fn.idx].memory;
                     if (memory) {
                         {FAIL_IF((num_var + memory) >= N_USER_VARS,
                                  "Maximum number of variables exceeded. (4)");}
