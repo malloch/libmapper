@@ -218,6 +218,8 @@ void mpr_dev_free(mpr_dev dev)
     own_graph = ldev->own_graph;
     net = mpr_graph_get_net(graph);
 
+    mpr_net_stop_polling(net);
+
     /* remove local graph handlers here so they are not called when child objects are freed */
     /* CHANGE: if graph is not owned then its callbacks _should_ be called when device is removed. */
     if (own_graph) {
