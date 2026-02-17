@@ -49,7 +49,7 @@ lo_address mpr_link_get_admin_addr(mpr_link link);
 void mpr_link_update_clock(mpr_link link, mpr_time then, mpr_time now,
                            int msg_id, int sent_id, double elapsed_remote);
 
-int mpr_link_housekeeping(mpr_link link, mpr_time now);
+void mpr_link_housekeeping(mpr_link link, mpr_time now);
 
 int mpr_link_get_dev_dir(mpr_link link, mpr_dev dev);
 

@@ -116,7 +116,7 @@ int setup_dst(mpr_graph g, const char *iface)
 
     /* This signal is expected to be updated at 100 Hz */
     rate = 100.f;
-    printf("rate updated? %d\n", mpr_obj_set_prop((mpr_obj)recvsig, MPR_PROP_RATE, NULL, 1, MPR_FLT, &rate, 1));
+    mpr_obj_set_prop((mpr_obj)recvsig, MPR_PROP_RATE, NULL, 1, MPR_FLT, &rate, 1);
 
     eprintf("Input signal 'insig' registered.\n");
 

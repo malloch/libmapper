@@ -35,6 +35,7 @@ typedef struct _mpr_sync_clock_t {
     mpr_sync_time_t sent;
     mpr_sync_time_t rcvd;
     double weight;
+    int8_t slope;
 } mpr_sync_clock_t, *mpr_sync_clock;
 
 typedef struct _mpr_link {
@@ -306,9 +307,13 @@ mpr_dev mpr_link_get_dev(mpr_link link, int idx)
     return link->devs[idx];
 }
 
-static void send_ping(mpr_link link, mpr_time now)
+static void send_ping(mpr_link link)
 {
     if (link->addr.admin) {
+        mpr_time now;
+        mpr_time_set(&now, MPR_NOW);
+        mpr_time_add_dbl(&now, mpr_dev_get_offset(link->devs[LINK_LOCAL_DEV]));
+
         mpr_sync_clock clk = &link->clock;
         mpr_net net = mpr_graph_get_net(link->obj.graph);
         double elapsed;
@@ -318,7 +323,6 @@ static void send_ping(mpr_link link, mpr_time now)
         if (elapsed < 0)
             elapsed = 0;
 
-        mpr_net_use_mesh(net, link->addr.admin, &now);
         lo_message_add_int64(msg, mpr_obj_get_id((mpr_obj)link->devs[LINK_LOCAL_DEV]));
         if (++clk->sent.msg_id < 0)
             clk->sent.msg_id = 0;
@@ -327,9 +331,10 @@ static void send_ping(mpr_link link, mpr_time now)
         lo_message_add_double(msg, elapsed);
 
         /* need to send immediately */
+        mpr_net_use_mesh(net, link->addr.admin, &now);
         mpr_net_add_msg(net, NULL, MSG_PING, msg);
-        mpr_time_set(&clk->sent.time, now);
         mpr_net_send(net);
+        mpr_time_set(&clk->sent.time, now);
     }
 }
 
@@ -350,7 +355,6 @@ void mpr_link_add_map(mpr_link link, mpr_map map)
         mpr_time time;
         mpr_time_set(&time, MPR_NOW);
         mpr_time_add_dbl(&time, mpr_dev_get_offset(link->devs[LINK_LOCAL_DEV]));
-        send_ping(link, time);
     }
     mpr_tbl_set_is_dirty(link->obj.props.synced, 1);
 }
@@ -375,6 +379,11 @@ void mpr_link_remove_map(mpr_link link, mpr_map map)
     }
 }
 
+static int slope_sign(double val)
+{
+    return (val > 0.0) - (val < 0);
+}
+
 void mpr_link_update_clock(mpr_link link, mpr_time time_remote, mpr_time time_local,
                            int msg_id, int sent_id, double elapsed_remote)
 {
@@ -383,13 +392,13 @@ void mpr_link_update_clock(mpr_link link, mpr_time time_remote, mpr_time time_lo
     /* add local clock offset */
     mpr_time_add_dbl(&time_local, mpr_dev_get_offset(link->devs[LINK_LOCAL_DEV]));
 
-    if (1.0 == clk->weight && elapsed_remote <= 0.0) {
-        /* link pings have not yet been exchanged */
-        /* store approximate device clock offset without symmetric latency estimate */
-        double offset = mpr_time_get_diff(time_remote, time_local);
-        mpr_dev_set_offset(link->devs[LINK_REMOTE_DEV], offset, 1.0);
+    if (!link->is_local_only) {
+        /* update sync status */
+        mpr_time_set(&clk->rcvd.time, time_local);
+        clk->rcvd.msg_id = msg_id;
     }
-    else if (sent_id == clk->sent.msg_id && (elapsed_remote < 10)) {
+
+    if (sent_id == clk->sent.msg_id && elapsed_remote < 10) {
         double offset, elapsed_local, latency;
 
         /* total elapsed time since ping sent */
@@ -405,23 +414,38 @@ void mpr_link_update_clock(mpr_link link, mpr_time time_remote, mpr_time time_lo
         /* difference between remote and local clocks (latency compensated) */
         offset = mpr_time_get_diff(time_remote, time_local) - latency;
 
-        clk->jitter += (clk->jitter - fabs(clk->latency - latency)) * clk->weight;
-        clk->latency += (clk->latency - latency) * clk->weight;
-        if (mpr_dev_set_offset(link->devs[LINK_REMOTE_DEV], offset, clk->weight) < clk->jitter)
-            clk->weight *= 2.0;
-        else
+        clk->jitter -= (clk->jitter - fabs(clk->latency - latency)) * clk->weight;
+        clk->latency -= (clk->latency - latency) * clk->weight;
+
+        double temp = mpr_dev_get_offset(link->devs[LINK_REMOTE_DEV]);
+
+        double diff = mpr_dev_set_offset(link->devs[LINK_REMOTE_DEV], offset, clk->weight);
+        temp = slope_sign(diff);
+
+        if (temp == clk->slope) {
+            clk->weight *= 1.5;
+        }
+        else {
             clk->weight *= 0.5;
+        }
         if (clk->weight > 1.0)
             clk->weight = 1.0;
         if (clk->weight < 0.01)
             clk->weight = 0.01;
+        clk->slope = temp;
+        trace("set link clock weight to %g\n", clk->weight);
+    }
+    else if (sent_id <= 1) {
+        /* link pings have not yet been exchanged */
+        /* store approximate device clock offset without symmetric latency estimate */
+        double offset = mpr_time_get_diff(time_remote, time_local);
+        mpr_dev_set_offset(link->devs[LINK_REMOTE_DEV], offset, 1.0);
     }
 
-    /* update sync status */
-    if (link->is_local_only)
-        return;
-    mpr_time_set(&clk->rcvd.time, time_local);
-    clk->rcvd.msg_id = msg_id;
+    /* When link is new we will exchange extra to establish clock offsets */
+    if (sent_id < 8) {
+        send_ping(link);
+    }
 }
 
 void mpr_link_update_offset(mpr_link link, double diff)
@@ -434,7 +458,7 @@ void mpr_link_update_offset(mpr_link link, double diff)
         mpr_time_add_dbl(&clk->rcvd.time, diff);
 }
 
-int mpr_link_housekeeping(mpr_link link, mpr_time now)
+void mpr_link_housekeeping(mpr_link link, mpr_time now)
 {
     mpr_sync_clock clk = &link->clock;
     double elapsed;
@@ -451,16 +475,29 @@ int mpr_link_housekeeping(mpr_link link, mpr_time now)
             clk->rcvd.msg_id = -1;
             clk->rcvd.time.sec = now.sec;
         }
-        else
-            return 1;
+        else {
+            int status = link->num_maps ? MPR_STATUS_EXPIRED : MPR_STATUS_REMOVED;
+            mpr_dev local_dev = link->devs[LINK_LOCAL_DEV];
+#ifdef DEBUG
+            mpr_dev remote_dev = link->devs[LINK_REMOTE_DEV];
+            trace_dev(local_dev, "Removing link to %sdevice '%s'\n",
+                      MPR_STATUS_EXPIRED == status ? "unresponsive " : "",
+                      mpr_dev_get_name(remote_dev));
+#endif
+            /* remove related data structures */
+            mpr_net_use_subscribers(mpr_graph_get_net(link->obj.graph),
+                                    (mpr_local_dev)local_dev, MPR_DEV);
+            mpr_graph_remove_link(link->obj.graph, link, status);
+            mpr_dev_send_state(local_dev, MSG_DEV);
+            return;
+        }
     }
 
     /* Only send pings if this link has associated maps, ensuring empty
      * links are removed after the ping timeout. */
-    if (!link->is_local_only && link->num_maps)
-        send_ping(link, now);
-
-    return 0;
+    if (!link->is_local_only && link->num_maps) {
+        send_ping(link);
+    }
 }
 
 int mpr_link_get_dev_dir(mpr_link link, mpr_dev dev)

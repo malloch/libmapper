@@ -806,7 +806,7 @@ void mpr_net_use_bus(mpr_net net)
 
 void mpr_net_use_mesh(mpr_net net, lo_address addr, mpr_time *time)
 {
-    if (net->bundle && (net->addr.dst != BUNDLE_DST_MESH || net->addr.mesh != addr))
+    if (net->bundle && (net->addr.dst != BUNDLE_DST_MESH || net->addr.mesh != addr || time))
         mpr_net_send(net);
     net->addr.dst = BUNDLE_DST_MESH;
     net->addr.mesh = addr;
@@ -929,19 +929,10 @@ static void mpr_net_maybe_send_ping(mpr_net net, int force)
     list = mpr_graph_get_list(gph, MPR_LINK);
     while (list) {
         mpr_link link = (mpr_link)*list;
+        /* get next since link may be expired/removed */
         list = mpr_list_get_next(list);
-        if (mpr_obj_get_is_local((mpr_obj)link) && mpr_link_housekeeping(link, now)) {
-            int mapped = mpr_link_get_has_maps(link, MPR_DIR_ANY);
-            mpr_dev local_dev = mpr_link_get_dev(link, LINK_LOCAL_DEV);
-#ifdef DEBUG
-            mpr_dev remote_dev = mpr_link_get_dev(link, LINK_REMOTE_DEV);
-            trace_dev(local_dev, "Removing link to %sdevice '%s'\n", mapped ? "unresponsive " : "",
-                      mpr_dev_get_name(remote_dev));
-#endif
-            /* remove related data structures */
-            mpr_graph_remove_link(gph, link, mapped ? MPR_STATUS_EXPIRED : MPR_STATUS_REMOVED);
-            mpr_net_use_subscribers(net, (mpr_local_dev)local_dev, MPR_DEV);
-            mpr_dev_send_state(local_dev, MSG_DEV);
+        if (mpr_obj_get_is_local((mpr_obj)link)) {
+            mpr_link_housekeeping(link, now);
         }
     }
 }
@@ -2273,15 +2264,16 @@ static int handler_ping(const char *path, const char *types, lo_arg **av,
 
     mpr_time_set(&now, MPR_NOW);
     then = lo_message_get_timestamp(msg);
+
     remote_dev = (mpr_dev)mpr_graph_get_obj(graph, av[0]->h, MPR_DEV);
     RETURN_ARG_UNLESS(remote_dev, 0);
     for (i = 0; i < net->num_devs; i++) {
         mpr_local_dev dev = net->devs[i];
         mpr_link link = mpr_dev_get_link_by_remote((mpr_dev)dev, remote_dev);
-        if (!link)
-            continue;
-        trace_dev(dev, "ping received from device '%s'\n", mpr_dev_get_name(remote_dev));
-        mpr_link_update_clock(link, then, now, av[1]->i, av[2]->i, av[3]->d);
+        if (link) {
+            trace_dev(dev, "ping received from device '%s'\n", mpr_dev_get_name(remote_dev));
+            mpr_link_update_clock(link, then, now, av[1]->i, av[2]->i, av[3]->d);
+        }
     }
     return 0;
 }

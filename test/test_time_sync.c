@@ -45,7 +45,7 @@ void handler(mpr_sig sig, mpr_sig_evt event, mpr_id instance, int length,
              mpr_type type, const void *value, mpr_time t)
 {
     mpr_id id = mpr_obj_get_prop_as_int64((mpr_obj)mpr_sig_get_dev(sig), MPR_PROP_ID, NULL);
-    double diff = mpr_time_as_dbl(t) - mpr_time_as_dbl(now), epsilon = 0.01 * period;
+    double diff = mpr_time_as_dbl(t) - mpr_time_as_dbl(now), epsilon = 0.01;
 
     if (value)
         eprintf("handler got value %g at time %f (%f)\n", *(float*)value, mpr_time_as_dbl(t), diff);
@@ -106,8 +106,16 @@ int setup_devs(mpr_graph g, const char *iface)
 
 int wait_ready(void)
 {
+    mpr_time t;
     while (!done && !(mpr_dev_get_is_ready(dev1) && mpr_dev_get_is_ready(dev2))) {
+        mpr_time_set(&t, MPR_NOW);
+        mpr_time_add_dbl(&t, offset1);
+        mpr_dev_set_time(dev1, t);
         mpr_dev_poll(dev1, 25);
+
+        mpr_time_set(&t, MPR_NOW);
+        mpr_time_add_dbl(&t, offset2);
+        mpr_dev_set_time(dev2, t);
         mpr_dev_poll(dev2, 25);
     }
     return done;
@@ -130,14 +138,23 @@ int setup_map(void)
         if (i++ > 100)
             return 1;
     }
-
     return 0;
 }
 
+enum {
+    SYNCING,
+    SYNCED
+};
+
 void loop(void)
 {
-    int i = 0;
-    mpr_time t;
+    int i = 0, status = SYNCING;
+    float sync_time = 0;
+    mpr_time start, t;
+    mpr_time_set(&start, MPR_NOW);
+
+    mpr_dev_start_polling(dev1, 10);
+    mpr_dev_start_polling(dev2, 10);
 
     eprintf("Polling device..\n");
     while ((!terminate || (i < 400 && received < 50)) && !done) {
@@ -149,6 +166,7 @@ void loop(void)
             mpr_dev_set_time(dev1, t);
             eprintf("sending %d from dev1 -> dev2\n", received);
             mpr_sig_set_value(out1, 0, 1, MPR_INT32, &received);
+            mpr_dev_update_maps(dev1);
         }
         else {
             mpr_time_set(&t, now);
@@ -156,25 +174,40 @@ void loop(void)
             mpr_dev_set_time(dev2, t);
             eprintf("sending %d from dev2 -> dev1\n", received);
             mpr_sig_set_value(out2, 0, 1, MPR_INT32, &received);
+            mpr_dev_update_maps(dev2);
         }
 
-        mpr_dev_update_maps(dev1);
-        mpr_dev_update_maps(dev2);
+        ++sent;
+        usleep(period * 1000);
+        ++i;
 
-        sent += 2;
-
-        mpr_dev_poll(dev1, period);
-        mpr_dev_poll(dev2, period);
-        i++;
-
-        if (!verbose) {
-            if (received > 1)
-                printf("\r  Synced  (%3i)... Offsets: [%+4.2f, %+4.2f]   ", received, diff1, diff2);
-            else
-                printf("\r  Syncing (%3i)... Offsets: [%+4.2f, %+4.2f]   ", i, diff1, diff2);
-            fflush(stdout);
+        if (received > 1) {
+            if (SYNCING == status) {
+                mpr_time_set(&t, MPR_NOW);
+                sync_time = mpr_time_as_dbl(t) - mpr_time_as_dbl(start);
+                eprintf("\n----------- %2.2f seconds -----------\n", sync_time);
+            }
+            status = SYNCED;
+            if (!verbose) {
+                printf("\r  Synced  (%3i)... Offsets: [%+4.3f, %+4.3f]   ", received, diff1, diff2);
+                fflush(stdout);
+            }
+        }
+        else {
+            status = SYNCING;
+            if (!verbose) {
+                printf("\r  Syncing (%3i)... Offsets: [%+4.3f, %+4.3f]   ", i, diff1, diff2);
+                fflush(stdout);
+            }
         }
     }
+    if (SYNCED == status)
+        printf("\n  Sync achieved in %2.2f seconds\n", sync_time);
+    else
+        printf("\n  Sync not achieved\n");
+
+    mpr_dev_stop_polling(dev1);
+    mpr_dev_stop_polling(dev2);
 }
 
 void ctrlc(int sig)
@@ -197,6 +230,7 @@ int main(int argc, char **argv)
                     case 'h':
                         printf("test_time_sync.c: possible arguments "
                                "-q quiet (suppress output), "
+                               "-f fast (execute quickly), "
                                "-t terminate automatically, "
                                "-s shared (use one mpr_graph only), "
                                "-h help, "
@@ -205,6 +239,9 @@ int main(int argc, char **argv)
                         break;
                     case 'q':
                         verbose = 0;
+                        break;
+                    case 'f':
+                        period = 1;
                         break;
                     case 't':
                         terminate = 1;
@@ -230,6 +267,9 @@ int main(int argc, char **argv)
 
     signal(SIGINT, ctrlc);
 
+    offset1 = rand() % 1000 * (rand() % 2 ? 1.0 : -1.0);
+    offset2 = rand() % 1000 * (rand() % 2 ? 1.0 : -1.0);
+
     if (setup_devs(g, iface)) {
         eprintf("Error initializing devices.\n");
         result = 1;
@@ -247,9 +287,6 @@ int main(int argc, char **argv)
         result = 1;
         goto done;
     }
-
-    offset1 = rand() % 1000 * (rand() % 2 ? 1.0 : -1.0);
-    offset2 = rand() % 1000 * (rand() % 2 ? 1.0 : -1.0);
 
     eprintf("offset1: %f\n", offset1);
     eprintf("offset2: %f\n", offset2);

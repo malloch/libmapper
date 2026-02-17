@@ -581,12 +581,11 @@ void mpr_dev_set_time(mpr_dev dev, mpr_time time)
 {
     mpr_local_dev ldev = (mpr_local_dev)dev;
     mpr_time now;
+
+    RETURN_UNLESS(dev && dev->obj.is_local && memcmp(&time, &(ldev->time), sizeof(mpr_time)));
+
     mpr_time_set(&now, MPR_NOW);
-
-    RETURN_UNLESS(dev && dev->obj.is_local && memcmp(&time, &(ldev)->time, sizeof(mpr_time)));
-
-    mpr_dev_set_offset(dev, mpr_time_as_dbl(time) - mpr_time_as_dbl(now),
-                       dev->clk_offset ? 0.1 : 1.0);
+    mpr_dev_set_offset(dev, mpr_time_get_diff(time, now), dev->clk_offset ? 0.1 : 1.0);
 
     if (!ldev->polling)
         process_outgoing_maps(ldev);
