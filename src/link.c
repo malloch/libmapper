@@ -144,6 +144,7 @@ void mpr_link_connect(mpr_link link, const char *host, int admin_port, int data_
         sprintf(str, "%d", data_port);
         link->addr.udp = lo_address_new(host, str);
         link->addr.tcp = lo_address_new_with_proto(LO_TCP, host, str);
+        lo_address_set_tcp_nodelay(link->addr.tcp, 1);
         sprintf(str, "%d", admin_port);
         link->addr.admin = lo_address_new(host, str);
         trace_dev(link->devs[LINK_LOCAL_DEV], "activated link to device '%s' at %s:%d\n",
