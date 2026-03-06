@@ -45,7 +45,7 @@ void handler(mpr_sig sig, mpr_sig_evt event, mpr_id instance, int length,
              mpr_type type, const void *value, mpr_time t)
 {
     mpr_id id = mpr_obj_get_prop_as_int64((mpr_obj)mpr_sig_get_dev(sig), MPR_PROP_ID, NULL);
-    double diff = mpr_time_as_dbl(t) - mpr_time_as_dbl(now), epsilon = 0.01;
+    double diff = mpr_time_as_dbl(t) - mpr_time_as_dbl(now), epsilon = 0.005;
 
     if (value)
         eprintf("handler got value %g at time %f (%f)\n", *(float*)value, mpr_time_as_dbl(t), diff);

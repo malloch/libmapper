@@ -25,8 +25,6 @@ mpr_dev dst = 0;
 mpr_sig sendsig = 0;
 mpr_sig recvsig = 0;
 
-mpr_time t_last_update = {0, 1};
-
 int sent = 0;
 int received = 0;
 
@@ -99,8 +97,6 @@ void handler(mpr_sig sig, mpr_sig_evt event, mpr_id instance, int length,
         mpr_time_print(t);
         printf("\n");
     }
-    if (mpr_time_cmp(t, t_last_update) <= 0)
-        value = 0;
     if (value)
         received++;
     else if (verbose) {
@@ -111,7 +107,6 @@ void handler(mpr_sig sig, mpr_sig_evt event, mpr_id instance, int length,
         mpr_time_print(t);
         printf("\n");
     }
-    t_last_update = t;
 }
 
 int setup_dst(mpr_graph g, const char *iface)
