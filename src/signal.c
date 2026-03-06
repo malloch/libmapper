@@ -738,7 +738,7 @@ void mpr_sig_init(mpr_sig sig, mpr_dev dev, int is_local, mpr_dir dir, const cha
     link(EPHEM,        MPR_BOOL,  &sig->ephemeral,    mod);
     link(ID,           MPR_INT64, &sig->obj.id,       MOD_NONE);
     link(LEN,          MPR_INT32, &sig->len,          MOD_NONE);
-    link(NAME,         MPR_STR,   &sig->name, 	      MOD_NONE | INDIRECT);
+    link(NAME,         MPR_STR,   &sig->name,         MOD_NONE | INDIRECT);
     link(NUM_INST,     MPR_INT32, &sig->num_inst,     MOD_NONE);
     link(NUM_MAPS_IN,  MPR_INT32, &sig->num_maps_in,  MOD_NONE);
     link(NUM_MAPS_OUT, MPR_INT32, &sig->num_maps_out, MOD_NONE);

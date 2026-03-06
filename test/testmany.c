@@ -47,27 +47,27 @@ void handler(mpr_sig sig, mpr_sig_evt event, mpr_id instance, int length,
 
 int setup_devs(const char *iface)
 {
-	char str[20];
-	float mn=0, mx=1;
+    char str[20];
+    float mn=0, mx=1;
     int i, j;
 
     mpr_graph g = shared_graph ? mpr_graph_new(0) : 0;
     if (g && iface) mpr_graph_set_interface(g, iface);
-	for (i = 0; i < num_devs; i++) {
-		devices[i] = mpr_dev_new("testmany", g);
+    for (i = 0; i < num_devs; i++) {
+        devices[i] = mpr_dev_new("testmany", g);
         if (!devices[i])
-			goto error;
+            goto error;
         if (!g && iface)
             mpr_graph_set_interface(mpr_obj_get_graph((mpr_obj)devices[i]), iface);
         eprintf("device %d created using interface %s.\n", i,
                 mpr_graph_get_interface(mpr_obj_get_graph((mpr_obj)devices[i])));
 
         /* give each device 10 inputs and 10 outputs */
-		for (j = 0; j < 10; j++) {
+        for (j = 0; j < 10; j++) {
             mn = fmod(rand() * 0.01, 21.f) - 10.f;
             mx = fmod(rand() * 0.01, 21.f) - 10.f;
-			sprintf(str, "in%d", j);
-			mpr_sig_new(devices[i], MPR_DIR_IN, str, 1, MPR_FLT, NULL, &mn, &mx, NULL, NULL, 0);
+            sprintf(str, "in%d", j);
+            mpr_sig_new(devices[i], MPR_DIR_IN, str, 1, MPR_FLT, NULL, &mn, &mx, NULL, NULL, 0);
             mn = fmod(rand() * 0.01, 21.f) - 10.f;
             mx = fmod(rand() * 0.01, 21.f) - 10.f;
             sprintf(str, "out%d", j);
@@ -77,8 +77,8 @@ int setup_devs(const char *iface)
             else
                 mpr_sig_new(devices[i], MPR_DIR_OUT, str, 1, MPR_FLT, NULL,
                             &mn, NULL, NULL, NULL, 0);
-		}
-	}
+        }
+    }
     return 0;
 
   error:
@@ -88,17 +88,17 @@ int setup_devs(const char *iface)
 void cleanup_devs(void)
 {
     int i;
-	mpr_dev dest;
+    mpr_dev dest;
 
     eprintf("Freeing devices");
-	for (i = 0; i < num_devs; i++) {
-		dest = devices[i];
+    for (i = 0; i < num_devs; i++) {
+        dest = devices[i];
 
-		if (dest) {
-			mpr_dev_free(dest);
-			eprintf(".");
-		}
-	}
+        if (dest) {
+            mpr_dev_free(dest);
+            eprintf(".");
+        }
+    }
     eprintf("\n");
 }
 
@@ -106,15 +106,15 @@ int wait_ready(int *cancel)
 {
     int i, j = 0, k = 0, keep_waiting = 1, highest = 0, result = 0;
 
-	while ( keep_waiting && !*cancel ) {
-		keep_waiting = 0;
+    while ( keep_waiting && !*cancel ) {
+        keep_waiting = 0;
 
-		for (i = 0; i < num_devs; i++) {
-			mpr_dev_poll(devices[i], 50);
-			if (!mpr_dev_get_is_ready(devices[i])) {
-				keep_waiting = 1;
-			}
-		}
+        for (i = 0; i < num_devs; i++) {
+            mpr_dev_poll(devices[i], 50);
+            if (!mpr_dev_get_is_ready(devices[i])) {
+                keep_waiting = 1;
+            }
+        }
         if (j++ >= 1000) {
             printf(".");
             fflush(stdout);
@@ -126,7 +126,7 @@ int wait_ready(int *cancel)
                 k = 0;
             }
         }
-	}
+    }
     eprintf("\nRegistered devices:\n");
     for (i = 0; i < num_devs; i++) {
         int ordinal = mpr_obj_get_prop_as_int32((mpr_obj)devices[i], MPR_PROP_ORDINAL, NULL);
@@ -158,9 +158,9 @@ void loop(void)
     eprintf("-------------------- GO ! --------------------\n");
 
     while (i >= 0 && !done) {
-		for (j = 0; j < num_devs; j++) {
-			mpr_dev_poll(devices[j], 10);
-		}
+        for (j = 0; j < num_devs; j++) {
+            mpr_dev_poll(devices[j], 10);
+        }
         i++;
     }
 }
@@ -232,7 +232,7 @@ int main(int argc, char *argv[])
 
     signal(SIGSEGV, segv);
     signal(SIGINT, ctrlc);
-	srand( time(NULL) );
+    srand( time(NULL) );
 
     if (setup_devs(iface)) {
         eprintf("Error initializing devices.\n");

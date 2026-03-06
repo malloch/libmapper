@@ -360,7 +360,7 @@ int etoken_replace_special_constants(etoken tok)
             case CONST_MAXVAL:
                 switch (tok->lit.datatype) {
                     case MPR_INT32: tok->lit.val.i = INT_MAX;   break;
-                    case MPR_FLT:   tok->lit.val.f = FLT_MAX; 	break;
+                    case MPR_FLT:   tok->lit.val.f = FLT_MAX;   break;
                     case MPR_DBL:   tok->lit.val.d = DBL_MAX;   break;
                     default:                                    goto error;
                 }
