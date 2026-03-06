@@ -52,7 +52,8 @@ int setup_devs(const char *iface)
     int i, j;
 
     mpr_graph g = shared_graph ? mpr_graph_new(0) : 0;
-    if (g && iface) mpr_graph_set_interface(g, iface);
+    if (g && iface)
+        mpr_graph_set_interface(g, iface);
     for (i = 0; i < num_devs; i++) {
         devices[i] = mpr_dev_new("testmany", g);
         if (!devices[i])

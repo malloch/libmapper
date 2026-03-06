@@ -49,6 +49,9 @@ static unsigned __stdcall net_thread_func(void *data);
 
 extern const char* prop_msg_strings[MPR_PROP_EXTRA+1];
 
+#define NUM_NET_SERVERS 2
+#define NUM_DEV_SERVERS 2
+
 #define SERVER_BUS      0   /* Multicast comms. */
 #define SERVER_MESH     1   /* Mesh comms. */
 
@@ -442,16 +445,17 @@ void mpr_net_add_dev(mpr_net net, mpr_local_dev dev)
         net->devs[net->num_devs] = dev;
         ++net->num_devs;
 
-        if ((net->num_servers - 2) < (net->num_devs * 2)) {
-            int num_servers = net->num_devs * 2 + 2;
+        if ((net->num_servers - NUM_NET_SERVERS) < (net->num_devs * NUM_DEV_SERVERS)) {
+            int num_servers = net->num_devs * NUM_DEV_SERVERS + NUM_NET_SERVERS;
             net->servers = realloc(net->servers, num_servers * sizeof(lo_server));
             net->server_status = realloc(net->server_status, num_servers * sizeof(int));
             net->num_servers = num_servers;
         }
-        net->servers[net->num_devs * 2] = net->servers[net->num_devs * 2 + 1] = 0;
+        memset(&net->servers[NUM_NET_SERVERS + (net->num_devs - 1) * NUM_DEV_SERVERS],
+               0, NUM_DEV_SERVERS * sizeof(lo_server));
     }
 
-    server_idx = dev_idx * 2 + 2;
+    server_idx = dev_idx * NUM_DEV_SERVERS + NUM_NET_SERVERS;
 
     /* (re)create device UDP server */
     while (!(temp = lo_server_new_from_config(&config))) {
@@ -537,16 +541,17 @@ void mpr_net_remove_dev(mpr_net net, mpr_local_dev dev)
         return;
     }
     --net->num_devs;
-    net->num_servers -= 2;
+    net->num_servers -= NUM_DEV_SERVERS;
 
     /* free device servers */
-    lo_server_free(net->servers[i * 2 + 2]); /* UDP server */
-    lo_server_free(net->servers[i * 2 + 3]); /* TCP server */
+    lo_server_free(net->servers[i * NUM_DEV_SERVERS + NUM_NET_SERVERS]); /* UDP server */
+    lo_server_free(net->servers[i * NUM_DEV_SERVERS + NUM_NET_SERVERS + 1]); /* TCP server */
 
     for (; i < net->num_devs; i++) {
         net->devs[i] = net->devs[i + 1];
-        net->servers[i * 2 + 2] = net->servers[i * 2 + 4];
-        net->servers[i * 2 + 3] = net->servers[i * 2 + 5];
+        memcpy(&net->servers[i * NUM_DEV_SERVERS + NUM_NET_SERVERS],
+               &net->servers[i * NUM_DEV_SERVERS + NUM_NET_SERVERS + NUM_DEV_SERVERS],
+               NUM_DEV_SERVERS * sizeof(lo_server));
     }
     net->devs = realloc(net->devs, net->num_devs * sizeof(mpr_local_dev));
     net->servers = realloc(net->servers, net->num_servers * sizeof(mpr_local_dev));
@@ -570,7 +575,7 @@ lo_server mpr_net_get_dev_server(mpr_net net, mpr_local_dev dev, dev_server_t id
     int i;
     for (i = 0; i < net->num_devs; i++) {
         if (dev == net->devs[i])
-            return net->servers[i * 2 + 2 + idx];
+            return net->servers[i * NUM_DEV_SERVERS + NUM_NET_SERVERS + idx];
     }
     return 0;
 }
@@ -580,10 +585,13 @@ void mpr_net_add_dev_server_method(mpr_net net, mpr_local_dev dev, const char *p
 {
     int i;
     for (i = 0; i < net->num_devs; i++) {
+        int start, end, j;
         if (dev != net->devs[i])
             continue;
-        lo_server_add_method(net->servers[i * 2 + 2], path, NULL, h, data);
-        lo_server_add_method(net->servers[i * 2 + 3], path, NULL, h, data);
+        start = NUM_NET_SERVERS + i * NUM_DEV_SERVERS;
+        end = start + NUM_DEV_SERVERS;
+        for (j = start; j < end; j++)
+            lo_server_add_method(net->servers[j], path, NULL, h, data);
     }
 }
 
@@ -591,10 +599,13 @@ void mpr_net_remove_dev_server_method(mpr_net net, mpr_local_dev dev, const char
 {
     int i;
     for (i = 0; i < net->num_devs; i++) {
+        int start, end, j;
         if (dev != net->devs[i])
             continue;
-        lo_server_del_method(net->servers[i * 2 + 2], path, NULL);
-        lo_server_del_method(net->servers[i * 2 + 3], path, NULL);
+        start = NUM_NET_SERVERS + i * NUM_DEV_SERVERS;
+        end = start + NUM_DEV_SERVERS;
+        for (j = start; j < end; j++)
+            lo_server_del_method(net->servers[j], path, NULL);
     }
 }
 
@@ -675,7 +686,7 @@ int mpr_net_init(mpr_net net, const char *iface, const char *group, int port)
 
     /* Allocate server array */
     if (!net->num_servers) {
-        net->num_servers = 2;
+        net->num_servers = NUM_NET_SERVERS;
         net->servers = (lo_server*) calloc(1, net->num_servers * sizeof(lo_server));
         net->server_status = (int*) malloc(net->num_servers * sizeof(int));
     }
@@ -971,7 +982,7 @@ static void mpr_net_housekeeping(mpr_net net, int force_ping)
 
 int mpr_net_poll_internal(mpr_net net, int block_ms)
 {
-    int i, j, count = 0, left_ms, elapsed_ms, admin_elapsed_ms = 0;
+    int i, count = 0, left_ms, elapsed_ms, admin_elapsed_ms = 0;
     double then;
 
     if (++net->polling > 1) {
@@ -1002,11 +1013,14 @@ int mpr_net_poll_internal(mpr_net net, int block_ms)
 
         if (lo_servers_recv_noblock(net->servers, net->server_status, net->num_servers, left_ms)) {
             count = (net->server_status[0] > 0) + (net->server_status[1] > 0);
-            for (i = 0, j = 2; j < net->num_servers; i++, j += 2) {
-                int dev_count = (net->server_status[j] > 0) || (net->server_status[j+1] > 0);
-                if (dev_count) {
-                    mpr_dev_process_incoming_maps(net->devs[i]);
-                    count += dev_count;
+            for (i = 0; i < net->num_devs; i++) {
+                int j;
+                for (j = NUM_NET_SERVERS; j < NUM_NET_SERVERS + NUM_DEV_SERVERS; j++) {
+                    if (net->server_status[j] > 0) {
+                        mpr_dev_process_incoming_maps(net->devs[i]);
+                        ++count;
+                        break;
+                    }
                 }
             }
             recvd = 1;
