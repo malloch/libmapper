@@ -807,6 +807,7 @@ static int strncmp_lc(const char *a, const char *b, int len)
     return 0;
 }
 
+/* TODO: could use binary search here if function names are alphabetical */
 #define FN_LOOKUP(LC, UC, CLOSE)                                    \
 static expr_##LC##_t LC##_lookup(const char *s, int len)            \
 {                                                                   \

@@ -88,7 +88,7 @@ static int expr_lex(const char *str, int idx, etoken tok)
                 etoken_set_flt(tok, (float)n);
                 return idx;
             }
-            while (c && (isalpha(c)))
+            while (c && (isalpha(c) || isdigit(c)))
                 c = str[++idx];
             ++i;
             if ((tok->fn.idx = vfn_lookup(str+i, idx-i)) != VFN_UNKNOWN) {
@@ -97,7 +97,10 @@ static int expr_lex(const char *str, int idx, etoken tok)
             }
             else if ((tok->fn.idx = rfn_lookup(str+i, idx-i)) != RFN_UNKNOWN) {
                 tok->toktype = TOK_RFN;
-                /* skip over '()' for reduce functions but not reduce types other than 'history' */
+                return idx;
+            }
+            else if ((tok->fn.idx = fn_lookup(str+i, idx-i)) != FN_UNKNOWN) {
+                tok->toktype = TOK_FN_DOT;
                 return idx;
             }
             else

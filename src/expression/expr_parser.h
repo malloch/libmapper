@@ -64,7 +64,7 @@ typedef struct _temp_var_cache {
 #define OBJECT_TOKENS (TOK_VAR | TOK_LITERAL | TOK_FN | TOK_VFN | TOK_MUTED | TOK_NEGATE \
                        | TOK_OPEN_PAREN | TOK_OPEN_SQUARE | TOK_OP | TOK_TT | TOK_HASH)
 #define JOIN_TOKENS (TOK_OP | TOK_CLOSE_PAREN | TOK_CLOSE_SQUARE | TOK_CLOSE_CURLY | TOK_COMMA \
-                     | TOK_COLON | TOK_SEMICOLON)
+                     | TOK_COLON | TOK_SEMICOLON | TOK_FN_DOT)
 
 /* some vector functions require additional variable load/write tokens for function memory */
 int push_vfn_token(estack op, estack out, etoken tok, expr_var_t *vars, int *p_num_var, int move)
@@ -398,19 +398,37 @@ int expr_parser_build_stack(mpr_expr expr, const char *str,
                 break;
             }
             case TOK_FN:
+            case TOK_FN_DOT: {
+                etoken_t newtok;
+                int dot = TOK_FN_DOT == tok.toktype;
                 tok.gen.datatype = fn_tbl[tok.fn.idx].fn_int ? MPR_INT32 : MPR_FLT;
                 tok.fn.arity = fn_tbl[tok.fn.idx].arity;
+                tok.toktype = TOK_FN;
                 estack_push(op, &tok);
-                if (fn_tbl[tok.fn.idx].arity)
-                    allow_toktype = TOK_OPEN_PAREN;
-                else {
-                    estack_push(out, estack_pop(op));
-                    {FAIL_IF(!estack_check_type(out, vars, 1), "Malformed expression (1)");}
-                    allow_toktype = JOIN_TOKENS;
+
+                GET_NEXT_TOKEN(newtok);
+                {FAIL_IF(newtok.toktype != TOK_OPEN_PAREN, "missing open parenthesis. (1)");}
+                if (dot && tok.fn.arity > 1)
+                    newtok.fn.arity = 2;
+                else
+                    newtok.fn.arity = 1;
+                newtok.fn.idx = tok.fn.idx;
+                estack_push(op, &newtok);
+
+                switch (tok.fn.arity - dot) {
+                    case -1:
+                        {FAIL("Dot function syntax requires arity > 0");}
+                    case 0:
+                        allow_toktype = TOK_CLOSE_PAREN;
+                        break;
+                    default:
+                        allow_toktype = OBJECT_TOKENS;
+                        break;
                 }
                 if (tok.fn.idx >= FN_DEL_IDX)
                     is_const = 0;
                 break;
+            }
             case TOK_VFN: {
                 int memory = vfn_tbl[tok.fn.idx].memory;
                 if (memory) {
@@ -458,7 +476,7 @@ int expr_parser_build_stack(mpr_expr expr, const char *str,
                     if (VFN_DIFF2 != tok.fn.idx) {
                         etoken_t newtok;
                         GET_NEXT_TOKEN(newtok);
-                        {FAIL_IF(newtok.toktype != TOK_OPEN_PAREN, "missing open parenthesis. (1)");}
+                        {FAIL_IF(newtok.toktype != TOK_OPEN_PAREN, "missing open parenthesis. (2)");}
                     }
                     int memory = vfn_tbl[tok.fn.idx].memory;
                     if (memory) {
@@ -495,7 +513,20 @@ int expr_parser_build_stack(mpr_expr expr, const char *str,
                         }
                         else {
                             GET_NEXT_TOKEN(tok);
-                            {FAIL_IF(tok.toktype != TOK_CLOSE_PAREN, "missing close parenthesis. (1)");}
+                            if (tok.toktype != TOK_CLOSE_PAREN) {
+                                t = estack_peek(op, ESTACK_TOP - 1);
+                                if (VFN_MAX == t->fn.idx || VFN_MIN == t->fn.idx) {
+                                    /* overloaded function, TOK_FN_DOT version expects argument */
+                                    t->toktype = TOK_FN;
+                                    t->fn.idx = (VFN_MAX == t->fn.idx) ? FN_MAX : FN_MIN;
+                                    t->fn.arity = 2;
+                                    /* also adjust arity of OPEN_PAREN token on op stack */
+                                    estack_peek(op, ESTACK_TOP)->fn.arity = 2;
+                                    allow_toktype = OBJECT_TOKENS;
+                                }
+                                else
+                                    {FAIL("missing close parenthesis. (1)");}
+                            }
                         }
 #if TRACE_PARSE
         estack_print("OUTPUT STACK", out, vars, 0);
@@ -535,7 +566,7 @@ int expr_parser_build_stack(mpr_expr expr, const char *str,
                             /* TODO: allow variable + maximum instead e.g. history(n, 10) */
                             /* TODO: allow range instead e.g. history(-5:-2) */
                             GET_NEXT_TOKEN(tok);
-                            {FAIL_IF(tok.toktype != TOK_OPEN_PAREN, "missing open parenthesis. (2)");}
+                            {FAIL_IF(tok.toktype != TOK_OPEN_PAREN, "missing open parenthesis. (3)");}
                             GET_NEXT_TOKEN(tok);
                             {FAIL_IF(tok.toktype != TOK_LITERAL || tok.lit.datatype != MPR_INT32,
                                      "'history' must be followed by integer argument.");}
@@ -678,7 +709,7 @@ int expr_parser_build_stack(mpr_expr expr, const char *str,
                 }
                 else {
                     GET_NEXT_TOKEN(newtok);
-                    {FAIL_IF(newtok.toktype != TOK_OPEN_PAREN, "missing open parenthesis. (3)");}
+                    {FAIL_IF(newtok.toktype != TOK_OPEN_PAREN, "missing open parenthesis. (4)");}
                 }
                 assert(op->num_tokens);
                 etoken_cpy(&newtok, estack_peek(op, ESTACK_TOP));
@@ -1090,8 +1121,9 @@ int expr_parser_build_stack(mpr_expr expr, const char *str,
                     break;
 
                 /* if the top of the operator stack is tok_fn or tok_vfn, pop to output */
-                if (TOK_FN == estack_peek(op, ESTACK_TOP)->toktype) {
-                    if (FN_SIG_IDX == estack_peek(op, ESTACK_TOP)->fn.idx) {
+                op_top = estack_peek(op, ESTACK_TOP);
+                if (TOK_FN == op_top->toktype) {
+                    if (FN_SIG_IDX == op_top->fn.idx) {
                         etoken top = estack_peek(out, ESTACK_TOP);
                         etoken top_m1 = estack_peek(out, ESTACK_TOP - 1);
                         {FAIL_IF(TOK_VAR != top->toktype || VAR_X != top->var.idx,
@@ -1128,7 +1160,7 @@ int expr_parser_build_stack(mpr_expr expr, const char *str,
                         if (!(top->gen.flags & VAR_HIST_IDX))
                             allow_toktype |= TOK_OPEN_CURLY;
                     }
-                    else if (FN_DEL_IDX == (estack_peek(op, ESTACK_TOP))->fn.idx) {
+                    else if (FN_DEL_IDX == op_top->fn.idx) {
                         int buffer_size = 0;
                         etoken t = estack_peek(out, ESTACK_TOP);
                         switch (arity) {
@@ -1204,7 +1236,7 @@ int expr_parser_build_stack(mpr_expr expr, const char *str,
                         if (!(t->gen.flags & VAR_VEC_IDX) && !t->var.vec_idx)
                             allow_toktype |= TOK_OPEN_SQUARE;
                     }
-                    else if (FN_VEC_IDX == (estack_peek(op, ESTACK_TOP))->fn.idx) {
+                    else if (FN_VEC_IDX == op_top->fn.idx) {
                         etoken top = estack_peek(out, ESTACK_TOP);
                         etoken top_m1 = estack_peek(out, ESTACK_TOP - 1);
 
@@ -1247,28 +1279,27 @@ int expr_parser_build_stack(mpr_expr expr, const char *str,
                         break;
                     }
                     else {
-                        etoken top = estack_peek(op, ESTACK_TOP);
-                        if (arity != fn_tbl[top->fn.idx].arity) {
+                        if (arity != fn_tbl[op_top->fn.idx].arity) {
                             /* check for overloaded functions */
                             if (arity != 1)
-                                {FAIL("Function arity mismatch.");}
-                            if (top->fn.idx == FN_MIN) {
-                                top->toktype = TOK_VFN;
-                                top->fn.idx = VFN_MIN;
+                                {FAIL("Function arity mismatch (1).");}
+                            if (op_top->fn.idx == FN_MIN) {
+                                op_top->toktype = TOK_VFN;
+                                op_top->fn.idx = VFN_MIN;
                             }
-                            else if (top->fn.idx == FN_MAX) {
-                                top->toktype = TOK_VFN;
-                                top->fn.idx = VFN_MAX;
+                            else if (op_top->fn.idx == FN_MAX) {
+                                op_top->toktype = TOK_VFN;
+                                op_top->fn.idx = VFN_MAX;
                             }
                             else
-                                {FAIL("Function arity mismatch.");}
+                                {FAIL("Function arity mismatch (2).");}
                         }
                         estack_push(out, estack_pop(op));
                         {FAIL_IF(!estack_check_type(out, vars, 1), "Malformed expression (14)");}
                     }
 
                 }
-                else if (TOK_VFN == (estack_peek(op, ESTACK_TOP))->toktype) {
+                else if (TOK_VFN == op_top->toktype) {
                     /* check arity */
                     etoken t = estack_pop(op);
                     {FAIL_IF(arity != vfn_tbl[t->fn.idx].arity, "VFN arity mismatch.");}
@@ -1292,7 +1323,7 @@ int expr_parser_build_stack(mpr_expr expr, const char *str,
                         }
                     }
                 }
-                else if (TOK_REDUCING == (estack_peek(op, ESTACK_TOP))->toktype) {
+                else if (TOK_REDUCING == op_top->toktype) {
                     int cache_pos;
                     etoken t;
 

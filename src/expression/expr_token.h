@@ -23,39 +23,40 @@ enum etoken_type {
     TOK_VLITERAL        = 0x0000002,    /* Vector literal */
     TOK_NEGATE          = 0x0000004,
     TOK_FN              = 0x0000008,    /* Function */
-    TOK_VFN             = 0x0000010,    /* Vector function */
-    TOK_VFN_DOT         = 0x0000020,    /* Dot vector function */
-    TOK_RFN             = 0x0000040,    /* Reduce function */
-    TOK_OPEN_PAREN      = 0x0000080,
-    TOK_MUTED           = 0x0000100,
-    TOK_OPEN_SQUARE     = 0x0000200,
-    TOK_OPEN_CURLY      = 0x0000400,
-    TOK_CLOSE_PAREN     = 0x0000800,
-    TOK_CLOSE_SQUARE    = 0x0001000,
-    TOK_CLOSE_CURLY     = 0x0002000,
-    TOK_VAR             = 0x0004000,
-    TOK_VAR_NUM_INST    = 0x0004001,
-    TOK_VAR_INST_IDX    = 0x0004002,
-    TOK_DOLLAR          = 0x0008000,
-    TOK_HASH            = 0x0010000,
-    TOK_OP              = 0x0020000,
-    TOK_COMMA           = 0x0040000,
-    TOK_COLON           = 0x0080000,
-    TOK_SEMICOLON       = 0x0100000,
-    TOK_VECTORIZE       = 0x0200000,
-    TOK_TT              = 0x0400000,    /* NTP Timestamp */
-    TOK_ASSIGN          = 0x0800000,
+    TOK_FN_DOT          = 0x0000010,    /* Dot function */
+    TOK_VFN             = 0x0000020,    /* Vector function */
+    TOK_VFN_DOT         = 0x0000040,    /* Dot vector function */
+    TOK_RFN             = 0x0000080,    /* Reduce function */
+    TOK_OPEN_PAREN      = 0x0000100,
+    TOK_MUTED           = 0x0000200,
+    TOK_OPEN_SQUARE     = 0x0000400,
+    TOK_OPEN_CURLY      = 0x0000800,
+    TOK_CLOSE_PAREN     = 0x0001000,
+    TOK_CLOSE_SQUARE    = 0x0002000,
+    TOK_CLOSE_CURLY     = 0x0004000,
+    TOK_VAR             = 0x0008000,
+    TOK_VAR_NUM_INST    = 0x0008001,
+    TOK_VAR_INST_IDX    = 0x0008002,
+    TOK_DOLLAR          = 0x0010000,
+    TOK_HASH            = 0x0020000,
+    TOK_OP              = 0x0040000,
+    TOK_COMMA           = 0x0080000,
+    TOK_COLON           = 0x0100000,
+    TOK_SEMICOLON       = 0x0200000,
+    TOK_VECTORIZE       = 0x0400000,
+    TOK_TT              = 0x0800000,    /* NTP Timestamp */
+    TOK_ASSIGN          = 0x1000000,
     TOK_ASSIGN_USE,
     TOK_ASSIGN_CONST,                   /* Const assignment (does not require input) */
     TOK_ASSIGN_TT,                      /* Assign to NTP timestamp */
-    TOK_COPY_FROM       = 0x1000000,    /* Copy from stack */
+    TOK_COPY_FROM       = 0x2000000,    /* Copy from stack */
     TOK_MOVE,                           /* Move stack */
     TOK_LAMBDA,
     TOK_LOOP_START,
     TOK_LOOP_END,
     TOK_SP_ADD,                         /* Stack pointer offset */
     TOK_REDUCING,
-    TOK_END             = 0x2000000
+    TOK_END             = 0x4000000
 };
 
 struct generic_type {
@@ -524,6 +525,7 @@ static void etoken_print(etoken tok, expr_var_t *vars, int show_locks)
                 snprintf(s + d, l - d, "var[%d].?", tok->var.idx);
             break;
         case TOK_FN:        snprintf(s, l, "FN\t\t%s()", fn_tbl[tok->fn.idx].name);     break;
+        case TOK_FN_DOT:    snprintf(s, l, ".FN\t%s()", fn_tbl[tok->fn.idx].name);      break;
         case TOK_COMMA:     snprintf(s, l, ",");                                        break;
         case TOK_COLON:     snprintf(s, l, ":");                                        break;
         case TOK_VECTORIZE: snprintf(s, l, "VECT(%d)", tok->fn.arity);                  break;
