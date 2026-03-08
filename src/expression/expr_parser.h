@@ -744,7 +744,7 @@ int expr_parser_build_stack(mpr_expr expr, const char *str,
                 }
                 else if (RFN_NEWEST == rfn) {
                     etoken t = estack_peek(out, ESTACK_TOP);
-                    {FAIL_IF(rt != RT_SIGNAL, "newest() requires 'signal' prefix'");}
+                    {FAIL_IF(rt != RT_SIGNAL, "newest() requires 'signal' prefix");}
                     t->toktype = TOK_VAR;
                     t->var.idx = VAR_X_NEWEST;
                     t->gen.datatype = type_lo;

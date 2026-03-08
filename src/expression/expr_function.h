@@ -744,7 +744,7 @@ typedef enum {
     RFN_SIZE,
     RFN_NEWEST,
 /*  RFN_MAP, */
-    RFN_FILTER,
+/*  RFN_FILTER, */
     RFN_REDUCE,
     RFN_HISTORY,
     RFN_INSTANCE,
@@ -772,7 +772,7 @@ static struct {
     { "size",     0, OP_UNKNOWN,     VFN_MAXMIN  },
     { "newest",   0, OP_UNKNOWN,     VFN_UNKNOWN },
 /*  { "map",      1, OP_UNKNOWN,     VFN_UNKNOWN }, */
-    { "filter",   1, OP_UNKNOWN,     VFN_UNKNOWN }, /* replaced during parsing */
+/*  { "filter",   1, OP_UNKNOWN,     VFN_UNKNOWN }, *//* replaced during parsing */
     { "reduce",   1, OP_UNKNOWN,     VFN_UNKNOWN }, /* replaced during parsing */
     { "history",  1, OP_UNKNOWN,     VFN_UNKNOWN }, /* replaced during parsing */
     { "instance", 0, OP_UNKNOWN,     VFN_UNKNOWN }, /* replaced during parsing */
