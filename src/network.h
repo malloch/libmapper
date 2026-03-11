@@ -12,8 +12,8 @@ typedef struct _mpr_net *mpr_net;
 #include "util/mpr_inline.h"
 
 typedef enum {
-    SERVER_UDP = 0,
-    SERVER_TCP = 1
+    SERVER_DATA_UDP = 0,
+    SERVER_DATA_TCP = 1
 } dev_server_t;
 
 mpr_net mpr_net_new(mpr_graph g);

@@ -46,8 +46,10 @@ typedef struct _mpr_link {
 
     struct {
         lo_address admin;               /*!< Network address of remote endpoint */
-        lo_address udp;                 /*!< Network address of remote endpoint */
-        lo_address tcp;                 /*!< Network address of remote endpoint */
+        struct {
+            lo_address udp;             /*!< Network address of remote endpoint */
+            lo_address tcp;             /*!< Network address of remote endpoint */
+        } data;
     } addr;
 
     int is_local_only;
@@ -73,7 +75,7 @@ mpr_link mpr_link_new(mpr_local_dev local_dev, mpr_dev remote_dev)
 
 int mpr_link_get_is_ready(mpr_link link)
 {
-    return link && link->addr.udp;
+    return link && link->addr.data.udp;
 }
 
 lo_address mpr_link_get_admin_addr(mpr_link link)
@@ -142,9 +144,9 @@ void mpr_link_connect(mpr_link link, const char *host, int admin_port, int data_
         mpr_tbl tbl = mpr_obj_get_prop_tbl((mpr_obj)link->devs[LINK_REMOTE_DEV]);
         mpr_tbl_add_record(tbl, MPR_PROP_PORT, NULL, 1, MPR_INT32, &data_port, MOD_REMOTE);
         sprintf(str, "%d", data_port);
-        link->addr.udp = lo_address_new(host, str);
-        link->addr.tcp = lo_address_new_with_proto(LO_TCP, host, str);
-        lo_address_set_tcp_nodelay(link->addr.tcp, 1);
+        link->addr.data.udp = lo_address_new(host, str);
+        link->addr.data.tcp = lo_address_new_with_proto(LO_TCP, host, str);
+        lo_address_set_tcp_nodelay(link->addr.data.tcp, 1);
         sprintf(str, "%d", admin_port);
         link->addr.admin = lo_address_new(host, str);
         trace_dev(link->devs[LINK_LOCAL_DEV], "activated link to device '%s' at %s:%d\n",
@@ -169,8 +171,8 @@ void mpr_link_free(mpr_link link)
     int i;
     mpr_obj_free(&link->obj);
     FUNC_IF(lo_address_free, link->addr.admin);
-    FUNC_IF(lo_address_free, link->addr.udp);
-    FUNC_IF(lo_address_free, link->addr.tcp);
+    FUNC_IF(lo_address_free, link->addr.data.udp);
+    FUNC_IF(lo_address_free, link->addr.data.tcp);
     for (i = 0; i < NUM_BUNDLES; i++) {
         FUNC_IF(lo_bundle_free_recursive, link->bundles[i].udp);
         FUNC_IF(lo_bundle_free_recursive, link->bundles[i].tcp);
@@ -226,7 +228,7 @@ int mpr_link_process_bundles(mpr_link link, mpr_time t)
         if ((lb = mb->udp)) {
             mb->udp = 0;
             if ((num_msg = lo_bundle_count(lb))) {
-                lo_send_bundle_from(link->addr.udp, mpr_net_get_dev_server(net, ldev, SERVER_UDP), lb);
+                lo_send_bundle_from(link->addr.data.udp, mpr_net_get_dev_server(net, ldev, SERVER_DATA_UDP), lb);
             }
             lo_bundle_free_recursive(lb);
         }
@@ -235,7 +237,7 @@ int mpr_link_process_bundles(mpr_link link, mpr_time t)
             int count;
             if ((count = lo_bundle_count(lb))) {
                 num_msg += count;
-                lo_send_bundle_from(link->addr.tcp, mpr_net_get_dev_server(net, ldev, SERVER_TCP), lb);
+                lo_send_bundle_from(link->addr.data.tcp, mpr_net_get_dev_server(net, ldev, SERVER_DATA_TCP), lb);
             }
             lo_bundle_free_recursive(lb);
         }
