@@ -554,7 +554,7 @@ void mpr_net_remove_dev(mpr_net net, mpr_local_dev dev)
                NUM_DEV_SERVERS * sizeof(lo_server));
     }
     net->devs = realloc(net->devs, net->num_devs * sizeof(mpr_local_dev));
-    net->servers = realloc(net->servers, net->num_servers * sizeof(mpr_local_dev));
+    net->servers = realloc(net->servers, net->num_servers * sizeof(lo_server));
     net->server_status = realloc(net->server_status, net->num_servers * sizeof(int));
 
     for (i = 0; i < NUM_DEV_HANDLERS_SPECIFIC; i++) {
@@ -689,8 +689,8 @@ int mpr_net_init(mpr_net net, const char *iface, const char *group, int port)
     /* Allocate server array */
     if (!net->num_servers) {
         net->num_servers = NUM_NET_SERVERS;
-        net->servers = (lo_server*) calloc(1, net->num_servers * sizeof(lo_server));
-        net->server_status = (int*) malloc(net->num_servers * sizeof(int));
+        net->servers = (lo_server*) calloc(1, NUM_NET_SERVERS * sizeof(lo_server));
+        net->server_status = (int*) malloc(NUM_NET_SERVERS * sizeof(int));
     }
 
     /* Open server for multicast */
