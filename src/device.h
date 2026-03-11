@@ -51,7 +51,7 @@ int mpr_dev_get_is_subscribed(mpr_dev dev);
 void mpr_dev_set_is_subscribed(mpr_dev dev, int subscribed);
 
 void mpr_dev_manage_subscriber(mpr_local_dev dev, lo_address address, int flags,
-                               int timeout_seconds, int revision);
+                               int timeout_seconds, int revision, mpr_proto proto);
 
 /*! Return the list of inter-device links associated with a given device.
  *  \param dev          Device record query.

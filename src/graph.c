@@ -165,8 +165,13 @@ static void send_subscribe_msg(mpr_graph g, mpr_dev d, int flags, int timeout)
     lo_message_add_string(msg, "@lease");
     lo_message_add_int32(msg, timeout);
 
-    lo_message_add_string(msg, "@version");
+    lo_message_add_string(msg, mpr_prop_as_str(MPR_PROP_VERSION, 0));
     lo_message_add_int32(msg, mpr_obj_get_version((mpr_obj)d));
+
+    if (timeout > 0) {
+        lo_message_add_string(msg, mpr_prop_as_str(MPR_PROP_PROTOCOL, 0));
+        lo_message_add_string(msg, mpr_proto_as_str(MPR_PROTO_TCP));
+    }
 
     mpr_net_add_msg(g->net, cmd, 0, msg);
     mpr_net_send(g->net);

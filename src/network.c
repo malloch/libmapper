@@ -1365,6 +1365,7 @@ static int handler_subscribe(const char *path, const char *types, lo_arg **av,
 {
     mpr_local_dev dev = (mpr_local_dev)user;
     int i, version = -1, flags = 0, timeout_seconds = -1;
+    mpr_proto proto = MPR_PROTO_UDP;
 
 #ifdef DEBUG
     trace_net(mpr_graph_get_net(mpr_obj_get_graph((mpr_obj)dev)));
@@ -1412,10 +1413,15 @@ static int handler_subscribe(const char *path, const char *types, lo_arg **av,
                 {trace_dev(dev, "error parsing subscription lease prop.\n");}
             timeout_seconds = timeout_seconds >= 0 ? timeout_seconds : 0;
         }
+        else if (0 == strcmp(&av[i]->s, "@protocol")) {
+            ++i;
+            if (MPR_STR == types[i])
+                proto = mpr_proto_from_str(&av[i]->s);
+        }
     }
 
     /* add or renew subscription */
-    mpr_dev_manage_subscriber(dev, addr, flags, timeout_seconds, version);
+    mpr_dev_manage_subscriber(dev, addr, flags, timeout_seconds, version, proto);
     return 0;
 }
 

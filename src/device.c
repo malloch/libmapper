@@ -1053,7 +1053,7 @@ void mpr_dev_set_is_subscribed(mpr_dev dev, int subscribed)
 
 /* Add/renew/remove a subscription. */
 void mpr_dev_manage_subscriber(mpr_local_dev dev, lo_address addr, int flags,
-                               int timeout_sec, int revision)
+                               int timeout_sec, int revision, mpr_proto proto)
 {
     mpr_time t;
     mpr_net net;
