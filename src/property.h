@@ -12,7 +12,7 @@ void mpr_prop_print(int len, mpr_type type, const void *val);
 
 mpr_prop mpr_prop_from_str(const char *str);
 
-const char *mpr_prop_as_str(mpr_prop prop, int skip_slash);
+const char *mpr_prop_as_str(mpr_prop prop, int skip_prefix);
 
 int mpr_prop_get_len(mpr_prop p);
 

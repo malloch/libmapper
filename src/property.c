@@ -111,14 +111,14 @@ int mpr_prop_get_protocol_type(mpr_prop p)
     return static_props[PROP_TO_INDEX(p)].protocol_type;
 }
 
-const char *mpr_prop_as_str(mpr_prop p, int skip_slash)
+const char *mpr_prop_as_str(mpr_prop p, int skip_prefix)
 {
     const char *s;
     p = MASK_PROP_BITFLAGS(p);
     die_unless(p > MPR_PROP_UNKNOWN && p <= MPR_PROP_EXTRA,
                "called mpr_prop_as_str() with bad index %d.\n", p);
     s = static_props[PROP_TO_INDEX(p)].key;
-    return skip_slash ? s + 1 : s;
+    return skip_prefix ? s + 1 : s;
 }
 
 mpr_prop mpr_prop_from_str(const char *string)
