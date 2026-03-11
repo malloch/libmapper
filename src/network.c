@@ -1014,16 +1014,19 @@ int mpr_net_poll_internal(mpr_net net, int block_ms)
             left_ms = 100;
 
         if (lo_servers_recv_noblock(net->servers, net->server_status, net->num_servers, left_ms)) {
-            count = (net->server_status[0] > 0) + (net->server_status[1] > 0);
+            int idx = NUM_NET_SERVERS;
+            for (i = 0; i < NUM_NET_SERVERS; i++)
+                count += (net->server_status[i] > 0);
             for (i = 0; i < net->num_devs; i++) {
                 int j;
-                for (j = NUM_NET_SERVERS; j < NUM_NET_SERVERS + NUM_DEV_SERVERS; j++) {
-                    if (net->server_status[j] > 0) {
+                for (j = 0; j < NUM_DEV_SERVERS; j++) {
+                    if (net->server_status[j + idx] > 0) {
                         mpr_dev_process_incoming_maps(net->devs[i]);
                         ++count;
                         break;
                     }
                 }
+                idx += NUM_DEV_SERVERS;
             }
             recvd = 1;
         }
