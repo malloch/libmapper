@@ -44,7 +44,9 @@ if (!(a)) { trace_net(__VA_ARGS__); return ret; }
 #define trace(...) { printf("-- " __VA_ARGS__); }
 #define trace_net(NET)                                               \
 {                                                                    \
-    printf("\x1B[33m-- <network.%p>\x1B[0m received %s", NET, path); \
+    int proto = lo_address_get_protocol(lo_message_get_source(msg)); \
+    printf("\x1B[33m-- <network.%p.%s>\x1B[0m received %s", NET,     \
+           proto == LO_TCP ? "TCP" : "UDP", path);                   \
     lo_message_pp(msg);                                              \
 }
 #define die_unless(a, ...) { if (!(a)) { printf("-- " __VA_ARGS__); assert(a); } }
