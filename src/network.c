@@ -405,21 +405,21 @@ void mpr_net_add_dev_methods(mpr_net net, mpr_local_dev dev)
     const char *dname = mpr_dev_get_name((mpr_dev)dev);
     mpr_graph graph = mpr_obj_get_graph((mpr_obj)dev);
     for (i = 0; i < NUM_DEV_HANDLERS_SPECIFIC; i++) {
+        int j;
         snprintf(path, 256, net_msg_strings[dev_handlers_specific[i].str_idx], dname);
-        lo_server_add_method(net->servers[SERVER_BUS], path, dev_handlers_specific[i].types,
-                             dev_handlers_specific[i].h, dev);
-        lo_server_add_method(net->servers[SERVER_MESH], path, dev_handlers_specific[i].types,
-                             dev_handlers_specific[i].h, dev);
+        for (j = 0; j < NUM_NET_SERVERS; j++) {
+            lo_server_add_method(net->servers[j], path, dev_handlers_specific[i].types,
+                                 dev_handlers_specific[i].h, dev);
+        }
     }
-    if (net->generic_dev_methods_added)
-        return;
-    for (i = 0; i < NUM_DEV_HANDLERS_GENERIC; i++) {
-        lo_server_add_method(net->servers[SERVER_BUS],
-                             net_msg_strings[dev_handlers_generic[i].str_idx],
-                             dev_handlers_generic[i].types, dev_handlers_generic[i].h, graph);
-        lo_server_add_method(net->servers[SERVER_MESH],
-                             net_msg_strings[dev_handlers_generic[i].str_idx],
-                             dev_handlers_generic[i].types,dev_handlers_generic[i].h, graph);
+    if (!net->generic_dev_methods_added) {
+        for (i = 0; i < NUM_DEV_HANDLERS_GENERIC; i++) {
+            int j;
+            for (j = 0; j < NUM_NET_SERVERS; j++) {
+                lo_server_add_method(net->servers[j], net_msg_strings[dev_handlers_generic[i].str_idx],
+                                     dev_handlers_generic[i].types, dev_handlers_generic[i].h, graph);
+            }
+        }
         net->generic_dev_methods_added = 1;
     }
 }
@@ -558,10 +558,12 @@ void mpr_net_remove_dev(mpr_net net, mpr_local_dev dev)
     net->server_status = realloc(net->server_status, net->num_servers * sizeof(int));
 
     for (i = 0; i < NUM_DEV_HANDLERS_SPECIFIC; i++) {
+        int j;
         snprintf(path, 256, net_msg_strings[dev_handlers_specific[i].str_idx],
                  mpr_dev_get_name((mpr_dev)dev));
-        lo_server_del_method(net->servers[SERVER_BUS], path, dev_handlers_specific[i].types);
-        lo_server_del_method(net->servers[SERVER_MESH], path, dev_handlers_specific[i].types);
+        for (j = 0; j < NUM_NET_SERVERS; j++) {
+            lo_server_del_method(net->servers[j], path, dev_handlers_specific[i].types);
+        }
     }
 }
 
@@ -635,7 +637,7 @@ int mpr_net_init(mpr_net net, const char *iface, const char *group, int port)
     lo_server temp_server1, temp_server2;
 
     /* Default standard ip and port is group 224.0.1.3, port 7570 */
-    char port_str[10], *s_port = port_str;
+    char port_str[10];
 
     /* send out any cached messages */
     mpr_net_send(net);
@@ -667,7 +669,7 @@ int mpr_net_init(mpr_net net, const char *iface, const char *group, int port)
         return 0;
 
     /* Open address */
-    temp_addr1 = lo_address_new(net->multicast.group, s_port);
+    temp_addr1 = lo_address_new(net->multicast.group, port_str);
     if (!temp_addr1) {
         trace("problem allocating bus address.\n");
         return 1;
@@ -692,14 +694,14 @@ int mpr_net_init(mpr_net net, const char *iface, const char *group, int port)
     }
 
     /* Open server for multicast */
-    temp_server1 = lo_server_new_multicast_iface(net->multicast.group, s_port,
+    temp_server1 = lo_server_new_multicast_iface(net->multicast.group, port_str,
                                                  net->iface.name, 0, handler_error);
 
     if (!temp_server1) {
         trace("problem allocating bus server.\n");
         return 2;
     }
-    trace("bus connected to %s:%s\n", net->multicast.group, s_port);
+    trace("bus connected to %s:%s\n", net->multicast.group, port_str);
 
     /* Disable liblo message queueing and add methods. */
     lo_server_enable_queue(temp_server1, 0, 1);
