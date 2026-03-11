@@ -1118,7 +1118,6 @@ void mpr_dev_manage_subscriber(mpr_local_dev dev, lo_address addr, int flags,
     net = mpr_graph_get_net(dev->obj.graph);
     mpr_net_use_mesh(net, addr, NULL);
     mpr_dev_send_state((mpr_dev)dev, MSG_DEV);
-    mpr_net_send(net);
 
     if (flags & MPR_SIG) {
         mpr_dir dir = 0;
@@ -1126,9 +1125,7 @@ void mpr_dev_manage_subscriber(mpr_local_dev dev, lo_address addr, int flags,
             dir |= MPR_DIR_IN;
         if (flags & MPR_SIG_OUT)
             dir |= MPR_DIR_OUT;
-        mpr_net_use_mesh(net, addr, NULL);
         mpr_dev_send_sigs(dev, dir, 1);
-        mpr_net_send(net);
     }
     if (flags & MPR_MAP) {
         mpr_dir dir = 0;
@@ -1136,10 +1133,9 @@ void mpr_dev_manage_subscriber(mpr_local_dev dev, lo_address addr, int flags,
             dir |= MPR_DIR_IN;
         if (flags & MPR_MAP_OUT)
             dir |= MPR_DIR_OUT;
-        mpr_net_use_mesh(net, addr, NULL);
         mpr_dev_send_maps(dev, dir, MSG_MAPPED);
-        mpr_net_send(net);
     }
+    mpr_net_send(net);
 }
 
 void mpr_dev_update_subscribers(mpr_local_dev ldev)
