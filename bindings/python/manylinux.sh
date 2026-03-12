@@ -21,7 +21,7 @@ INST=$TMP/inst
     echo === Building liblo
     TAR=$PWD/master.zip
     if [ -f $PWD/master.zip ] then
-        curl -L -O curl -L -O https://github.com/radarsat1/liblo/archive/refs/heads/master.zip
+        curl -L -O https://github.com/radarsat1/liblo/archive/refs/heads/master.zip
     fi
     cd $TMP
     unzip $TAR
