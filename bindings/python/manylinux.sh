@@ -22,7 +22,6 @@ INST=$TMP/inst
     TAR=$PWD/master.zip
     if [ -f $PWD/master.zip ] then
         curl -L -O curl -L -O https://github.com/radarsat1/liblo/archive/refs/heads/master.zip
-        echo '14a65154e8f2609f558ce2648f1c99ef  liblo-0.34.tar.gz' | md5sum -c -
     fi
     cd $TMP
     unzip $TAR
