@@ -25,9 +25,10 @@ jobs:
     - name: install liblo
       run: |
         curl -L -O https://github.com/radarsat1/liblo/archive/refs/heads/master.zip
-        unzip liblo-master.zip
-        rm liblo-master.zip
-        mv liblo-master liblo
+        ls
+        unzip master.zip
+        rm master.zip
+        mv master liblo
         cd liblo
         (./configure --host=$HOST --prefix=$PWD/inst --enable-static --disable-shared --disable-tests --disable-tools --disable-examples --disable-doc CFLAGS=-fPIC || (cat config.log; false))
         make install
@@ -83,9 +84,10 @@ jobs:
     - name: download liblo
       run: |
         curl -L -O https://github.com/radarsat1/liblo/archive/refs/heads/master.zip
-        unzip liblo-master.zip
-        rm liblo-master.zip
-        mv liblo-master liblo
+        ls
+        unzip master.zip
+        rm master.zip
+        mv master liblo
     - name: liblo make arm64
       run: |
         cd ./liblo
