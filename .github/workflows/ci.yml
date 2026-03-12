@@ -28,7 +28,7 @@ jobs:
         ls
         unzip master.zip
         rm master.zip
-        mv master liblo
+        mv liblo-master liblo
         cd liblo
         (./configure --host=$HOST --prefix=$PWD/inst --enable-static --disable-shared --disable-tests --disable-tools --disable-examples --disable-doc CFLAGS=-fPIC || (cat config.log; false))
         make install
@@ -87,7 +87,7 @@ jobs:
         ls
         unzip master.zip
         rm master.zip
-        mv master liblo
+        mv liblo-master liblo
     - name: liblo make arm64
       run: |
         cd ./liblo
