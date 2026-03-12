@@ -7,10 +7,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
       with:
         fetch-depth: 0
-    - uses: actions/setup-java@v4
+    - uses: actions/setup-java@v5
       with:
         distribution: 'temurin'
         java-version: '17'
@@ -50,7 +50,7 @@ jobs:
     - name: python wheels
       run:
         pwd && make distclean && bindings/python/build_wheels.py
-    - uses: actions/upload-artifact@v4
+    - uses: actions/upload-artifact@v7
       with:
         name: artifact_linux
         path: |
@@ -64,7 +64,7 @@ jobs:
       CC: clang
       CXX: clang++
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
       with:
         fetch-depth: 0
     - uses: actions/setup-python@v6
@@ -164,7 +164,7 @@ jobs:
         && cp -v $PWD/inst/lib/libmapper.*.dylib bindings/python/libmapper/libmapper.dylib
         && pip3 wheel bindings/python -w ./wheelhouse
         && unzip -t wheelhouse/*.whl
-    - uses: actions/upload-artifact@v4
+    - uses: actions/upload-artifact@v7
       with:
         name: artifact_macos
         path: ./wheelhouse/*.whl
@@ -173,7 +173,7 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 20
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
       with:
         fetch-depth: 0
     - uses: actions/setup-python@v6
@@ -187,7 +187,7 @@ jobs:
       run: .\windows_build.ps1
     - name: Build python wheel
       run: .\bindings\python\windows_build_wheel.ps1
-    - uses: actions/upload-artifact@v4
+    - uses: actions/upload-artifact@v7
       with:
         name: artifact_windows
         path: ./bindings/python/dist/*.whl
@@ -201,7 +201,7 @@ jobs:
         with:
           python-version: '3.11'
       - name: download artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: artifact_linux
       - name: install wheel
@@ -209,7 +209,7 @@ jobs:
           ls
           && python3 -m pip install wheelhouse/libmapper*-py3-none-manylinux_2_24_x86_64.whl
       - name: checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
       - name: run python tests
@@ -230,7 +230,7 @@ jobs:
         with:
           python-version: '3.11'
       - name: download artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: artifact_macos
       - name: install wheel
@@ -238,7 +238,7 @@ jobs:
           ls
           && python3 -m pip install libmapper*-py3-none-macosx_*_universal2.whl
       - name: checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
       - name: run python tests
@@ -257,7 +257,7 @@ jobs:
         with:
           python-version: '3.11'
       - name: download artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: artifact_windows
       - name: install wheel
@@ -265,7 +265,7 @@ jobs:
           ls
           && python3 -m pip install libmapper-2.5.2-py3-none-win_amd64.whl
       - name: checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
       - name: run python tests
