@@ -29,6 +29,7 @@ INST=$TMP/inst
     cd $TMP
     unzip $TAR
     cd liblo-master
+    env NOCONFIGURE=1 am_opt=--copy ./autogen.sh
     ./configure --host=$HOST --prefix=$INST --disable-tests --disable-tools --disable-examples --disable-doc \
         || (cat config.log; echo "Error."; false)
     make clean
