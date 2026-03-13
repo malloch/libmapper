@@ -22,6 +22,8 @@ INST=$TMP/inst
     TAR=$PWD/master.zip
     if [ -f $PWD/master.zip ]
     then
+        echo === liblo already downloaded
+    else
         curl -L -O https://github.com/radarsat1/liblo/archive/refs/heads/master.zip
     fi
     cd $TMP
