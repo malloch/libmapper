@@ -57,10 +57,15 @@ jobs:
         path: |
           libmapper*.tar.gz
           ./wheelhouse/*.whl
+    - uses: actions/upload-artifact@v7
+      with:
+        name: libs_linux
+        path: |
+          $PWD/inst/*
 
   MacOS:
     runs-on: macOS-14
-    timeout-minutes: 45
+    timeout-minutes: 50
     env:
       CC: clang
       CXX: clang++
