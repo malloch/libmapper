@@ -407,9 +407,11 @@ int main(int argc, char **argv)
     mpr_graph g;
 
     /* process flags for -v verbose, -t terminate, -h help */
+    printf("parsing %d args\n", argc);
     for (i = 1; i < argc; i++) {
         if (argv[i] && argv[i][0] == '-') {
             int len = strlen(argv[i]);
+            printf("strlen is %d\n", len);
             for (j = 1; j < len; j++) {
                 switch (argv[i][j]) {
                     case 'h':
@@ -457,8 +459,11 @@ int main(int argc, char **argv)
         }
     }
 
+    printf("check1\n");
     signal(SIGSEGV, segv);
+    printf("check2\n");
     signal(SIGINT, ctrlc);
+    printf("check3\n");
 
     g = shared_graph ? mpr_graph_new(0) : 0;
 
