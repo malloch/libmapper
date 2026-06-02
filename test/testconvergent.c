@@ -462,18 +462,21 @@ int main(int argc, char **argv)
 
     g = shared_graph ? mpr_graph_new(0) : 0;
 
+    printf("setting up src...\n");
     if (setup_dst(g, iface)) {
         eprintf("Error initializing destination.\n");
         result = 1;
         goto done;
     }
 
+    printf("setting up dst...\n");
     if (setup_srcs(g, iface)) {
         eprintf("Done initializing %d sources.\n", num_sources);
         result = 1;
         goto done;
     }
 
+    printf("registering devices...\n");
     if (wait_ready(&done)) {
         eprintf("Device registration aborted.\n");
         result = 1;
@@ -483,16 +486,20 @@ int main(int argc, char **argv)
     if (autoconnect) {
         for (i = num_configs - 1; i >= 0; i--) {
             config = i;
+            printf("setting up maps for config %d...\n", i);
             if (setup_maps()) {
                 eprintf("Error setting map (1).\n");
                 result = 1;
                 goto done;
             }
+            printf("looping...\n");
             loop();
         }
     }
     else
         loop();
+
+    printf("checking results...\n");
 
     if (sent != received || sent != matched) {
         eprintf("Mismatch between sent and received/matched messages.\n");
