@@ -132,8 +132,8 @@ jobs:
           CFLAGS="$COMMON -arch arm64" \
           CXXFLAGS="$COMMON -arch arm64" \
           LDFLAGS="$COMMON -arch arm64 $LDCOMMON" \
-          --enable-static --disable-shared \
-          --disable-tests --disable-tools --disable-examples --disable-doc \
+          --enable-static \
+          --disable-audio --disable-docs --disable-java --disable-csharp \
           --prefix=$PWD/inst \
           PKG_CONFIG_PATH=$PWD/liblo/inst/lib/pkgconfig
         make install
@@ -148,8 +148,8 @@ jobs:
           CFLAGS="$COMMON -arch x86_64" \
           CXXFLAGS="$COMMON -arch x86_64" \
           LDFLAGS="$COMMON -arch x86_64 $LDCOMMON" \
-          --enable-static --disable-shared \
-          --disable-tests --disable-tools --disable-examples --disable-doc \
+          --enable-static \
+          --disable-audio --disable-docs --disable-java --disable-csharp \
           --prefix=$PWD/inst \
           PKG_CONFIG_PATH=$PWD/liblo/inst/lib/pkgconfig
         make install
