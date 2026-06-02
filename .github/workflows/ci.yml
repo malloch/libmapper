@@ -96,7 +96,7 @@ jobs:
           CFLAGS="$COMMON -arch arm64" \
           CXXFLAGS="$COMMON -arch arm64" \
           LDFLAGS="$COMMON -arch arm64 $LDCOMMON" \
-          --enable-static --disable-shared \
+          --enable-static --disable-shared --disable-poll \
           --disable-tests --disable-tools --disable-examples --disable-doc \
           --prefix=$PWD/inst
         make install
@@ -110,7 +110,7 @@ jobs:
           CFLAGS="$COMMON -arch x86_64" \
           CXXFLAGS="$COMMON -arch x86_64" \
           LDFLAGS="$COMMON -arch x86_64 $LDCOMMON" \
-          --enable-static --disable-shared \
+          --enable-static --disable-shared --disable-poll \
           --disable-tests --disable-tools --disable-examples --disable-doc \
           --prefix=$PWD/inst
         make install
