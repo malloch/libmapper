@@ -38,8 +38,8 @@ float expected[3];
 static void eprintf(const char *format, ...)
 {
     va_list args;
-    if (!verbose)
-        return;
+//    if (!verbose)
+//        return;
     va_start(args, format);
     vprintf(format, args);
     va_end(args);
