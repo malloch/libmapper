@@ -171,9 +171,6 @@ jobs:
         && file ./libmapper.15.dylib
         && rm ./libmapper.15.dylib.*
         && cd ../..
-    - name: make tests
-      continue-on-error: true
-      run: cd test && make tests
     - name: python wheels
       run:
         mv bindings/python/pyproject.toml bindings/python/pyproject.toml.temp
@@ -184,6 +181,10 @@ jobs:
       with:
         name: artifact_macos
         path: ./wheelhouse/*.whl
+    - name: make tests
+      timeout-minutes: 20
+      continue-on-error: true
+      run: cd test && make tests
 
   Windows-Latest:
     runs-on: windows-latest
