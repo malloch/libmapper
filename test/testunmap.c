@@ -1,3 +1,4 @@
+#include "../src/util/mpr_debug.h"
 #include "../src/link.h"
 #include <mapper/mapper.h>
 #include <stdio.h>

@@ -1,3 +1,4 @@
+#include "../src/util/mpr_debug.h"
 #include "../src/device.h"
 #include "../src/graph.h"
 #include <mapper/mapper.h>

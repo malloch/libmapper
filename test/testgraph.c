@@ -3,6 +3,7 @@
 #include <string.h>
 #include <lo/lo_lowlevel.h>
 
+#include "../src/util/mpr_debug.h"
 #include "../src/graph.h"
 #include "../src/map.h"
 #include "../src/message.h"
