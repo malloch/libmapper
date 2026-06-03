@@ -224,6 +224,8 @@ jobs:
           name: artifact_linux
       - name: build tests
         run: |
+          ls inst
+          ls inst/include
           cd test
           for i in *.c; \
            do \
