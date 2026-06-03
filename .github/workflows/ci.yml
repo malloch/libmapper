@@ -45,7 +45,7 @@ jobs:
         (make check || (for i in src/*.log; do echo === $i ===; cat $i; done; false))
         make install
         find inst
-        mv -v ./liblo/inst/include/lo ./inst/include/
+        cp -r ./liblo/inst/include/lo ./inst/include/
     - name: make dist
       run: make dist
     - name: python wheels
