@@ -34,13 +34,18 @@ jobs:
         find inst
         cd ..
     - name: autogen
-      run:
+      run: |
         pwd
-        && mkdir $PWD/inst
-        && env NOCONFIGURE=1 am_opt=--copy ./autogen.sh
-        && (./configure --enable-static --disable-tests --prefix=$PWD/inst PKG_CONFIG_PATH=$PWD/liblo/inst/lib/pkgconfig || (cat config.log; false))
+        mkdir $PWD/inst
+        env NOCONFIGURE=1 am_opt=--copy ./autogen.sh
+        (./configure --enable-static --disable-tests --prefix=$PWD/inst PKG_CONFIG_PATH=$PWD/liblo/inst/lib/pkgconfig || (cat config.log; false))
     - name: make
-      run: make && (make check || (for i in src/*.log; do echo === $i ===; cat $i; done; false)) && make install && find inst
+      run: |
+        make
+        (make check || (for i in src/*.log; do echo === $i ===; cat $i; done; false))
+        make install
+        find inst
+        cp ./liblo/inst/include/* ./inst/include/
     - name: make dist
       run: make dist
     - name: python wheels
@@ -169,7 +174,6 @@ jobs:
         file ./libmapper.15.dylib
         rm ./libmapper.15.dylib.*
         cd ../..
-        cp ./liblo/inst/include/* ./inst/include/
     - name: python wheels
       run:
         mv bindings/python/pyproject.toml bindings/python/pyproject.toml.temp
