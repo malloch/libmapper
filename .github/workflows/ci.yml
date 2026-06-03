@@ -230,7 +230,7 @@ jobs:
           for i in *.c; \
            do \
            echo Building $i; \
-           gcc $i -L../inst/lib -lmapper -I../inst/include/mapper -o "${i%.*}"; \
+           gcc $i -L../inst/lib -lmapper -I../inst/include -o "${i%.*}"; \
            done
       - name: run tests
         run: |
