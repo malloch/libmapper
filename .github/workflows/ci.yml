@@ -251,37 +251,36 @@ jobs:
            ./$i {{ matrix.flags }}; \
            done
 
-    Linux-instance-tests:
-      runs-on: ubuntu-latest
-      needs: Linux
-      timeout-minutes: 10
-      strategy:
-        matrix:
-          flags: [-qtf, -qtfs, -qtfp, -qtfps]
-      steps:
-        - uses: actions/checkout@v6
-          with:
-            fetch-depth: 0
-        - name: download libraries
-          uses: actions/download-artifact@v8
-          with:
-            name: artifact_linux
-        - name: build tests
-          run: |
-            cd test
-            for i in testinstance testinstance_no_cb; \
-             do \
-             echo Building $i; \
-             gcc $i.c -L../inst/lib -lmapper -I../inst/include/mapper -o $i; \
-             done
-        - name: run tests
-          run: |
-            for i in testinstance testinstance_no_cb; \
-             do \
-             echo Running $i; \
-             ./$i {{ matrix.flags }}; \
-             done
-
+  Linux-instance-tests:
+    runs-on: ubuntu-latest
+    needs: Linux
+    timeout-minutes: 10
+    strategy:
+      matrix:
+        flags: [-qtf, -qtfs, -qtfp, -qtfps]
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - name: download libraries
+        uses: actions/download-artifact@v8
+        with:
+          name: artifact_linux
+      - name: build tests
+        run: |
+          cd test
+          for i in testinstance testinstance_no_cb; \
+           do \
+           echo Building $i; \
+           gcc $i.c -L../inst/lib -lmapper -I../inst/include/mapper -o $i; \
+           done
+      - name: run tests
+        run: |
+          for i in testinstance testinstance_no_cb; \
+           do \
+           echo Running $i; \
+           ./$i {{ matrix.flags }}; \
+           done
 
   Linux-check-wheel:
     runs-on: ubuntu-latest
