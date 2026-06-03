@@ -156,19 +156,20 @@ jobs:
         mv -v ./inst/lib/libmapper.a ./inst/lib/libmapper.a.x86_64
         lipo -info ./inst/lib/libmapper.a.x86_64
     - name: libmapper create universal binary
-      run:
+      run: |
         pwd
-        && find inst
-        && cd ./inst/lib
-        && lipo -create -output ./libmapper.a ./libmapper.a.arm64 ./libmapper.a.x86_64
-        && lipo -info ./libmapper.a
-        && rm ./libmapper.a.*
-        && file ./libmapper.15.dylib.arm64
-        && file ./libmapper.15.dylib.x86_64
-        && lipo -create -output ./libmapper.15.dylib ./libmapper.15.dylib.arm64 ./libmapper.15.dylib.x86_64
-        && file ./libmapper.15.dylib
-        && rm ./libmapper.15.dylib.*
-        && cd ../..
+        find inst
+        cd ./inst/lib
+        lipo -create -output ./libmapper.a ./libmapper.a.arm64 ./libmapper.a.x86_64
+        lipo -info ./libmapper.a
+        rm ./libmapper.a.*
+        file ./libmapper.15.dylib.arm64
+        file ./libmapper.15.dylib.x86_64
+        lipo -create -output ./libmapper.15.dylib ./libmapper.15.dylib.arm64 ./libmapper.15.dylib.x86_64
+        file ./libmapper.15.dylib
+        rm ./libmapper.15.dylib.*
+        cd ../..
+        cp ./liblo/inst/include/* ./inst/include/
     - name: python wheels
       run:
         mv bindings/python/pyproject.toml bindings/python/pyproject.toml.temp
