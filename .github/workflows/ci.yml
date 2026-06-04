@@ -236,7 +236,7 @@ jobs:
           for i in *.c; \
            do \
            echo Building $i; \
-           gcc $i -std=gnu23 -Wall -I../inst/include -g -O2 -DNDEBUG -L../inst/lib -lmapper -llo -lz -lm -o "${i%.*}"; \
+           gcc $i -Wall -I../inst/include -g -O2 -DNDEBUG -L../inst/lib -lmapper -llo -lz -lm -o "${i%.*}"; \
            done
       - name: run tests
         run: |
