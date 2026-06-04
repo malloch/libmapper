@@ -38,7 +38,7 @@ jobs:
         pwd
         mkdir $PWD/inst
         env NOCONFIGURE=1 am_opt=--copy ./autogen.sh
-        (./configure --enable-static --disable-tests --prefix=$PWD/inst PKG_CONFIG_PATH=$PWD/liblo/inst/lib/pkgconfig || (cat config.log; false))
+        (./configure --enable-static --prefix=$PWD/inst PKG_CONFIG_PATH=$PWD/liblo/inst/lib/pkgconfig || (cat config.log; false))
     - name: make
       run: |
         make
@@ -46,9 +46,6 @@ jobs:
         make install
         find inst
         cp -r ./liblo/inst/include/lo ./inst/include/
-        cp ./src/config.h ./inst/
-        mkdir test_artifact
-        mv ./inst ./test_artifact/
     - name: make dist
       run: make dist
     - name: python wheels
@@ -60,6 +57,13 @@ jobs:
         path: |
           libmapper*.tar.gz
           ./wheelhouse/*.whl
+    - name: prepare test artifact
+      run: |
+        mkdir test_artifact
+        mkdir test_artifact/test
+        for i in ./test/*.c; do
+         mv -v "${i%%.*}" ./test_artifact/test/
+        mv ./inst ./test_artifact/
     - uses: actions/upload-artifact@v7
       with:
         name: tests_linux
@@ -227,31 +231,19 @@ jobs:
       matrix:
         flags: [-qtf, -qtfs]
     steps:
-      - uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
       - name: download libraries
         uses: actions/download-artifact@v8
         with:
           name: tests_linux
-      - name: build tests
-        run: |
-          mv -v ./inst/config.h ./src/
-          cd test
-          for i in *.c; do
-           echo Building $i "->" "${i%%.*}";
-           gcc $i -Wall -I../inst/include -g -O2 -DNDEBUG -L../inst/lib -lmapper -lz -lm -o "${i%%.*}";
-           done
-          cd ..
       - name: run tests
         env:
           TEST_FLAGS: ${{ matrix.flags }}
         run: |
           cd test
-          for i in *.c; do
-           echo Running "${i%%.*}" $TEST_FLAGS;
-           LD_LIBRARY_PATH=../inst/lib "./${i%%.*}" $TEST_FLAGS --iterations 200 || continue;
-           echo Completed "${i%%.*}" $TEST_FLAGS;
+          for i in *; do
+           echo Running $i $TEST_FLAGS;
+           LD_LIBRARY_PATH=../inst/lib ./$i $TEST_FLAGS --iterations 200 || continue;
+           echo Completed $i $TEST_FLAGS;
            done
           # also run instance tests with persistent instances
           for i in testinstance testinstance_no_cb; do
