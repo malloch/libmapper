@@ -47,6 +47,8 @@ jobs:
         find inst
         cp -r ./liblo/inst/include/lo ./inst/include/
         cp ./src/config.h ./inst/
+        mkdir test_artifact
+        mv ./inst ./test_artifact/
     - name: make dist
       run: make dist
     - name: python wheels
@@ -58,7 +60,11 @@ jobs:
         path: |
           libmapper*.tar.gz
           ./wheelhouse/*.whl
-          ./inst
+    - uses: actions/upload-artifact@v7
+      with:
+        name: tests_linux
+        path: ./test_artifact
+        retention-days: 1
 
   MacOS:
     runs-on: macOS-26
@@ -227,7 +233,7 @@ jobs:
       - name: download libraries
         uses: actions/download-artifact@v8
         with:
-          name: artifact_linux
+          name: tests_linux
       - name: build tests
         run: |
           ls ./inst
@@ -239,16 +245,18 @@ jobs:
            gcc $i -Wall -I../inst/include -g -O2 -DNDEBUG -L../inst/lib -lmapper -lz -lm -o "${i%.*}"; \
            done
       - name: run tests
+        env:
+          TEST_FLAGS: ${{ matrix.flags }}
         run: |
           for i in *.c; \
            do \
-           echo Running "${i%.*}" {{ matrix.flags }}; \
-           "./${i%.*}" {{ matrix.flags }} --iterations 200; \
+           echo Running "${i%.*}" $TEST_FLAGS; \
+           "./${i%.*}" $TEST_FLAGS --iterations 200; \
            done
-          echo Running testinstance {{ matrix.flags }} -p
-          ./testinstance {{ matrix.flags }} -p
-          echo Running testinstance_no_cb {{ matrix.flags }} -p
-          ./testinstance_no_cb {{ matrix.flags }} -p
+          echo Running testinstance $TEST_FLAGS -p
+          ./testinstance $TEST_FLAGS -p
+          echo Running testinstance_no_cb $TEST_FLAGS -p
+          ./testinstance_no_cb $TEST_FLAGS -p
 
   Linux-check-wheel:
     runs-on: ubuntu-latest
