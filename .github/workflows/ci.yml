@@ -236,22 +236,21 @@ jobs:
           name: tests_linux
       - name: build tests
         run: |
-          ls ./inst
           mv -v ./inst/config.h ./src/
           cd test
-          for i in *.c; \
-           do \
-           echo Building $i "->" "${i%%.*}"; \
-           gcc $i -Wall -I../inst/include -g -O2 -DNDEBUG -L../inst/lib -lmapper -lz -lm -o "${i%%.*}"; \
+          for i in *.c; do
+           echo Building $i "->" "${i%%.*}";
+           gcc $i -Wall -I../inst/include -g -O2 -DNDEBUG -L../inst/lib -lmapper -lz -lm -o "${i%%.*}";
            done
+          cd ..
       - name: run tests
         env:
           TEST_FLAGS: ${{ matrix.flags }}
         run: |
-          for i in *.c; \
-           do \
-           echo Running "${i%%.*}" $TEST_FLAGS; \
-           "./${i%%.*}" $TEST_FLAGS --iterations 200; \
+          cd test
+          for i in *.c; do
+           echo Running "${i%%.*}" $TEST_FLAGS;
+           "./${i%%.*}" $TEST_FLAGS --iterations 200;
            done
           echo Running testinstance $TEST_FLAGS -p
           ./testinstance $TEST_FLAGS -p
