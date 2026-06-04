@@ -246,6 +246,7 @@ jobs:
           TEST_FLAGS: ${{ matrix.flags }}
         run: |
           cd test
+          chmod +x *
           ls -al
           for i in *; do
            echo Running $i $TEST_FLAGS;
