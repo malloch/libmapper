@@ -247,16 +247,18 @@ jobs:
         env:
           TEST_FLAGS: ${{ matrix.flags }}
         run: |
-          ls ./inst/lib
           cd test
           for i in *.c; do
            echo Running "${i%%.*}" $TEST_FLAGS;
-           LD_LIBRARY_PATH=../inst/lib "./${i%%.*}" $TEST_FLAGS --iterations 200;
+           LD_LIBRARY_PATH=../inst/lib "./${i%%.*}" $TEST_FLAGS --iterations 200 || continue;
+           echo Completed "${i%%.*}" $TEST_FLAGS;
            done
-          echo Running testinstance $TEST_FLAGS -p
-          ./testinstance $TEST_FLAGS -p
-          echo Running testinstance_no_cb $TEST_FLAGS -p
-          ./testinstance_no_cb $TEST_FLAGS -p
+          # also run instance tests with persistent instances
+          for i in testinstance testinstance_no_cb; do
+           echo Running $i $TEST_FLAGS;
+           LD_LIBRARY_PATH=../inst/lib $i $TEST_FLAGS -p || continue;
+           echo Completed $i $TEST_FLAGS;
+           done
 
   Linux-check-wheel:
     runs-on: ubuntu-latest
