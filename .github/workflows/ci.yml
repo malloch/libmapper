@@ -62,7 +62,9 @@ jobs:
         mkdir test_artifact
         mkdir test_artifact/test
         for i in ./test/*.c; do
-         mv -v "${i%%.*}" ./test_artifact/test/
+         mv -v "${i%%.*}" ./test_artifact/test/;
+         done
+        mv -v ./test/testcpp ./test_artifact/test/
         mv ./inst ./test_artifact/
     - uses: actions/upload-artifact@v7
       with:
