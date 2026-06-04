@@ -58,10 +58,6 @@ jobs:
         path: |
           libmapper*.tar.gz
           ./wheelhouse/*.whl
-    - uses: actions/upload-artifact@v7
-      with:
-        name: tests_linux
-        path: |
           ./inst
 
   MacOS:
@@ -231,9 +227,10 @@ jobs:
       - name: download libraries
         uses: actions/download-artifact@v8
         with:
-          name: tests_linux
+          name: artifact_linux
       - name: build tests
         run: |
+          ls ./inst
           mv -v ./inst/config.h ./src/
           cd test
           for i in *.c; \
