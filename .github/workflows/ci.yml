@@ -46,6 +46,21 @@ jobs:
         make install
         find inst
         cp -r ./liblo/inst/include/lo ./inst/include/
+    - name: prepare test artifact
+      run: |
+        mkdir test_artifact
+        mkdir test_artifact/test
+        ls ./test
+        for i in ./test/*.c; do
+         mv -v "${i%%.*}" ./test_artifact/test/;
+         done
+        mv -v ./test/testcpp ./test_artifact/test/
+        mv ./inst ./test_artifact/
+    - uses: actions/upload-artifact@v7
+      with:
+        name: tests_linux
+        path: ./test_artifact
+        retention-days: 1
     - name: make dist
       run: make dist
     - name: python wheels
@@ -57,20 +72,6 @@ jobs:
         path: |
           libmapper*.tar.gz
           ./wheelhouse/*.whl
-    - name: prepare test artifact
-      run: |
-        mkdir test_artifact
-        mkdir test_artifact/test
-        for i in ./test/*.c; do
-         mv -v "${i%%.*}" ./test_artifact/test/;
-         done
-        mv -v ./test/testcpp ./test_artifact/test/
-        mv ./inst ./test_artifact/
-    - uses: actions/upload-artifact@v7
-      with:
-        name: tests_linux
-        path: ./test_artifact
-        retention-days: 1
 
   MacOS:
     runs-on: macOS-26
