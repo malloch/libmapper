@@ -241,8 +241,8 @@ jobs:
           cd test
           for i in *.c; \
            do \
-           echo Building $i; \
-           gcc $i -Wall -I../inst/include -g -O2 -DNDEBUG -L../inst/lib -lmapper -lz -lm -o "${i%.*}"; \
+           echo Building $i "->" "${i%%.*}"; \
+           gcc $i -Wall -I../inst/include -g -O2 -DNDEBUG -L../inst/lib -lmapper -lz -lm -o "${i%%.*}"; \
            done
       - name: run tests
         env:
@@ -250,8 +250,8 @@ jobs:
         run: |
           for i in *.c; \
            do \
-           echo Running "${i%.*}" $TEST_FLAGS; \
-           "./${i%.*}" $TEST_FLAGS --iterations 200; \
+           echo Running "${i%%.*}" $TEST_FLAGS; \
+           "./${i%%.*}" $TEST_FLAGS --iterations 200; \
            done
           echo Running testinstance $TEST_FLAGS -p
           ./testinstance $TEST_FLAGS -p
