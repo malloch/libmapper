@@ -50,12 +50,13 @@ jobs:
       run: |
         mkdir test_artifact
         mkdir test_artifact/test
-        ls ./test
-        for i in ./test/*.c; do
+        cd ./test
+        for i in *.c; do
          echo copying file "${i%%.*}" to test artifact;
-         cp "${i%%.*}" ./test_artifact/test/ || continue;
+         cp "${i%%.*}" ../test_artifact/test/ || continue;
          echo copied successfully;
          done
+        cd ..
         cp ./test/testcpp ./test_artifact/test/
         mv ./inst ./test_artifact/
     - uses: actions/upload-artifact@v7
@@ -245,6 +246,7 @@ jobs:
           TEST_FLAGS: ${{ matrix.flags }}
         run: |
           cd test
+          ls -al
           for i in *; do
            echo Running $i $TEST_FLAGS;
            LD_LIBRARY_PATH=../inst/lib ./$i $TEST_FLAGS --iterations 200 || continue;
@@ -253,7 +255,7 @@ jobs:
           # also run instance tests with persistent instances
           for i in testinstance testinstance_no_cb; do
            echo Running $i $TEST_FLAGS;
-           LD_LIBRARY_PATH=../inst/lib $i $TEST_FLAGS -p || continue;
+           LD_LIBRARY_PATH=../inst/lib ./$i $TEST_FLAGS -p || continue;
            echo Completed $i $TEST_FLAGS;
            done
 
