@@ -249,10 +249,9 @@ jobs:
         run: |
           ls ./inst/lib
           cd test
-          export LD_LIBRARY_PATH=/inst/lib:$LD_LIBRARY_PATH
           for i in *.c; do
            echo Running "${i%%.*}" $TEST_FLAGS;
-           "./${i%%.*}" $TEST_FLAGS --iterations 200;
+           LD_LIBRARY_PATH=../inst/lib "./${i%%.*}" $TEST_FLAGS --iterations 200;
            done
           echo Running testinstance $TEST_FLAGS -p
           ./testinstance $TEST_FLAGS -p
