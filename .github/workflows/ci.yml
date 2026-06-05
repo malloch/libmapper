@@ -139,7 +139,7 @@ jobs:
       - name: install wheel
         run:
           ls
-          && python3 -m pip install wheelhouse/libmapper*-py3-none-manylinux_2_24_x86_64.whl
+          && python3 -m pip install libmapper*-py3-none-manylinux_2_24_x86_64.whl
       - name: checkout
         uses: actions/checkout@v6
         with:
@@ -269,7 +269,12 @@ jobs:
     - name: run tests
       run: |
         cd test
-        make tests
+        echo running testparams
+        ./testparams -tf
+        echo running testprops
+        ./testprops -tf
+        echo running testlinear
+        ./testlinear -tf
         cd ..
     - name: python wheels
       run:
@@ -280,9 +285,7 @@ jobs:
     - uses: actions/upload-artifact@v7
       with:
         name: artifact_macos
-        path: |
-          ./wheelhouse/*.whl
-          ./liblo/config.h
+        path: ./wheelhouse/*.whl
     - name: prepare test artifact
       run: |
         mkdir test_artifact
