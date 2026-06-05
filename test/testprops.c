@@ -130,16 +130,22 @@ int main(int argc, char **argv)
             }
         }
     }
-
+    printf("check1\n");
     graph = mpr_graph_new(MPR_OBJ);
+    printf("check2\n");
     dev = mpr_dev_new("testprops", 0);
+    printf("check3\n");
     sig = (mpr_obj)mpr_sig_new(dev, MPR_DIR_IN, "test", 3, MPR_FLT,
                                "Hz", NULL, NULL, NULL, NULL, 0);
-
+    printf("check4\n");
     while (!mpr_dev_get_is_ready(dev)) {
+        printf("check5\n");
         mpr_dev_poll(dev, 100);
+        printf("check6\n");
         mpr_graph_poll(graph, 100);
+        printf("check7\n");
     }
+    printf("check8\n");
 
     /* get a non-local copy of the device */
     do {
