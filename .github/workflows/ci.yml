@@ -152,7 +152,7 @@ jobs:
           && for i in test testcallbacks testconvergent testgetvalue testinstance testmapfromstr testnumpy testreverse testvector; do echo running ${i}; if ! python3 ${i}.py; then exit 1; fi; done;
 
   MacOS:
-    runs-on: macOS-15
+    runs-on: macOS-26
     timeout-minutes: 5
     env:
       CC: clang
