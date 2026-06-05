@@ -152,7 +152,7 @@ jobs:
           && for i in test testcallbacks testconvergent testgetvalue testinstance testmapfromstr testnumpy testreverse testvector; do echo running ${i}; if ! python3 ${i}.py; then exit 1; fi; done;
 
   MacOS:
-    runs-on: macOS-26
+    runs-on: macOS-15
     timeout-minutes: 5
     env:
       CC: clang
@@ -298,7 +298,7 @@ jobs:
         retention-days: 1
 
   MacOS-tests:
-    runs-on: macOS-26
+    runs-on: macOS-15
     needs: MacOS
     timeout-minutes: 5
     strategy:
@@ -326,7 +326,7 @@ jobs:
            done
 
   MacOS-instance-tests:
-    runs-on: macOS-26
+    runs-on: macOS-15
     needs: MacOS-tests
     timeout-minutes: 3
     strategy:
@@ -351,7 +351,7 @@ jobs:
            done
 
   MacOS-check-wheel:
-    runs-on: macOS-26
+    runs-on: macOS-15
     needs: MacOS
     timeout-minutes: 5
     env:
