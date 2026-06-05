@@ -275,7 +275,9 @@ jobs:
     - uses: actions/upload-artifact@v7
       with:
         name: artifact_macos
-        path: ./wheelhouse/*.whl
+        path: |
+          ./wheelhouse/*.whl
+          ./liblo/config.h
     - name: prepare test artifact
       run: |
         mkdir test_artifact
