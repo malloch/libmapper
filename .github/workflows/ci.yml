@@ -180,8 +180,8 @@ jobs:
     - name: download liblo
       run: |
         curl -L -O https://github.com/malloch/liblo/archive/refs/heads/master.zip
-        unzip liblo-master.zip
-        rm liblo-master.zip
+        unzip master.zip
+        rm master.zip
         mv liblo-master liblo
     - name: liblo build arm64
       run: |
