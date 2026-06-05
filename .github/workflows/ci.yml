@@ -49,15 +49,7 @@ jobs:
     - name: prepare test artifact
       run: |
         mkdir test_artifact
-        mkdir test_artifact/test
-        cd ./test
-        for i in *.c; do
-         echo copying file "${i%%.*}" to test artifact;
-         cp "${i%%.*}" ../test_artifact/test/ || continue;
-         echo copied successfully;
-         done
-        cd ..
-        cp ./test/testcpp ./test_artifact/test/
+        mv ./test/.libs ./test_artifact/test
         mv ./inst ./test_artifact/
     - uses: actions/upload-artifact@v7
       with:
@@ -66,15 +58,11 @@ jobs:
         retention-days: 1
     - name: make dist
       run: make dist
-    - name: python wheels
-      run:
-        pwd && make distclean && bindings/python/build_wheels.py
     - uses: actions/upload-artifact@v7
       with:
-        name: artifact_linux
+        name: linux_tarball
         path: |
           libmapper*.tar.gz
-          ./wheelhouse/*.whl
 
   MacOS:
     runs-on: macOS-26
@@ -260,9 +248,24 @@ jobs:
            echo Completed $i $TEST_FLAGS;
            done
 
-  Linux-check-wheel:
+  Linux-build-wheel:
     runs-on: ubuntu-latest
     needs: Linux
+    - uses: actions/checkout@v6
+      with:
+        fetch-depth: 0
+    - name: build wheels
+      run:
+        bindings/python/build_wheels.py
+    - uses: actions/upload-artifact@v7
+      with:
+        name: linux_wheel
+        path: |
+          ./wheelhouse/*.whl
+
+  Linux-check-wheel:
+    runs-on: ubuntu-latest
+    needs: Linux-build-wheel
     timeout-minutes: 20
     steps:
       - uses: actions/setup-python@v6
@@ -271,7 +274,7 @@ jobs:
       - name: download artifact
         uses: actions/download-artifact@v8
         with:
-          name: artifact_linux
+          name: linux_wheel
       - name: install wheel
         run:
           ls
