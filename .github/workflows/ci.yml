@@ -295,7 +295,7 @@ jobs:
     timeout-minutes: 5
     strategy:
       matrix:
-        flags: [-qtf, -qtfs]
+        flags: [-tf, -tfs]
     steps:
       - name: download libraries
         uses: actions/download-artifact@v8
@@ -308,6 +308,8 @@ jobs:
           cd test
           ls -al
           chmod +x *
+          echo trying testconvergent first for debugging
+          DYLD_LIBRARY_PATH=../inst/lib ./$i $TEST_FLAGS
           for i in *; do
            if [[ $i = "testinstance" || $i = "testinstance_no_cb" ]]; then continue; fi;
            echo Running $i $TEST_FLAGS;
