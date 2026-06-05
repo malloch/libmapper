@@ -266,6 +266,11 @@ jobs:
         file ./libmapper.15.dylib
         rm ./libmapper.15.dylib.*
         cd ../..
+    - name run tests
+      run: |
+        cd test
+        make tests
+        cd ..
     - name: python wheels
       run:
         mv bindings/python/pyproject.toml bindings/python/pyproject.toml.temp
