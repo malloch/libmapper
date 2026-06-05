@@ -64,7 +64,8 @@ jobs:
         path: |
           libmapper*.tar.gz
     - name: build wheels
-      run:
+      run: |
+        make distclean
         bindings/python/build_wheels.py
     - uses: actions/upload-artifact@v7
       with:
