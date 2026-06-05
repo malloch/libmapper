@@ -309,7 +309,7 @@ jobs:
           ls -al
           chmod +x *
           echo trying testconvergent first for debugging
-          DYLD_LIBRARY_PATH=../inst/lib ./$i $TEST_FLAGS
+          DYLD_LIBRARY_PATH=../inst/lib ./testconvergent $TEST_FLAGS
           for i in *; do
            if [[ $i = "testinstance" || $i = "testinstance_no_cb" ]]; then continue; fi;
            echo Running $i $TEST_FLAGS;
