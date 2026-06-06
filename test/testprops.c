@@ -95,6 +95,7 @@ int check_keys(mpr_obj obj)
 
 int main(int argc, char **argv)
 {
+    printf("check0a\n");
     int i, j, int_value, seen, length, public, result = 0;
     int int_array[] = {1, 2, 3, 4, 5};
     mpr_graph graph;
@@ -108,7 +109,7 @@ int main(int argc, char **argv)
     const void *ptr_array[] = {(const void*)0x1111, (const void*)0x2222};
     mpr_obj read_obj;
     mpr_list read_list, check_list;
-
+    printf("check0b\n");
     /* process flags for -v verbose, -h help */
     for (i = 1; i < argc; i++) {
         if (argv[i] && argv[i][0] == '-') {

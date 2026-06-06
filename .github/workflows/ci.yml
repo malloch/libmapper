@@ -152,13 +152,13 @@ jobs:
           && for i in test testcallbacks testconvergent testgetvalue testinstance testmapfromstr testnumpy testreverse testvector; do echo running ${i}; if ! python3 ${i}.py; then exit 1; fi; done;
 
   MacOS:
-    runs-on: macOS-26
+    runs-on: macOS-14
     timeout-minutes: 5
     env:
       CC: clang
       CXX: clang++
-      COMMON: -isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk
-      LDCOMMON: -Wl,-compatibility_version,12 -Wl,-current_version,12.1
+      COMMON: -isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk -mmacosx-version-min=10.10 -Qunused-arguments
+      LDCOMMON: -mmacosx-version-min=10.10
     steps:
     - uses: actions/checkout@v6
       with:
@@ -188,7 +188,7 @@ jobs:
         cd ./liblo
         mkdir $PWD/inst
         ./autogen.sh \
-          CFLAGS="$COMMON -arch arm64" \
+          CFLAGS="$COMMON -arch arm64 -fPIC" \
           CXXFLAGS="$COMMON -arch arm64" \
           LDFLAGS="$COMMON -arch arm64 $LDCOMMON" \
           --enable-static --disable-shared --disable-poll \
@@ -270,6 +270,8 @@ jobs:
       run: |
         cd test
         echo running testparams
+        ./testparams -tf
+        echo running testparams again
         ./testparams -tf
         echo running testprops
         ./testprops -tf
