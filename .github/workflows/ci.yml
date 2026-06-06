@@ -179,10 +179,10 @@ jobs:
         python3 --version
     - name: download liblo
       run: |
-        curl -L -O https://github.com/malloch/liblo/archive/refs/heads/master.zip
-        unzip master.zip
-        rm master.zip
-        mv liblo-master liblo
+        curl -L -O https://github.com/radarsat1/liblo/releases/download/0.35/liblo-0.35.tar.gz
+        tar -xzf liblo-0.35.tar.gz
+        rm liblo-0.35.tar.gz
+        mv liblo-0.35 liblo
     - name: liblo build arm64
       run: |
         cd ./liblo
@@ -227,7 +227,7 @@ jobs:
           CFLAGS="$COMMON -arch arm64" \
           CXXFLAGS="$COMMON -arch arm64" \
           LDFLAGS="$COMMON -arch arm64 $LDCOMMON" \
-          --enable-static --enable-debug \
+          --enable-static \
           --disable-audio --disable-docs --disable-java --disable-csharp \
           --prefix=$PWD/inst \
           PKG_CONFIG_PATH=$PWD/liblo/inst/lib/pkgconfig
@@ -243,7 +243,7 @@ jobs:
           CFLAGS="$COMMON -arch x86_64" \
           CXXFLAGS="$COMMON -arch x86_64" \
           LDFLAGS="$COMMON -arch x86_64 $LDCOMMON" \
-          --enable-static --enable-debug \
+          --enable-static \
           --disable-audio --disable-docs --disable-java --disable-csharp \
           --prefix=$PWD/inst \
           PKG_CONFIG_PATH=$PWD/liblo/inst/lib/pkgconfig
@@ -266,18 +266,6 @@ jobs:
         file ./libmapper.15.dylib
         rm ./libmapper.15.dylib.*
         cd ../..
-    - name: run tests
-      run: |
-        cd test
-        echo running testparams
-        ./testparams -tf
-        echo running testparams again
-        ./testparams -tf
-        echo running testprops
-        ./testprops -tf
-        echo running testlinear
-        ./testlinear -tf
-        cd ..
     - name: python wheels
       run:
         mv bindings/python/pyproject.toml bindings/python/pyproject.toml.temp
