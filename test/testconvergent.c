@@ -38,8 +38,8 @@ float expected[3];
 static void eprintf(const char *format, ...)
 {
     va_list args;
-//    if (!verbose)
-//        return;
+    if (!verbose)
+        return;
     va_start(args, format);
     vprintf(format, args);
     va_end(args);
@@ -407,11 +407,9 @@ int main(int argc, char **argv)
     mpr_graph g;
 
     /* process flags for -v verbose, -t terminate, -h help */
-    printf("parsing %d args\n", argc);
     for (i = 1; i < argc; i++) {
         if (argv[i] && argv[i][0] == '-') {
             int len = strlen(argv[i]);
-            printf("strlen is %d\n", len);
             for (j = 1; j < len; j++) {
                 switch (argv[i][j]) {
                     case 'h':
@@ -459,29 +457,23 @@ int main(int argc, char **argv)
         }
     }
 
-    printf("check1\n");
     signal(SIGSEGV, segv);
-    printf("check2\n");
     signal(SIGINT, ctrlc);
-    printf("check3\n");
 
     g = shared_graph ? mpr_graph_new(0) : 0;
 
-    printf("setting up src...\n");
     if (setup_dst(g, iface)) {
         eprintf("Error initializing destination.\n");
         result = 1;
         goto done;
     }
 
-    printf("setting up dst...\n");
     if (setup_srcs(g, iface)) {
         eprintf("Done initializing %d sources.\n", num_sources);
         result = 1;
         goto done;
     }
 
-    printf("registering devices...\n");
     if (wait_ready(&done)) {
         eprintf("Device registration aborted.\n");
         result = 1;
@@ -491,20 +483,16 @@ int main(int argc, char **argv)
     if (autoconnect) {
         for (i = num_configs - 1; i >= 0; i--) {
             config = i;
-            printf("setting up maps for config %d...\n", i);
             if (setup_maps()) {
                 eprintf("Error setting map (1).\n");
                 result = 1;
                 goto done;
             }
-            printf("looping...\n");
             loop();
         }
     }
     else
         loop();
-
-    printf("checking results...\n");
 
     if (sent != received || sent != matched) {
         eprintf("Mismatch between sent and received/matched messages.\n");

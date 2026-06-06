@@ -95,7 +95,6 @@ int check_keys(mpr_obj obj)
 
 int main(int argc, char **argv)
 {
-    printf("check0a\n");
     int i, j, int_value, seen, length, public, result = 0;
     int int_array[] = {1, 2, 3, 4, 5};
     mpr_graph graph;
@@ -109,7 +108,7 @@ int main(int argc, char **argv)
     const void *ptr_array[] = {(const void*)0x1111, (const void*)0x2222};
     mpr_obj read_obj;
     mpr_list read_list, check_list;
-    printf("check0b\n");
+
     /* process flags for -v verbose, -h help */
     for (i = 1; i < argc; i++) {
         if (argv[i] && argv[i][0] == '-') {
@@ -131,22 +130,16 @@ int main(int argc, char **argv)
             }
         }
     }
-    printf("check1\n");
+
     graph = mpr_graph_new(MPR_OBJ);
-    printf("check2\n");
     dev = mpr_dev_new("testprops", 0);
-    printf("check3\n");
     sig = (mpr_obj)mpr_sig_new(dev, MPR_DIR_IN, "test", 3, MPR_FLT,
                                "Hz", NULL, NULL, NULL, NULL, 0);
-    printf("check4\n");
+
     while (!mpr_dev_get_is_ready(dev)) {
-        printf("check5\n");
         mpr_dev_poll(dev, 100);
-        printf("check6\n");
         mpr_graph_poll(graph, 100);
-        printf("check7\n");
     }
-    printf("check8\n");
 
     /* get a non-local copy of the device */
     do {

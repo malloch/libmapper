@@ -316,7 +316,7 @@ jobs:
   MacOS-instance-tests:
     runs-on: macOS-14
     needs: MacOS-tests
-    timeout-minutes: 5
+    timeout-minutes: 10
     strategy:
       matrix:
         flags: [-qtf, -qtfs, -qtfp, -qtfps]

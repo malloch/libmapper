@@ -359,7 +359,7 @@ testvector_LDADD = $(TEST_LDADD)
 
 tests: all
 	echo Running tests with separate device graphs
-	for i in $(test_all_ordered); do echo Running $$i -tf; ./$$i -tf; done
+	for i in $(test_all_ordered); do echo Running $$i -qtf; ./$$i -qtf; done
 	echo Running testinstance with ephemeral destination instances
 	./testinstance -qtf
 	echo Running testinstance with persistent destination instances
@@ -369,7 +369,7 @@ tests: all
 	echo Running testinstance_no_cb with persistent destination instances
 	./testinstance_no_cb -qtfp
 	echo Running tests with shared device graphs
-	for i in $(test_all_ordered); do echo Running $$i -tfs; ./$$i -tfs; done
+	for i in $(test_all_ordered); do echo Running $$i -qtfs; ./$$i -qtfs; done
 	echo Running testinstance with ephemeral destination instances
 	./testinstance -qtfs
 	echo Running testinstance with persistent destination instances
