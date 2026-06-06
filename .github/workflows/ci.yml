@@ -126,7 +126,7 @@ jobs:
 
   Linux-check-wheel:
     runs-on: ubuntu-latest
-    needs: Linux
+    needs: Linux-instance-tests
     timeout-minutes: 5
     steps:
       - uses: actions/setup-python@v6
@@ -340,7 +340,7 @@ jobs:
 
   MacOS-check-wheel:
     runs-on: macOS-14
-    needs: MacOS
+    needs: MacOS-instance-tests
     timeout-minutes: 5
     env:
       SYSTEM_VERSION_COMPAT: 0
