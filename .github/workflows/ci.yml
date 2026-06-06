@@ -300,12 +300,12 @@ jobs:
         retention-days: 1
 
   MacOS-tests:
-    runs-on: macOS-15
+    runs-on: macOS-14
     needs: MacOS
     timeout-minutes: 5
     strategy:
       matrix:
-        flags: [-tf, -tfs]
+        flags: [-qtf, -qtfs]
     steps:
       - name: download libraries
         uses: actions/download-artifact@v8
@@ -318,8 +318,6 @@ jobs:
           cd test
           ls -al
           chmod +x *
-          echo trying testconvergent first for debugging
-          DYLD_LIBRARY_PATH=../inst/lib ./testconvergent $TEST_FLAGS
           for i in *; do
            if [[ $i = "testinstance" || $i = "testinstance_no_cb" ]]; then continue; fi;
            echo Running $i $TEST_FLAGS;
@@ -328,7 +326,7 @@ jobs:
            done
 
   MacOS-instance-tests:
-    runs-on: macOS-15
+    runs-on: macOS-14
     needs: MacOS-tests
     timeout-minutes: 3
     strategy:
@@ -353,7 +351,7 @@ jobs:
            done
 
   MacOS-check-wheel:
-    runs-on: macOS-15
+    runs-on: macOS-14
     needs: MacOS
     timeout-minutes: 5
     env:
