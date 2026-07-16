@@ -87,6 +87,10 @@ static int estack_sort(estack stk)
     int i, initializing, init_offset = 0;
     mpr_bitflags move = mpr_bitflags_new(stk->num_subexpr);
 
+#if TRACE_PARSE
+    printf("sorting subexpressions...\n");
+#endif
+
     /* if user variable is assigned constant before read -> move to start */
     /* TODO: also consider variable instancing when finding init offset(s) */
 
@@ -97,7 +101,7 @@ static int estack_sort(estack stk)
             etoken t = &stk->tokens[j];
             int toktype = t->toktype & TOKEN_MASK;
             if (TOK_VAR == toktype || TOK_TT == toktype) {
-                if (VAR_Y == t->var.idx) {
+                if (t->var.idx >= N_USER_VARS) {
                     mpr_bitflags_unset(move, i);
                     break;
                 }
@@ -105,16 +109,18 @@ static int estack_sort(estack stk)
                     /* Check if variable is assigned elsewhere outside of initialization statements.
                      * If the assignment is not constant or there are multiple assignments to this
                      * variable, disallow moving or skipping this subexpression */
-                    int k, breaking = 0;
+                    int k, breaking = 0, assigned = 0;
                     for (k = 0; k < stk->num_tokens; k++) {
                         etoken t2 = &stk->tokens[k];
                         if (    (TOK_ASSIGN & t2->toktype)
                             &&  (t2->var.idx == t->var.idx)
-                            && !(t2->gen.flags & VAR_HIST_IDX)
-                            && !(ASSIGN_CONSTANT & t2->toktype)) {
-                            mpr_bitflags_unset(move, i);
-                            breaking = 1;
-                            break;
+                            && !(t2->gen.flags & VAR_HIST_IDX)) {
+                            if (assigned || !(ASSIGN_CONSTANT & t2->toktype)) {
+                                mpr_bitflags_unset(move, i);
+                                breaking = 1;
+                                break;
+                            }
+                            assigned = 1;
                         }
                     }
                     if (t->var.idx >= N_USER_VARS)
@@ -123,21 +129,36 @@ static int estack_sort(estack stk)
                         break;
                 }
             }
-            else if (TOK_ASSIGN == toktype) {
+            else if (TOK_ASSIGN == toktype || TOK_ASSIGN_TT == toktype) {
                 if ((var_referenced || t->var.idx >= N_USER_VARS) && !(VAR_HIST_IDX & t->gen.flags)) {
                     mpr_bitflags_unset(move, i);
                     break;
                 }
-                var_referenced = 0;
-            }
-            else if (TOK_ASSIGN_TT == toktype) {
-                if (var_referenced && !(VAR_HIST_IDX & t->gen.flags)) {
-                    mpr_bitflags_unset(move, i);
-                    break;
+                if (t->var.idx < N_USER_VARS) {
+                    /* count assignments of this variable */
+                    int k, breaking = 0, assigned = 0;
+                    for (k = 0; k < stk->num_tokens; k++) {
+                        etoken t2 = &stk->tokens[k];
+                        if (    (TOK_ASSIGN & t2->toktype)
+                            &&  (t2->var.idx == t->var.idx)
+                            && !(t2->gen.flags & VAR_HIST_IDX)) {
+                            if (assigned) {
+                                mpr_bitflags_unset(move, i);
+                                breaking = 1;
+                                break;
+                            }
+                            assigned = 1;
+                        }
+                    }
+                    if (breaking)
+                        break;
                 }
                 var_referenced = 0;
             }
         }
+#if TRACE_PARSE
+        printf("%d\n", mpr_bitflags_get(move, i));
+#endif
     }
 
     if (!(mpr_bitflags_get_sum(move))) {
@@ -1079,6 +1100,8 @@ static int estack_get_eval_buffer_size(estack stk)
  */
 void estack_update_eval_flags(estack stk, int num_inputs)
 {
+    int i;
+
     if (1 == stk->num_subexpr) {
         /* conditional evaluation can be handled at map-level */
         return;
@@ -1088,18 +1111,28 @@ void estack_update_eval_flags(estack stk, int num_inputs)
         int i;
         etoken_t *tok = stk->tokens;
         for (i = 0; i < stk->num_tokens; i++) {
-            if (tok[i].toktype == TOK_ASSIGN_TT && VAR_NEXT == tok[i].var.idx)
+            if (TOK_ASSIGN_TT == tok[i].toktype && VAR_NEXT == tok[i].var.idx)
                 break;
         }
         if (i >= stk->num_tokens) {
             /* no need for conditional evaluation tokens */
-            trace("no need for conditional evaluation tokens\n");
+            /* TODO: remove this if future development includes support for multiple output vars */
             return;
         }
     }
+    /* if no inputs cause evaluation conditional evaluation can be handled at map-level */
+    for (i = 0; i < stk->num_tokens; i++) {
+        etoken_t *tok = stk->tokens;
+        if (   TOK_ASSIGN_TT == tok[i].toktype
+            && tok[i].var.idx >= VAR_X_NEWEST
+            && !(tok->gen.flags & VAR_MUTED))
+            break;
+    }
+    if (i >= stk->num_tokens) {
+        return;
+    }
 
     /* create a conditional expression token for each subexpr */
-    int i;
     etoken_t *newtoks = calloc(1, stk->num_subexpr * sizeof(etoken_t));
     for (i = 0; i < stk->num_subexpr; i++) {
         newtoks[i].toktype = TOK_COND_EVAL;
@@ -1185,6 +1218,9 @@ void estack_update_eval_flags(estack stk, int num_inputs)
             continue;
         }
         /* insert a conditional evaluation token */
+#if TRACE_PARSE
+        printf("inserting a conditional evaluation token before subexpression %d\n", i);
+#endif
         newtoks[i].cnd.jump_offset = stk->subexpr_lens[i];
         last_cond_eval_tok = estack_insert(stk, stk->subexpr_starts[i], 1, &newtoks[i]);
     }
