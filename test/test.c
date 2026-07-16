@@ -23,6 +23,7 @@ mpr_sig sendsig_4 = 0;
 mpr_sig recvsig_4 = 0;
 
 int sent = 0;
+int matched = 0;
 int received = 0;
 int done = 0;
 
@@ -30,6 +31,8 @@ int verbose = 1;
 int terminate = 0;
 int shared_graph = 0;
 int autoconnect = 1;
+
+float expect_flt[3];
 
 int period = 100;
 
@@ -46,8 +49,8 @@ static void eprintf(const char *format, ...)
 /*! Creation of a local source. */
 int setup_src(mpr_graph g, const char *iface)
 {
-    float mnf[]={3.2,2,0}, mxf[]={-2,13,100};
-    double mnd=0, mxd=10;
+    float mnf[]={0,0,0}, mxf[]={1,1,1};
+    double mnd=0, mxd=1;
     mpr_list l;
 
     src = mpr_dev_new("test-send", g);
@@ -99,7 +102,7 @@ void handler(mpr_sig sig, mpr_sig_evt evt, mpr_id id, int len, mpr_type type,
     if (val) {
         int i;
         const char *name = mpr_obj_get_prop_as_str(sig, MPR_PROP_NAME, NULL);
-        eprintf("--> destination got %s", name);
+        eprintf("--> destination %s got", name);
 
         switch (type) {
             case MPR_FLT: {
@@ -119,16 +122,55 @@ void handler(mpr_sig sig, mpr_sig_evt evt, mpr_id id, int len, mpr_type type,
             default:
                 break;
         }
+
+        if (sig == recvsig_1) {
+            float *v = (float*)val;
+            if (v[0] != expect_flt[0])
+                eprintf(" (expected %f)", expect_flt[0]);
+            else
+                ++matched;
+        }
+        else if (sig == recvsig_2) {
+            double *v = (double*)val;
+            if (v[0] != expect_flt[1])
+                eprintf(" (expected %f)", expect_flt[1]);
+            else
+                ++matched;
+        }
+        else if (sig == recvsig_3) {
+            float *v = (float*)val;
+            for (i = 0; i < len; i++) {
+                if (v[i] != expect_flt[i])
+                    break;
+            }
+            if (i >= len) {
+                ++matched;
+            }
+            else if (verbose) {
+                printf(" (expected");
+                for (i = 0; i < len; i++) {
+                    printf(" %f", expect_flt[i]);
+                }
+                printf(")");
+            }
+        }
+        else if (sig == recvsig_4) {
+            float *v = (float*)val;
+            if (v[0] != expect_flt[0])
+                eprintf(" (expected %f)", expect_flt[0]);
+            else
+                ++matched;
+        }
         eprintf("\n");
     }
-    received++;
+    ++received;
 }
 
 /*! Creation of a local destination. */
 int setup_dst(mpr_graph g, const char *iface)
 {
-    float mnf[]={0,0,0}, mxf[]={1,1,1};
-    double mnd=0, mxd=1;
+    float mnf[]={0,0,0}, mxf[]={100,100,100};
+    double mnd=0, mxd=100;
     mpr_list l;
 
     dst = mpr_dev_new("test-recv", g);
@@ -216,19 +258,22 @@ void loop(void)
 
     i = 0;
     while ((!terminate || i < 50) && !done) {
-
-        val[0] = val[1] = val[2] = (i % 10) * 1.0f;
+        int j;
+        for (j = 0; j < 3; j++) {
+            val[j] = (i % 10) * 1.0f + j;
+            expect_flt[j] = val[j] * 100.0f;
+        }
         mpr_sig_set_value(sendsig_1, 0, 1, MPR_FLT, val);
-        eprintf("outsig_1 value updated to %d -->\n", i % 10);
+        eprintf("outsig_1 value updated to %f -->\n", val[0]);
 
-        mpr_sig_set_value(sendsig_2, 0, 1, MPR_FLT, val);
-        eprintf("outsig_2 value updated to %d -->\n", i % 10);
+        mpr_sig_set_value(sendsig_2, 0, 1, MPR_FLT, &val[1]);
+        eprintf("outsig_2 value updated to %f -->\n", val[1]);
 
         mpr_sig_set_value(sendsig_3, 0, 3, MPR_FLT, val);
         eprintf("outsig_3 value updated to [%f,%f,%f] -->\n", val[0], val[1], val[2]);
 
-        mpr_sig_set_value(sendsig_4, 0, 1, MPR_FLT, val);
-        eprintf("outsig_4 value updated to %d -->\n", i % 10);
+        mpr_sig_set_value(sendsig_4, 0, 1, MPR_FLT, &val[2]);
+        eprintf("outsig_4 value updated to %f -->\n", val[2]);
 
         eprintf("Sent %i messages.\n", 4);
         sent += 4;
@@ -238,7 +283,7 @@ void loop(void)
         i++;
 
         if (!verbose) {
-            printf("\r  Sent: %4i, Received: %4i   ", sent, received);
+            printf("\r  Sent: %4i, Received: %4i, Matched: %4i   ", sent, received, matched);
             fflush(stdout);
         }
     }
@@ -328,8 +373,10 @@ int main(int argc, char ** argv)
 
     loop();
 
-    if (autoconnect && (!received || received != sent)) {
-        eprintf("sent: %d, recvd: %d\n", sent, received);
+    if (autoconnect && (!received || sent != matched)) {
+        eprintf("Mismatch between sent and received/matched messages.\n");
+        eprintf("Updated value %d time%s, but received %d and matched %d of them.\n",
+                sent, sent == 1 ? "" : "s", received, matched);
         result = 1;
     }
 
