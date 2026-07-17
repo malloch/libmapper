@@ -227,10 +227,9 @@ int wait_ready(void)
     return done;
 }
 
-void loop(void)
+void setup_maps(mpr_loc loc)
 {
-    int i = 0, recvd, num_maps;
-    float val[3];
+    int i = 0, num_maps;
     eprintf("-------------------- GO ! --------------------\n");
 
     if (!done && autoconnect) {
@@ -241,6 +240,7 @@ void loop(void)
         maps[3] = mpr_map_new(1, &sendsig_3, 1, &recvsig_4);
 
         for (i = 0; i < 4; i++) {
+            mpr_obj_set_prop((mpr_obj)maps[i], MPR_PROP_PROCESS_LOC, NULL, 1, MPR_INT32, &loc, 1);
             mpr_obj_push(maps[i]);
         }
 
@@ -255,8 +255,20 @@ void loop(void)
             }
         }
     }
+}
 
-    i = 0;
+void destroy_maps() {
+    mpr_list maps = mpr_dev_get_maps(dst, MPR_DIR_ANY);
+    while (maps) {
+        mpr_map_release((mpr_map)*maps);
+        maps = mpr_list_get_next(maps);
+    }
+}
+
+void loop() {
+    int i = 0, recvd;
+    float val[3];
+
     while ((!terminate || i < 50) && !done) {
         int j;
         for (j = 0; j < 3; j++) {
@@ -371,7 +383,13 @@ int main(int argc, char ** argv)
         goto done;
     }
 
+    setup_maps(MPR_LOC_DST);
     loop();
+    destroy_maps();
+
+    setup_maps(MPR_LOC_SRC);
+    loop();
+    destroy_maps();
 
     if (autoconnect && (!received || sent != matched)) {
         eprintf("Mismatch between sent and received/matched messages.\n");

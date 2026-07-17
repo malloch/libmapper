@@ -1971,10 +1971,21 @@ void mpr_sig_copy_props(mpr_sig to, mpr_sig from)
 {
     mpr_dev dev = to->dev;
     if (!to->obj.id) {
+        int len;
+        mpr_type type;
+        const void *val;
+
         to->obj.id = from->obj.id;
         to->dir = from->dir;
         to->len = from->len;
         to->type = from->type;
+
+        if (mpr_obj_get_prop_by_idx((mpr_obj)from, MPR_PROP_MIN, NULL, &len, &type, &val, NULL)) {
+            mpr_tbl_add_record(to->obj.props.synced, MPR_PROP_MIN, NULL, len, type, val, 0);
+        }
+        if (mpr_obj_get_prop_by_idx((mpr_obj)from, MPR_PROP_MAX, NULL, &len, &type, &val, NULL)) {
+            mpr_tbl_add_record(to->obj.props.synced, MPR_PROP_MAX, NULL, len, type, val, 0);
+        }
     }
 
     if (!mpr_obj_get_id((mpr_obj)dev))
