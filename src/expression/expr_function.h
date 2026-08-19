@@ -60,7 +60,7 @@ NORMAL_FUNC(double, d)
 /* Returns next timestamp in periodic sequence
  * This function is declared as arity-2 in the fn_tbl, however during parsing another argument is
  * added to the instruction stack and the function token is upgraded to arity-3 */
-/* TODO: consider using NTP type for this instead of double */
+/* TODO: use NTP type for this instead of double to avoid FP rounding errors */
 static double periodicd(double period, double t_start, double t_now)
 {
     if (period <= 0)

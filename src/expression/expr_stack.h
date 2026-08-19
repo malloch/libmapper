@@ -82,6 +82,10 @@ static void estack_move_subexpr(estack stk, int from, int to)
 
 /* Where possible, shuffle initialization subexpressions and constant assignments to the start of
  * the stack. During evaluation these tokens can be skipped after the first evaluation. */
+/* Subexpressions may be moved to the start unless:
+ * - they include non-historical assignments AND
+ * - use input variables, input-dependent variables, or variables with multiple assignments
+ */
 static int estack_sort(estack stk)
 {
     int i, initializing, init_offset = 0;
@@ -102,31 +106,25 @@ static int estack_sort(estack stk)
             int toktype = t->toktype & TOKEN_MASK;
             if (TOK_VAR == toktype || TOK_TT == toktype) {
                 if (t->var.idx >= N_USER_VARS) {
-                    mpr_bitflags_unset(move, i);
-                    break;
+                    var_referenced = 1;
                 }
                 else {
                     /* Check if variable is assigned elsewhere outside of initialization statements.
                      * If the assignment is not constant or there are multiple assignments to this
                      * variable, disallow moving or skipping this subexpression */
-                    int k, breaking = 0, assigned = 0;
+                    int k, assigned = 0;
                     for (k = 0; k < stk->num_tokens; k++) {
                         etoken t2 = &stk->tokens[k];
                         if (    (TOK_ASSIGN & t2->toktype)
                             &&  (t2->var.idx == t->var.idx)
                             && !(t2->gen.flags & VAR_HIST_IDX)) {
                             if (assigned || !(ASSIGN_CONSTANT & t2->toktype)) {
-                                mpr_bitflags_unset(move, i);
-                                breaking = 1;
+                                var_referenced = 1;
                                 break;
                             }
                             assigned = 1;
                         }
                     }
-                    if (t->var.idx >= N_USER_VARS)
-                        var_referenced = 1;
-                    if (breaking)
-                        break;
                 }
             }
             else if (TOK_ASSIGN == toktype || TOK_ASSIGN_TT == toktype) {
@@ -140,9 +138,8 @@ static int estack_sort(estack stk)
                     for (k = 0; k < stk->num_tokens; k++) {
                         etoken t2 = &stk->tokens[k];
                         if (    (TOK_ASSIGN & t2->toktype)
-                            &&  (t2->var.idx == t->var.idx)
-                            && !(t2->gen.flags & VAR_HIST_IDX)) {
-                            if (assigned) {
+                            &&  (t2->var.idx == t->var.idx)) {
+                            if (!(VAR_HIST_IDX & t->gen.flags) && assigned) {
                                 mpr_bitflags_unset(move, i);
                                 breaking = 1;
                                 break;
@@ -219,12 +216,15 @@ void estack_free(estack stk, int free_token_mem)
     free(stk);
 }
 
-static int estack_get_subexpr(estack stk, int token_idx)
+#define ESTACK_PREPEND 0
+#define ESTACK_APPEND  1
+
+static int estack_get_subexpr(estack stk, int token_idx, int affinity)
 {
     int i;
     for (i = 0; i < stk->num_subexpr; i++) {
         token_idx -= stk->subexpr_lens[i];
-        if (token_idx < 0) {
+        if (token_idx < (0 + affinity)) {
             break;
         }
     }
@@ -559,7 +559,7 @@ static void estack_cpy_tok(estack stk, int dst_idx, int src_idx)
     etoken_cpy(&stk->tokens[dst_idx], &stk->tokens[src_idx]);
 }
 
-static etoken estack_insert(estack stk, int idx, int num_tokens, etoken_t *src)
+static etoken estack_insert(estack stk, int idx, int num_tokens, etoken_t *src, int affinity)
 {
     int i;
     if (!src || num_tokens <= 0 || stk->num_tokens + num_tokens > stk->size)
@@ -586,7 +586,7 @@ static etoken estack_insert(estack stk, int idx, int num_tokens, etoken_t *src)
     free(cache);
 
     /* update `subexpr_starts` and `subexpr_lens` arrays */
-    i = estack_get_subexpr(stk, idx);
+    i = estack_get_subexpr(stk, idx, affinity);
     stk->subexpr_lens[i] += num_tokens;
     for (++i; i < stk->num_subexpr; i++) {
         stk->subexpr_starts[i] += num_tokens;
@@ -1222,7 +1222,8 @@ void estack_update_eval_flags(estack stk, int num_inputs)
         printf("inserting a conditional evaluation token before subexpression %d\n", i);
 #endif
         newtoks[i].cnd.jump_offset = stk->subexpr_lens[i];
-        last_cond_eval_tok = estack_insert(stk, stk->subexpr_starts[i], 1, &newtoks[i]);
+        last_cond_eval_tok = estack_insert(stk, stk->subexpr_starts[i], 1,
+                                           &newtoks[i], ESTACK_PREPEND);
     }
     free(newtoks);
 }

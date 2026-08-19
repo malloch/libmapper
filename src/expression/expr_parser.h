@@ -494,9 +494,26 @@ int expr_parser_build_stack(mpr_expr expr, const char *str,
                 /* do not break */
             case TOK_OP: {
                 if (OP_PRIME == tok.op.idx) {
-                    tok.toktype = TOK_VFN;
-                    tok.fn.idx = VFN_DIFF2;
-                    /* omit break and continue to case TOK_VFN_DOT */
+                    etoken t = estack_peek(out, ESTACK_TOP);
+                    if (   (TOK_VAR == t->toktype || TOK_TT == t->toktype)
+                        && (t->var.idx >= VAR_X_NEWEST)) {
+                        /* use simple derivative arithmetic instead of diff function with memory */
+                        etoken_set_int32(&tok, -1);
+                        estack_push(out, &tok);
+                        etoken_cpy(&tok, t);
+                        tok.gen.flags |= VAR_HIST_IDX;
+                        estack_push(out, &tok);
+                        etoken_set_op(&tok, OP_SUBTRACT);
+                        estack_push(out, &tok);
+
+                        mpr_expr_update_mlen(expr, t->var.idx, 1);
+                        break;
+                    }
+                    else {
+                        tok.toktype = TOK_VFN;
+                        tok.fn.idx = VFN_DIFF2;
+                        /* omit break and continue to case TOK_VFN_DOT */
+                    }
                 }
                 else if (OP_INCREMENT_PRE == tok.op.idx || OP_DECREMENT_PRE == tok.op.idx) {
                     if (decorating_var) {
@@ -1863,6 +1880,7 @@ int expr_parser_build_stack(mpr_expr expr, const char *str,
                              "Only past samples of output timetag are writable.");}
                     i = estack_get_substack_len(out, ESTACK_TOP);
                     out_top->toktype = TOK_ASSIGN_TT;
+                    out_top->var.offset = 0;
                     if (ASSIGN_COMPOUND & tok.toktype) {
                         out_top->toktype |= ASSIGN_COMPOUND;
                         out_top->var.op_idx = tok.var.op_idx;
@@ -1953,6 +1971,7 @@ int expr_parser_build_stack(mpr_expr expr, const char *str,
     printf("checking whether user-defined variables should be singleton or instanced\n");
 #endif
     /* check whether user variables should be singleton or support instancing */
+    /* if a variable has compound assignment within an instanced subexpression */
     {
         int changed = 1, instanced = 0;
         while (changed) {
@@ -1960,10 +1979,13 @@ int expr_parser_build_stack(mpr_expr expr, const char *str,
             for (i = 0; i < out->num_tokens; i++) {
                 etoken t = estack_peek(out, i);
                 switch (t->toktype & TOKEN_MASK) {
+                    case TOK_VAR_INST_IDX:
+                        instanced = VAR_INSTANCED;
+                        break;
                     case TOK_VAR:
                     case TOK_TT:
                         // next needs special treatment here - leaving as instanced for now
-                        if (t->var.idx >= VAR_NEXT)
+                        if (t->var.idx >= VAR_NOW)
                             instanced = VAR_INSTANCED;
                         else if (vars[t->var.idx].flags & VAR_INSTANCED)
                             instanced = VAR_INSTANCED;
@@ -1983,7 +2005,7 @@ int expr_parser_build_stack(mpr_expr expr, const char *str,
         }
 #if TRACE_PARSE
         for (i = 0; i < num_var; i++) {
-            printf("  variable[%d] '%s': %s\n", i, vars[i].name ? vars[i].name : "----",
+            printf("  variable[%d] '%s': %s\n", i, vars[i].name ? vars[i].name : "<anonymous>",
                    vars[i].flags & VAR_INSTANCED ? "instanced" : "singleton");
         }
 #endif
@@ -2050,12 +2072,12 @@ int expr_parser_build_stack(mpr_expr expr, const char *str,
             }
 
             /* 3) insert op token between arg and var sub-expressions */
-            estack_insert(out, i - var_substack_len + 1, 1, &newtok);
+            estack_insert(out, i - var_substack_len + 1, 1, &newtok, ESTACK_PREPEND);
 
             /* 4) insert assignment substack before arg substack */
             /* we have inserted a token but i still points to the old assignment token position */
             estack_insert(out, i - var_substack_len - arg_substack_len + 1, var_substack_len,
-                          estack_peek(out, i - var_substack_len + 2));
+                          estack_peek(out, i - var_substack_len + 2), ESTACK_PREPEND);
 
             /* 5) convert to var/tt tokens */
             /* we have inserted a token but i still points to the old assignment token position */
@@ -2072,7 +2094,7 @@ int expr_parser_build_stack(mpr_expr expr, const char *str,
             if (assign_len > 1) {
                 newtok.toktype = TOK_VECTORIZE;
                 newtok.fn.arity = assign_len;
-                estack_insert(out, i - arg_substack_len + 1, 1, &newtok);
+                estack_insert(out, i - arg_substack_len + 1, 1, &newtok, ESTACK_APPEND);
             }
 
             /* start scan again */
@@ -2143,7 +2165,7 @@ int expr_parser_build_stack(mpr_expr expr, const char *str,
                     /* above code does not guarantee that variable token will not be cast to another
                      * datatype before copy */
                     /* for now we will copy variable substack instead of using copy */
-                    estack_insert(out, i, substack_len, estack_peek(out, var_idx - substack_len + 1));
+                    estack_insert(out, i, substack_len, estack_peek(out, var_idx - substack_len + 1), ESTACK_APPEND);
                     i += substack_len;
                 }
             }
@@ -2153,10 +2175,10 @@ int expr_parser_build_stack(mpr_expr expr, const char *str,
             newtok.op.idx = inc ? OP_ADD : OP_SUBTRACT;
             newtok.op.arity = 2;
             newtok.gen.vec_len = 1;
-            estack_insert(out, ++i, 1, &newtok);
+            estack_insert(out, ++i, 1, &newtok, ESTACK_APPEND);
 
             /* add var substack and convert to assign with keep_arg flag */
-            t = estack_insert(out, ++i, substack_len, estack_peek(out, var_idx - substack_len + 1));
+            t = estack_insert(out, ++i, substack_len, estack_peek(out, var_idx - substack_len + 1), ESTACK_APPEND);
             {FAIL_IF(t->toktype != TOK_VAR, "error!");}
             t->toktype = TOK_ASSIGN;
             t->var.offset = 0;

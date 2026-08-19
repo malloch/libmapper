@@ -289,7 +289,7 @@ int mpr_expr_eval(mpr_expr expr, ebuffer buff, mpr_value *v_in, mpr_value *v_var
                     int newest_idx = _newest_val_idx(v_in, expr->num_src, inst_idx);
                     v = v_in[newest_idx];
 #if TRACE_EVAL
-                    printf("[x$%d]", newest_idx);
+                    printf("[x$%d/%d]", newest_idx, expr->num_src);
 #endif
                 }
                 else if (!(tok->gen.flags & VAR_SIG_IDX)) {
@@ -353,9 +353,9 @@ int mpr_expr_eval(mpr_expr expr, ebuffer buff, mpr_value *v_in, mpr_value *v_var
             }
 #if TRACE_EVAL
             if (hwt)
-                printf("{%g}", hidx + -hwt);
+                printf("{%g/%d}", hidx + -hwt, mpr_value_get_mlen(v));
             else
-                printf("{%d}", hidx);
+                printf("{%d/%d}", hidx, mpr_value_get_mlen(v));
 #endif
 
             if (tok->gen.flags & VAR_VEC_IDX) {
@@ -461,8 +461,9 @@ int mpr_expr_eval(mpr_expr expr, ebuffer buff, mpr_value *v_in, mpr_value *v_var
                 int i;
                 double t_d;
                 mpr_time t = mpr_value_get_time(v, inst_idx, hidx);
-                if (0 == mpr_time_cmp(t, MPR_TIME_0))
+                if (0 == mpr_time_cmp(t, MPR_TIME_0)) {
                     t = mpr_value_get_start(v, inst_idx);
+                }
                 t_d = mpr_time_as_dbl(t);
                 if (hwt) {
                     t = mpr_value_get_time(v, inst_idx, hidx - 1);
@@ -1076,7 +1077,7 @@ int mpr_expr_eval(mpr_expr expr, ebuffer buff, mpr_value *v_in, mpr_value *v_var
         }
         case TOK_ASSIGN_TT: {
             mpr_value v = 0;
-            int hidx = tok->gen.flags & VAR_HIST_IDX;
+            int vidx = 0, hidx = tok->gen.flags & VAR_HIST_IDX;
             mpr_time t;
 
             if (VAR_Y == tok->var.idx) {
@@ -1115,11 +1116,25 @@ int mpr_expr_eval(mpr_expr expr, ebuffer buff, mpr_value *v_in, mpr_value *v_var
                 printf("{N=%d}", hidx);
 #endif
             }
+
+            BAIL_UNLESS(v);
+
+            if (VAR_NEXT == tok->var.idx && lens[dp] > 1) {
+                /* use the minimum */
+                int i;
+                for (i = 1; i < lens[dp]; i++) {
+                    if (vals[sp + i].d < vals[sp + i - 1].d)
+                        vidx = i;
+                }
+            }
+
 #if TRACE_EVAL
+            printf("\t\t");
+            evalue_print(vals + sp + vidx, MPR_DBL, 1, dp);
             printf("\n");
 #endif
-            BAIL_UNLESS(v);
-            mpr_time_set_dbl(&t, vals[sp].d);
+
+            mpr_time_set_dbl(&t, vals[sp + vidx].d);
             mpr_value_set_time(v, inst_idx, hidx, t);
 
             if (tok->gen.flags & CLEAR_STACK)
