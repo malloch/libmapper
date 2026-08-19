@@ -5,6 +5,8 @@
 #include <signal.h>
 #include <stdlib.h>
 
+// TODO: test running multiple self-timed maps simultaneously
+
 int verbose = 1;
 int terminate = 0;
 int autoconnect = 1;
@@ -12,13 +14,15 @@ int shared_graph = 0;
 int done = 0;
 int period = 100;
 
-// TODO: increase
-int num_inst = 1;
+int num_inst = 10;
+int num_iterations = 50;
 
-mpr_dev src = 0;
-mpr_dev dst = 0;
-mpr_sig sendsig = 0;
-mpr_sig recvsig = 0;
+mpr_dev src = NULL;
+mpr_dev dst = NULL;
+mpr_sig sendsig = NULL;
+mpr_sig recvsig = NULL;
+
+mpr_map map = NULL;
 
 int current_config = -1;
 int sent = 0;
@@ -28,8 +32,9 @@ int matched = 0;
 mpr_time t_last = {0, 0}, t_now;
 double expected = 0;
 
-//if map is instanced, map-produced instance updates should cause activation right?
-//if map is not instanced, only already-active instances would be updated
+// TODO: test with instanced and non-instanced maps
+// - if map is instanced, map-produced instance updates should cause activation
+// - if map is not instanced, only already-active instances should be updated
 
 /* schedule next periodic event from current time */
 #define NOW                 \
@@ -37,72 +42,78 @@ double expected = 0;
     "y = a++; "             \
     "next = now + period;"
 
-/* schedule next periodic event from current time (explicit phase)
+/* schedule next periodic event from current time with explicit phase
  * we "round up" when calculating num periods since start if closer than 0.999 */
 #define NOW_W_START                                                         \
     "period = %g; "                                                         \
-    "start = 10; "                                                          \
+    "start{-1} = now; "                                                     \
     "y = 1; "                                                               \
     "next = (floor((now - start + 0.001) / period) + 1) * period + start;"
 
 /* better to schedule by incrementing the `next` timestamp for drift-free timing */
-/* schedule next periodic event (implicit phase) */
+/* schedule next periodic event with implicit phase */
 /* also test assigning `t_next` instead of `next` (shouldn't make a difference) */
 #define NEXT            \
     "period = %g; "     \
     "y = 1; "           \
     "t_next += period;"
 
-/* schedule next periodic event (explicit phase)
- * we "round up" when calculating num periods since start if closer than 0.999 */
+/* schedule next periodic event with explicit phase
+ * we "round up" if closer than 1ms when calculating num periods since start */
 #define NEXT_W_START                                                \
     "period = %g; "                                                 \
-    "start = 10; "                                                  \
-    "y = _x; "                                                      \
+    "start{-1} = now; "                                             \
+    "y = 1; "                                                       \
     "next = (floor((next - start + 0.001) / period) + 1) * period + start;"
 
 /* if we track num_periods it is much cheaper to calculate `(n++)*period+start`
  * also have access to beat number which could be useful
  * this version has no division at "runtime" */
+/* the variable `i` is not instanced, so it gets incremented each time an instance is updated */
 #define START_NO_DIV                            \
-    "start{-1} = 10; "                          \
+    "start{-1} = now; "                         \
     "period{-1} = %g; "                         \
     "i{-1} = floor((now - start) / period); "   \
-    "y = 1; next = (i++) * period + start;"
+    "y = i; next = (i++) * period + start;"
 
 /* schedule next periodic event from a repeating pattern (implicit start time) */
-#define PATT                    \
+#define PATTERN                 \
     "period = %g; "             \
     "p = [1,.5,.5] * period; "  \
     "y = 1; next += p[i++];"
 
 /* schedule next periodic event using a ramp */
+/* TODO: reduce jitter so period at receiver increases monotonically */
 #define RAMP                \
-    "period = %g; "         \
-    "y = a; "               \
-    "a += period * 0.1; "   \
-    "next += a %% period;"
+    "period{-1} = %g; "     \
+    "y = period; "          \
+    "period *= 1.01; "      \
+    "next += period;"
 
 /* schedule next periodic event using a sinusoid */
 #define SINE                                    \
     "start{-1} = now; "                         \
-    "period = %g; y = 1; "                      \
+    "period = %g; "                             \
+    "y = 1; "                                   \
     "next += (sin(now - start) + 1.1) * period;"
 
 /* schedule next periodic event in the past */
-#define PAST                \
-    "period = %g; "         \
-    "y = 1; "               \
-    "next = now - 1;"
+/* setting the `t_next` timestamp to a past value will cause very fast repetition so we will limit
+ * this behaviour to 50 iterations. */
+#define PAST                        \
+    "i{-1} = 0; "                   \
+    "y = i; "                       \
+    "next = now - 1 + (i > 50) * 2;"
 
 /* 'start' time is in the future */
 #define FUTURE                                      \
-    "start{-1} = 0; "                               \
+    "start{-1} = now; "                             \
     "period{-1} = %g; "                             \
     "i{-1} = floor((now - start) / period) + 50; "  \
     "y = 1; "                                       \
     "next = (i++) * period + start;"
 
+/* upsampling envelope follower */
 #define UPSAMPLE            \
     "period = %g; "         \
     "y = ema(_x, 0.1); "    \
@@ -113,18 +124,22 @@ double expected = 0;
     "y = ema(_x, 0.5); "            \
     "next = next{-1} + period * 2;"
 
-#define QUANTIZE                                        \
-    "period = ema((_t_x-_t_x{-1}) ?: %g * 25, 0.2); "   \
-    "y = period; "                                      \
-    "next += period;"
+/* period assignment includes check that delta time is not zero */
+/* We explicitly track an initialization state using the user variable `started`. In generaal this
+ * could be replaced with `_t_x' > 0 ?: ...` however when running tests in series the previous map
+ * may be recovered and reactivated in which case the first result `_t_x'` will not be zero. */
+#define QUANTIZE                                    \
+    "started{-1} = 0; "                             \
+    "period = ema(started ? _t_x' : %g * 25, 0.2); "\
+    "y = period; "                                  \
+    "next += period; "                              \
+    "started = 1;"
 
 #define RANDOM                  \
     "p = %g; "                  \
     "r = uniform(p) + p * 0.5; "\
     "y = r;"                    \
     "next += r;"
-
-//"new{-1}=0; period = ema(new?0.1:(t_x')
 
 /* TODO: need unmodified t_x to estimate timebase offset
  * or direct access to timebase offset estimation, e.g. `periodic(period, x - t0_x)` */
@@ -139,7 +154,7 @@ double expected = 0;
 /* the periodic function (syntactic sugar) */
 #define FN_PERIODIC                         \
     "period = %g; "                         \
-    "start = 10; "                          \
+    "start{-1} = now; "                     \
     "y = 1; "                               \
     "next = periodic(period, start);"
 
@@ -149,6 +164,36 @@ double expected = 0;
     "start{-1} = now + period * 50; "       \
     "y = 1; "                               \
     "next = periodic(period, start);"
+
+/* the periodic function with a vector period argument */
+/* this supports polyrhythms & phasing */
+/* this is a boring example with period multiples for easy evaluation */
+#define FN_PERIODIC_LIST                    \
+    "period = %g; "                         \
+    "p = [3,2,1] * period; "                \
+    "start{-1} = now; "                     \
+    "y = 1; "                               \
+    "next = periodic(p, start);"
+
+#define REINSTANCE_SHORT    \
+    "p = %g; "              \
+    "alive = 1; "           \
+    "y = p; "               \
+    "alive = 0; "           \
+    "next += p;"
+
+#define REINSTANCE_LONG     \
+    "p = %g; "              \
+    "alive = 0; "           \
+    "alive = 1; "           \
+    "y = p; "               \
+    "next += p;"
+
+// TODO:
+// - decay with instance release
+// - upsampling with linear envelope
+// - check timing with difference number of instances
+// - consider addding explicit control of map num_inst
 
 typedef struct _test_config
 {
@@ -162,40 +207,46 @@ typedef struct _test_config
 test_config test_configs[] = {
     {  1, NOW,                  MPR_LOC_SRC, 0.95, 1.15 },
     {  2, NOW,                  MPR_LOC_DST, 0.95, 1.20 },
-    {  3, NOW_W_START,          MPR_LOC_SRC, 0.95, 1.05 },
-    {  4, NOW_W_START,          MPR_LOC_DST, 0.95, 1.05 },
-    {  5, NEXT,                 MPR_LOC_SRC, 0.95, 1.05 },
-    {  6, NEXT,                 MPR_LOC_DST, 0.95, 1.05 },
-    {  7, NEXT_W_START,         MPR_LOC_SRC, 0.95, 1.05 },
-    {  8, NEXT_W_START,         MPR_LOC_DST, 0.95, 1.05 },
-    {  9, START_NO_DIV,         MPR_LOC_SRC, 0.95, 1.05 },
-    { 10, START_NO_DIV,         MPR_LOC_DST, 0.95, 1.05 },
-    { 11, PATT,                 MPR_LOC_SRC, 0.60, 0.70 },
-    { 12, PATT,                 MPR_LOC_DST, 0.60, 0.70 },
-    { 13, RAMP,                 MPR_LOC_SRC, 0.44, 0.52 },
-    { 14, RAMP,                 MPR_LOC_DST, 0.44, 0.52 },
+    {  3, NOW_W_START,          MPR_LOC_SRC, 0.95, 1.10 },
+    {  4, NOW_W_START,          MPR_LOC_DST, 0.95, 1.10 },
+    {  5, NEXT,                 MPR_LOC_SRC, 0.95, 1.10 },
+    {  6, NEXT,                 MPR_LOC_DST, 0.95, 1.10 },
+    {  7, NEXT_W_START,         MPR_LOC_SRC, 0.95, 1.10 },
+    {  8, NEXT_W_START,         MPR_LOC_DST, 0.95, 1.10 },
+    {  9, START_NO_DIV,         MPR_LOC_SRC, 0.95, 1.10 },
+    { 10, START_NO_DIV,         MPR_LOC_DST, 0.95, 1.10 },
+    { 11, PATTERN,              MPR_LOC_SRC, 0.61, 0.71 },
+    { 12, PATTERN,              MPR_LOC_DST, 0.61, 0.71 },
+    { 13, RAMP,                 MPR_LOC_SRC, 1.40, 1.60 },
+    { 14, RAMP,                 MPR_LOC_DST, 1.40, 1.60 },
     { 15, SINE,                 MPR_LOC_SRC, 0.85, 2.00 },
     { 16, SINE,                 MPR_LOC_DST, 0.85, 2.00 },
-    { 17, PAST,                 MPR_LOC_SRC, 0.00, 0.05 },
-    { 18, PAST,                 MPR_LOC_DST, 0.00, 0.05 },
+    { 17, PAST,                 MPR_LOC_SRC, 0.00, 0.10 },
+    { 18, PAST,                 MPR_LOC_DST, 0.00, 0.10 },
     { 19, FUTURE,               MPR_LOC_SRC, 1.95, 2.05 },
     { 20, FUTURE,               MPR_LOC_DST, 1.90, 2.05 },
-    { 21, UPSAMPLE,             MPR_LOC_SRC, 0.65, 0.70 },
-    { 22, UPSAMPLE,             MPR_LOC_DST, 0.65, 0.70 },
-    { 23, DOWNSAMPLE,           MPR_LOC_SRC, 1.95, 2.05 },
-    { 24, DOWNSAMPLE,           MPR_LOC_DST, 1.95, 2.05 },
-    { 25, QUANTIZE,             MPR_LOC_SRC, 1.65, 1.90 },
-    { 26, QUANTIZE,             MPR_LOC_DST, 1.65, 1.90 },
+    { 21, UPSAMPLE,             MPR_LOC_SRC, 0.60, 0.75 },
+    { 22, UPSAMPLE,             MPR_LOC_DST, 0.60, 0.75 },
+    { 23, DOWNSAMPLE,           MPR_LOC_SRC, 1.90, 2.10 },
+    { 24, DOWNSAMPLE,           MPR_LOC_DST, 1.90, 2.10 },
+    { 25, QUANTIZE,             MPR_LOC_SRC, 1.65, 2.00 },
+    { 26, QUANTIZE,             MPR_LOC_DST, 1.65, 2.00 },
     { 27, RANDOM,               MPR_LOC_SRC, 0.50, 1.50 },
     { 28, RANDOM,               MPR_LOC_DST, 0.50, 1.50 },
     { 29, FN_PERIODIC,          MPR_LOC_SRC, 0.95, 1.15 },
     { 30, FN_PERIODIC,          MPR_LOC_DST, 0.95, 1.15 },
     { 31, FN_PERIODIC_FUTURE,   MPR_LOC_SRC, 1.95, 2.05 },
     { 32, FN_PERIODIC_FUTURE,   MPR_LOC_DST, 1.85, 2.05 },
-//    { 33, SYNC_LOCAL,           MPR_LOC_SRC, 2.0,  2.0  },
-//    { 34, SYNC_LOCAL,           MPR_LOC_DST, 2.0,  2.0  },
-//    { 35, SYNC_REMOTE,          MPR_LOC_SRC, 2.0,  2.0  },
-//    { 36, SYNC_REMOTE,          MPR_LOC_DST, 2.0,  2.0  },
+    { 33, FN_PERIODIC_LIST,     MPR_LOC_SRC, 0.95, 1.10 },
+    { 34, FN_PERIODIC_LIST,     MPR_LOC_DST, 0.95, 1.10 },
+    { 35, REINSTANCE_SHORT,     MPR_LOC_SRC, 0.95, 1.05 },
+    { 36, REINSTANCE_SHORT,     MPR_LOC_DST, 0.95, 1.05 },
+    { 37, REINSTANCE_LONG,      MPR_LOC_SRC, 0.95, 1.05 },
+    { 38, REINSTANCE_LONG,      MPR_LOC_DST, 0.95, 1.05 },
+//    { 39, SYNC_LOCAL,           MPR_LOC_SRC, 2.00, 2.00 },
+//    { 40, SYNC_LOCAL,           MPR_LOC_DST, 2.00, 2.00 },
+//    { 41, SYNC_REMOTE,          MPR_LOC_SRC, 2.00, 2.00 },
+//    { 42, SYNC_REMOTE,          MPR_LOC_DST, 2.00, 2.00 },
 
 };
 const int NUM_TESTS = sizeof(test_configs)/sizeof(test_configs[0]);
@@ -249,17 +300,31 @@ void handler(mpr_sig sig, mpr_sig_evt event, mpr_id instance, int length,
              mpr_type type, const void *value, mpr_time t)
 {
     mpr_time_set(&t_now, MPR_NOW);
-    if (verbose) {
-        eprintf("handler inst %d, evt %d", instance, event);
-        if (value)
-            printf(", val %g\n", *(float*)value);
-        else
-            printf("\n");
+    if (MPR_STATUS_UPDATE_REM == event) {
+        ++received;
+        eprintf("  received: %d (%gms)\n", received,
+                (mpr_time_as_dbl(t_now) - mpr_time_as_dbl(t_last)) * 1000);
+        if (terminate && received == num_iterations) {
+            /* release map */
+            mpr_list maps;
+            if (current_config >= 0 && MPR_LOC_SRC == test_configs[current_config].process_loc)
+                maps = mpr_dev_get_maps(src, MPR_DIR_ANY);
+            else
+                maps = mpr_dev_get_maps(dst, MPR_DIR_ANY);
+            while (maps) {
+                eprintf("releasing map\n");
+                mpr_map map = (mpr_map)*maps;
+                maps = mpr_list_get_next(maps);
+                mpr_map_release(map);
+            }
+        }
     }
-    ++received;
-    eprintf("  received: %d (%gms)\n", received,
-            (mpr_time_as_dbl(t_now) - mpr_time_as_dbl(t_last)) * 1000);
+    else {
+        eprintf("  received instance release\n");
+        mpr_sig_release_inst(sig, instance);
+    }
     t_last = t_now;
+
 }
 
 int setup_dst(mpr_graph g, const char *iface)
@@ -274,8 +339,8 @@ int setup_dst(mpr_graph g, const char *iface)
     eprintf("destination created using interface %s.\n",
             mpr_graph_get_interface(mpr_obj_get_graph(dst)));
 
-    recvsig = mpr_sig_new(dst, MPR_DIR_IN, "insig", 1, MPR_FLT, NULL,
-                          NULL, NULL, &num_inst, handler, MPR_STATUS_UPDATE_REM);
+    recvsig = mpr_sig_new(dst, MPR_DIR_IN, "insig", 1, MPR_FLT, NULL, NULL, NULL, &num_inst,
+                          handler, MPR_STATUS_UPDATE_REM | MPR_STATUS_REL_UPSTRM);
 
     eprintf("Input signal 'insig' registered.\n");
     l = mpr_dev_get_sigs(dst, MPR_DIR_IN);
@@ -308,11 +373,11 @@ int wait_ready(void)
 
 void loop()
 {
+    eprintf("Polling device..\n");
     received = 0;
     mpr_dev_start_polling(dst, 100);
 
-    eprintf("Polling device..\n");
-    while ((!terminate || received < 50) && !done) {
+    while ((!terminate || received < num_iterations) && !done) {
 
         ++sent;
         if (sent % 3)
@@ -330,26 +395,35 @@ void loop()
     mpr_dev_stop_polling(dst);
 }
 
-int run_test(test_config *config)
+int run_test(test_config *cfg)
 {
     double period_sec = period * 0.001;
     mpr_time t_start;
     int result = 0;
-    int use_inst = 0;
-    mpr_map map;
+    int use_inst = 1;
     char expr[256];
 
-    /* insert period value into expression string if specified */
-    snprintf(expr, 256, config->expr, period_sec);
+    /* process in-flight messages before running the next test configuration */
+    mpr_dev_poll(src, period);
+    mpr_dev_poll(dst, period);
+    mpr_dev_poll(src, period);
+    mpr_dev_poll(dst, period);
+    mpr_dev_poll(src, period);
+    mpr_dev_poll(dst, period);
 
-    printf("Configuration %d: ", config->test_id);
-    printf("PROC: %s", config->process_loc == MPR_LOC_SRC ? "src" : "dst");
+    /* insert period value into expression string if specified */
+    snprintf(expr, 256, cfg->expr, period_sec);
+
+    printf("Configuration %d: ", cfg->test_id);
+    printf("PROC: %s", cfg->process_loc == MPR_LOC_SRC ? "src" : "dst");
     printf("; EXPR: \"%s\"\n", expr);
 
     map = mpr_map_new(1, &sendsig, 1, &recvsig);
+    if (!map)
+        return 1;
 
     /* set process location */
-    mpr_obj_set_prop((mpr_obj)map, MPR_PROP_PROCESS_LOC, NULL, 1, MPR_INT32, &config->process_loc, 1);
+    mpr_obj_set_prop((mpr_obj)map, MPR_PROP_PROCESS_LOC, NULL, 1, MPR_INT32, &cfg->process_loc, 1);
 
     /* set expression */
     mpr_obj_set_prop((mpr_obj)map, MPR_PROP_EXPR, NULL, 1, MPR_STR, expr, 1);
@@ -377,7 +451,7 @@ int run_test(test_config *config)
 
         eprintf("\r  checking process location...");
         if (   !shared_graph
-            && mpr_obj_get_prop_as_int32((mpr_obj)map, MPR_PROP_PROCESS_LOC, 0) != config->process_loc)
+            && mpr_obj_get_prop_as_int32((mpr_obj)map, MPR_PROP_PROCESS_LOC, 0) != cfg->process_loc)
             ready = 0;
         else {
             eprintf("\r  checking expression...      ");
@@ -414,12 +488,18 @@ int run_test(test_config *config)
         mpr_time_set(&t_end, MPR_NOW);
 
         elapsed_sec = mpr_time_as_dbl(t_end) - mpr_time_as_dbl(t_start);
-        min_expected_sec = 50 * period_sec * config->time_mult_min;
-        max_expected_sec = 50 * period_sec * config->time_mult_max;
+        min_expected_sec = period_sec * (num_iterations * cfg->time_mult_min);
+        max_expected_sec = period_sec * (num_iterations * cfg->time_mult_max);
 
+        if (verbose) {
+            /* print configuration again */
+            printf("Configuration %d: ", cfg->test_id);
+            printf("PROC: %s", cfg->process_loc == MPR_LOC_SRC ? "src" : "dst");
+            printf("; EXPR: \"%s\"\n", expr);
+        }
         printf(" in %.2fs (expected %.2fs–%.2fs)", elapsed_sec, min_expected_sec, max_expected_sec);
 
-        result = elapsed_sec < min_expected_sec || elapsed_sec > (max_expected_sec + 0.1);
+        result = elapsed_sec < min_expected_sec || elapsed_sec > (max_expected_sec);
     }
 
     printf(" ..... %s\x1B[0m.\n", result ? "\x1B[31mFAILED" : "\x1B[32mPASSED");
@@ -517,7 +597,7 @@ int main(int argc, char **argv)
     signal(SIGSEGV, segv);
     signal(SIGINT, ctrlc);
 
-    g = shared_graph ? mpr_graph_new(0) : 0;
+    g = shared_graph ? mpr_graph_new(0) : NULL;
 
     if (setup_dst(g, iface)) {
         eprintf("Error initializing destination.\n");
@@ -537,14 +617,14 @@ int main(int argc, char **argv)
         goto done;
     }
 
-    i = config_start;
-    while (!done && i < config_stop) {
-        test_config *config = &test_configs[i];
+    current_config = config_start;
+    while (!done && current_config < config_stop) {
+        test_config *config = &test_configs[current_config];
         if (run_test(config)) {
             result = 1;
             break;
         }
-        ++i;
+        ++current_config;
     }
 
     if (autoconnect && result) {

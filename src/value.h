@@ -18,8 +18,17 @@ typedef struct _mpr_value *mpr_value;
 
 mpr_value mpr_value_new(unsigned int vlen, mpr_type type, unsigned int mlen, unsigned int num_inst);
 
-void mpr_value_realloc(mpr_value val, unsigned int vec_len, mpr_type type,
-                       unsigned int mem_len, unsigned int num_inst, int reset);
+/*! Reallocate the internal memory for a `mpr_value` structure based on datatype, vector length,
+ *  number of historical samples to store, and number of instances.
+ *  \param val      A previously-allocated `mpr_value`, or NULL for fresh allocation.
+ *  \param vec_len  Vector length of the values to store
+ *  \param type     Data type of the values to store
+ *  \param mem_len  Number of historical values to store
+ *  \param num_inst Number of value instances to store
+ *  \param reset    Pass a non-zero argument to reset the internal memory to zero
+ *  \return         The reallocated object. */
+mpr_value mpr_value_realloc(mpr_value val, unsigned int vec_len, mpr_type type,
+                            unsigned int mem_len, unsigned int num_inst, int reset);
 
 void mpr_value_reset_inst(mpr_value v, unsigned int inst_idx, mpr_time t);
 

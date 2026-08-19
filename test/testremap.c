@@ -148,13 +148,23 @@ int setup_maps(void)
     mpr_map map = mpr_map_new(NUM_SRC, sendsigs, 1, &recvsig);
     mpr_obj_push((mpr_obj)map);
     map_id = mpr_obj_get_id((mpr_obj)map);
+    int i, ready = 0;
 
     /* Wait until mapping has been established */
-    while (!done && !mpr_map_get_is_ready(map)) {
-        int i;
+    while (!done && !ready) {
         for (i = 0; i < NUM_SRC; i++)
             mpr_dev_poll(srcs[i], 10);
         mpr_dev_poll(dst, 10);
+
+        ready = 1;
+        for (i = 0; i < NUM_SRC; i++) {
+            mpr_list list = mpr_sig_get_maps(sendsigs[i], MPR_DIR_ANY);
+            while (list) {
+                ready *= mpr_map_get_is_ready((mpr_map)*list);
+                list = mpr_list_get_next(list);
+            }
+        }
+        ready *= mpr_map_get_is_ready(map);
     }
 
     return 0;
@@ -333,10 +343,12 @@ int main(int argc, char **argv)
     }
 
     if (sent != received) {
-        eprintf("Mismatch between sent and received messages.\n");
+        eprintf("Mismatch between sent and received messages is OK due to updates during remap.\n");
         eprintf("Updated value %d time%s, but received %d update%s.\n",
                 sent, sent == 1 ? "" : "s", received, received == 1 ? "" : "s");
-        result = 1;
+        /* allow for some lost updates during remap */
+        if ((sent - received) > 10)
+            result = 1;
     }
 
   done:

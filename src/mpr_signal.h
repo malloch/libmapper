@@ -26,7 +26,7 @@ void mpr_sig_init(mpr_sig sig, mpr_dev dev, int is_local, mpr_dir dir, const cha
 
 void mpr_local_sig_add_to_net(mpr_local_sig sig, mpr_net net);
 
-void mpr_sig_call_handler(mpr_local_sig sig, int evt, mpr_id inst, unsigned int inst_idx);
+int mpr_sig_call_handler(mpr_local_sig sig, int evt, mpr_id inst, unsigned int inst_idx);
 
 int mpr_sig_set_from_msg(mpr_sig sig, mpr_msg msg);
 
@@ -73,9 +73,9 @@ int mpr_sig_get_num_inst_internal(mpr_sig sig);
 
 int mpr_sig_get_use_inst(mpr_sig sig);
 
-void mpr_local_sig_set_inst_value(mpr_local_sig sig, const void *value, int inst_idx,
-                                  mpr_id_map id_map, int status, int map_manages_inst,
-                                  mpr_time time);
+int mpr_local_sig_set_inst_value(mpr_local_sig sig, const void *value, int inst_idx,
+                                 mpr_id_map id_map, int status, int map_manages_inst,
+                                 mpr_time time);
 
 mpr_id_map mpr_local_sig_get_id_map_by_inst_idx(mpr_local_sig sig, unsigned int inst_idx);
 

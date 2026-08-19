@@ -63,12 +63,16 @@ void mpr_value_free(mpr_value v) {
     free(v);
 }
 
-void mpr_value_realloc(mpr_value v, unsigned int vlen, mpr_type type, unsigned int mlen,
-                       unsigned int num_inst, int reset)
+mpr_value mpr_value_realloc(mpr_value v, unsigned int vlen, mpr_type type, unsigned int mlen,
+                            unsigned int num_inst, int reset)
 {
     int i, samp_size;
     mpr_value_buffer_t *b, tmp;
-    RETURN_UNLESS(v);
+
+    if (!v) {
+        return mpr_value_new(vlen, type, mlen, num_inst);
+    }
+
     if (vlen <= 0)
         vlen = v->vlen;
     if (mlen <= 0)
@@ -176,6 +180,7 @@ done:
     v->type = type;
     v->mlen = mlen;
     v->num_inst = num_inst;
+    return v;
 }
 
 int mpr_value_remove_inst(mpr_value v, unsigned int idx)

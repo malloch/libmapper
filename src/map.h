@@ -23,6 +23,9 @@ size_t mpr_map_get_struct_size(int is_local);
 
 void mpr_map_alloc_values(mpr_local_map map, int quiet);
 
+/*! Activate a map */
+void mpr_local_map_activate(mpr_local_map m);
+
 /*! Process updated instance values according to mapping properties.
  *  \param map          The mapping process to perform.
  *  \param time         Timestamp for this update.
@@ -40,7 +43,7 @@ int mpr_map_send_state(mpr_map map, int slot, net_msg_t cmd, int version);
 
 void mpr_map_init(mpr_map map, int num_src, mpr_sig *src, mpr_sig dst, int is_local);
 
-void mpr_map_process_before_free(mpr_map map);
+void mpr_local_map_process_before_free(mpr_local_map map);
 
 void mpr_map_free(mpr_map map);
 
@@ -67,6 +70,8 @@ const char *mpr_map_get_expr_str(mpr_map map);
 int mpr_local_map_get_has_scope(mpr_local_map map, mpr_id id);
 
 int mpr_local_map_get_is_one_src(mpr_local_map map);
+
+int mpr_local_map_get_is_self_map(mpr_local_map map);
 
 int mpr_map_get_locality(mpr_map map);
 

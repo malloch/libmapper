@@ -334,8 +334,8 @@ int mpr_tbl_remove_record(mpr_tbl t, mpr_prop prop, const char *key, int flags)
                 else
                     free(rec->val);
             }
-            rec->val = 0;
         }
+        rec->val = 0;
         rec->prop |= PROP_REMOVE;
         ret = 1;
     } while (prop == MPR_PROP_EXTRA && strchr(key, '*'));
@@ -960,11 +960,15 @@ void mpr_tbl_print_record(mpr_tbl_record rec)
     val = (rec->flags & MPR_TBL_INDIRECT) ? *rec->val : rec->val;
     switch (rec->type) {
         case MPR_VAL: {
-            int len = mpr_value_get_vlen((mpr_value)val);
-            mpr_type type = mpr_value_get_type((mpr_value)val);
-            /* TODO: consider instanced values */
-            val = mpr_value_get_value((mpr_value)val, 0, 0);
-            mpr_prop_print(len, type, val);
+            if (val) {
+                int len = mpr_value_get_vlen((mpr_value)val);
+                mpr_type type = mpr_value_get_type((mpr_value)val);
+                /* TODO: consider instanced values */
+                val = mpr_value_get_value((mpr_value)val, 0, 0);
+                mpr_prop_print(len, type, val);
+            }
+            else
+                printf("<NULL>");
             break;
         }
         default:

@@ -69,19 +69,28 @@ mpr_slot mpr_slot_new(mpr_map map, mpr_sig sig, mpr_dir dir,
         mpr_prop_print(1, MPR_SIG, slot->sig);
         printf("\n");
 #endif
-        mpr_local_slot lslot = (mpr_local_slot)slot;
-        lslot->val = mpr_value_new(mpr_sig_get_len(sig), mpr_sig_get_type(sig), 1, slot->num_inst);
-
         /* TODO: don't need to allocate for every local slot */
-        lslot->msg = lo_message_new();
-        lslot->num_msg = -1;
-        if (lslot->msg) {
-            /* increment refcount to prevent freeing by lo_bundle_free_recursive() in link.c */
-            lo_message_incref(lslot->msg);
+//        processing  src-side        dst-side
+//        src         both (out/out)  none (in/in) // but needs msg for sending release upstream
+//        dst         dst (out/out)   both (in/in)
+
+        if (1) {
+            mpr_local_slot lslot = (mpr_local_slot)slot;
+            lslot->val = mpr_value_new(mpr_sig_get_len(sig), mpr_sig_get_type(sig), 1, slot->num_inst);
         }
-        else {
-            trace("Error allocating lo_message\n");
-            assert(0);
+
+        if (1) {
+            mpr_local_slot lslot = (mpr_local_slot)slot;
+            lslot->msg = lo_message_new();
+            lslot->num_msg = -1;
+            if (lslot->msg) {
+                /* increment refcount to prevent freeing by lo_bundle_free_recursive() in link.c */
+                lo_message_incref(lslot->msg);
+            }
+            else {
+                trace("Error allocating lo_message\n");
+                assert(0);
+            }
         }
     }
 
@@ -111,18 +120,13 @@ void mpr_slot_free(mpr_slot slot)
     free(slot);
 }
 
-MPR_INLINE static int slot_mask(mpr_slot slot)
-{
-    return slot == mpr_map_get_dst_slot(slot->map) ? DST_SLOT_PROP : SRC_SLOT_PROP(slot->id);
-}
-
-int mpr_slot_set_from_msg(mpr_slot slot, mpr_msg msg)
+int mpr_slot_set_from_msg(mpr_slot slot, mpr_msg msg, int idx)
 {
     int updated = 0, mask;
     mpr_msg_atom a;
     mpr_tbl tbl;
     RETURN_ARG_UNLESS(slot && !mpr_slot_get_sig_if_local(slot), 0);
-    mask = slot_mask(slot);
+    mask = idx >= 0 ? SRC_SLOT_PROP(idx) : DST_SLOT_PROP;
     tbl = mpr_obj_get_prop_tbl((mpr_obj)slot->sig);
 
     a = mpr_msg_get_prop(msg, MPR_PROP_LEN | mask);
@@ -153,27 +157,32 @@ int mpr_slot_set_from_msg(mpr_slot slot, mpr_msg msg)
                                               MPR_INT32, &dir, MPR_TBL_MOD_REM);
         }
         num_inst = mpr_msg_get_prop_as_int32(msg, MPR_PROP_NUM_INST | mask);
-        if (!((mpr_local_slot)slot)->val || (num_inst && num_inst != slot->num_inst)) {
-            if (mpr_local_map_get_expr(((mpr_local_slot)slot)->map))
+
+        if (mpr_local_map_get_expr(((mpr_local_slot)slot)->map)) {
+            mpr_value val = ((mpr_local_slot)slot)->val;
+            if (!val || (num_inst && num_inst != mpr_value_get_num_inst(val))) {
                 mpr_slot_alloc_values((mpr_local_slot)slot, num_inst, 0);
-            else
-                slot->num_inst = num_inst;
+                ++updated;
+            }
+        }
+        else if (num_inst && num_inst != slot->num_inst) {
+            slot->num_inst = num_inst;
             ++updated;
         }
     }
     return updated;
 }
 
-void mpr_slot_add_props_to_msg(lo_message msg, mpr_slot slot, int is_dst)
+void mpr_slot_add_props_to_msg(lo_message msg, mpr_slot slot, int idx)
 {
     int len;
     char temp[32];
-    if (is_dst)
+    if (-1 == idx)
         snprintf(temp, 32, "@dst");
-    else if (0 == (int)slot->id)
+    else if (0 == (int)idx)
         snprintf(temp, 32, "@src");
     else
-        snprintf(temp, 32, "@src.%d", (int)slot->id);
+        snprintf(temp, 32, "@src.%d", idx);
     len = strlen(temp);
 
     if (mpr_obj_get_is_local((mpr_obj)slot->sig)) {
@@ -199,16 +208,17 @@ void mpr_slot_add_props_to_msg(lo_message msg, mpr_slot slot, int is_dst)
     }
 }
 
-void mpr_slot_print(mpr_slot slot, int is_dst)
+void mpr_slot_print(mpr_slot slot, int idx)
 {
     char temp[16];
-    if (is_dst)
+    if (-1 == idx)
         snprintf(temp, 16, "@dst");
-    else if (0 == (int)slot->id)
+    else if (0 == idx)
         snprintf(temp, 16, "@src");
     else
-        snprintf(temp, 16, "@src.%d", (int)slot->id);
+        snprintf(temp, 16, "@src.%d", idx);
 
+    printf(", %s%s=%d", temp, mpr_prop_as_str(MPR_PROP_ID, 0), (int)slot->id);
     printf(", %s%s=%d", temp, mpr_prop_as_str(MPR_PROP_LEN, 0), mpr_sig_get_len(slot->sig));
     printf(", %s%s=%c", temp, mpr_prop_as_str(MPR_PROP_TYPE, 0), mpr_sig_get_type(slot->sig));
     printf(", %s%s=%d", temp, mpr_prop_as_str(MPR_PROP_NUM_INST, 0), slot->num_inst);
@@ -235,44 +245,68 @@ int mpr_slot_alloc_values(mpr_local_slot slot, unsigned int num_inst, int hist_s
     RETURN_ARG_UNLESS(type && len, 0);
 
 #ifdef DEBUG
-    printf("(re)allocating value memory for slot ");
+    trace("(re)allocating value memory for slot ");
     mpr_prop_print(1, MPR_SIG, slot->sig);
     printf("\n");
 #endif
 
-    if (len != mpr_value_get_vlen(slot->val)) {
-        trace("  updating slot vector length %d -> %d\n", mpr_value_get_vlen(slot->val), len);
+    if (!slot->val) {
         updated = 1;
     }
+    else {
+        if (len != mpr_value_get_vlen(slot->val)) {
+            trace("  updating slot vector length %d -> %d\n", mpr_value_get_vlen(slot->val), len);
+            updated = 1;
+        }
 
-    if (type != mpr_value_get_type(slot->val)) {
-        trace("  updating slot type %c -> %c\n",
-              mpr_value_get_type(slot->val) ? mpr_value_get_type(slot->val) : '?', type);
-        updated = 1;
-    }
+        if (type != mpr_value_get_type(slot->val)) {
+            trace("  updating slot type %c -> %c\n",
+                  mpr_value_get_type(slot->val) ? mpr_value_get_type(slot->val) : '?', type);
+            updated = 1;
+        }
 
-    if (hist_size > 0 && hist_size != mpr_value_get_mlen(slot->val)) {
-        trace("  updating slot hist_size %d -> %d\n", mpr_value_get_mlen(slot->val), hist_size);
-        updated = 1;
+        if (hist_size > 0 && hist_size != mpr_value_get_mlen(slot->val)) {
+            trace("  updating slot hist_size %d -> %d\n", mpr_value_get_mlen(slot->val), hist_size);
+            updated = 1;
+        }
     }
 
     if (mpr_obj_get_is_local((mpr_obj)slot->sig)) {
         num_inst = mpr_sig_get_num_inst_internal(slot->sig);
     }
-    if (num_inst > 0 && num_inst != slot->num_inst) {
-        trace("  updating slot num_inst %d -> %d\n", slot->num_inst, num_inst);
+    else if (!num_inst)
+        num_inst = slot->num_inst;
+    if (num_inst > 0) {
+        if (slot->val && num_inst != mpr_value_get_num_inst(slot->val)) {
+            trace("  updating slot num_inst %d -> %d\n", mpr_value_get_num_inst(slot->val), num_inst);
+            updated = 1;
+        }
         slot->num_inst = num_inst;
-        updated = 1;
+    }
+    else {
+
     }
 
     if (updated) {
         /* reallocate memory */
-        trace("  reallocating value memory with num_inst %d and hist_size %d\n",
+        trace("  reallocating value memory (%p) with num_inst %d and hist_size %d\n", slot->val,
               slot->num_inst, hist_size);
-        mpr_value_realloc(slot->val, len, type, hist_size, slot->num_inst,
-                          slot != (mpr_local_slot)mpr_map_get_dst_slot((mpr_map)slot->map));
+        slot->val = mpr_value_realloc(slot->val, len, type, hist_size, slot->num_inst,
+                                      slot != (mpr_local_slot)mpr_map_get_dst_slot((mpr_map)slot->map));
     }
     return updated;
+}
+
+void mpr_local_slot_free_values(mpr_local_slot slot)
+{
+#ifdef DEBUG
+    printf("freeing value memory for slot ");
+    mpr_prop_print(1, MPR_SIG, slot->sig);
+    printf("\n");
+#endif
+
+    FUNC_IF(mpr_value_free, slot->val);
+    slot->val = NULL;
 }
 
 void mpr_slot_remove_inst(mpr_local_slot slot, unsigned int inst_idx)
@@ -288,6 +322,7 @@ mpr_value mpr_slot_get_value(mpr_local_slot slot)
 
 int mpr_slot_set_value(mpr_local_slot slot, unsigned int inst_idx, const void *value, mpr_time time)
 {
+    RETURN_ARG_UNLESS(slot->val, 0);
     if (value)
         mpr_value_set_next(slot->val, inst_idx, value, time);
     else

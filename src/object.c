@@ -470,8 +470,8 @@ void mpr_obj_print(mpr_obj o, int include_props)
         /* also print slot props */
         mpr_map map = (mpr_map)o;
         for (i = 0; i < mpr_map_get_num_src(map); i++)
-            mpr_slot_print(mpr_map_get_src_slot(map, i), 0);
-        mpr_slot_print(mpr_map_get_dst_slot(map), 1);
+            mpr_slot_print(mpr_map_get_src_slot(map, i), i);
+        mpr_slot_print(mpr_map_get_dst_slot(map), -1);
     }
     printf("\n");
 }

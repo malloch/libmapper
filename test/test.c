@@ -229,7 +229,9 @@ int wait_ready(void)
 
 void setup_maps(mpr_loc loc)
 {
-    int i = 0, num_maps;
+    int i = 0, ready = 0;
+    mpr_sig sendsigs[4] = {sendsig_1, sendsig_2, sendsig_3, sendsig_4};
+
     eprintf("-------------------- GO ! --------------------\n");
 
     if (!done && autoconnect) {
@@ -245,13 +247,20 @@ void setup_maps(mpr_loc loc)
         }
 
         /* wait until all maps has been established */
-        num_maps = 0;
-        while (!done && num_maps < 4) {
+        while (!done && !ready) {
             mpr_dev_poll(src, 10);
             mpr_dev_poll(dst, 10);
-            num_maps = 0;
+            ready = 1;
             for (i = 0; i < 4; i++) {
-                num_maps += (mpr_map_get_is_ready(maps[i]));
+                /* maps[] stores the destinations' copies of the maps */
+                ready *= mpr_map_get_is_ready(maps[i]);
+
+                /* also check readiness at the source side before proceeding */
+                mpr_list list = mpr_sig_get_maps(sendsigs[i], MPR_DIR_ANY);
+                while (list) {
+                    ready *= mpr_map_get_is_ready((mpr_map)*list);
+                    list = mpr_list_get_next(list);
+                }
             }
         }
     }
@@ -266,7 +275,7 @@ void destroy_maps() {
 }
 
 void loop() {
-    int i = 0, recvd;
+    int i = 0;
     float val[3];
 
     while ((!terminate || i < 50) && !done) {
@@ -290,8 +299,7 @@ void loop() {
         eprintf("Sent %i messages.\n", 4);
         sent += 4;
         mpr_dev_poll(src, 0);
-        recvd = mpr_dev_poll(dst, period);
-        eprintf("Received %i messages.\n\n", recvd);
+        mpr_dev_poll(dst, period);
         i++;
 
         if (!verbose) {

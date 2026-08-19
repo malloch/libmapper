@@ -305,7 +305,7 @@ int parse_and_eval(int expectation, int check_val, int exp_updates,
     }
     e = mpr_expr_new_from_str(str, n_sources, src_types, src_lens, 1, &dst_type, &dst_len);
     if (!e) {
-        eprintf("Parser FAILED (expression %d)\n", expression_count - 1);
+        eprintf("Parser FAILED\n");
         if (!(PARSE_FAILURE & expectation))
             result = 1;
         goto fail;
@@ -464,6 +464,7 @@ free:
     mpr_expr_free(e);
 
 fail:
+    eprintf("Expression %d %s\n", expression_count - 1, result ? "FAILED" : "SUCCEEDED");
     return result;
 }
 

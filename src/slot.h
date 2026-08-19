@@ -19,13 +19,15 @@ mpr_slot mpr_slot_new(mpr_map map, mpr_sig sig, mpr_dir dir, unsigned char is_lo
 
 int mpr_slot_alloc_values(mpr_local_slot slot, unsigned int num_inst, int hist_size);
 
+void mpr_local_slot_free_values(mpr_local_slot slot);
+
 void mpr_slot_free(mpr_slot slot);
 
-int mpr_slot_set_from_msg(mpr_slot slot, mpr_msg msg);
+int mpr_slot_set_from_msg(mpr_slot slot, mpr_msg msg, int idx);
 
-void mpr_slot_add_props_to_msg(lo_message msg, mpr_slot slot, int is_dest);
+void mpr_slot_add_props_to_msg(lo_message msg, mpr_slot slot, int idx);
 
-void mpr_slot_print(mpr_slot slot, int is_dest);
+void mpr_slot_print(mpr_slot slot, int idx);
 
 int mpr_slot_match_full_name(mpr_slot slot, const char *full_name);
 

@@ -127,6 +127,7 @@ void cleanup_dst(void)
 
 int setup_maps(int calibrate)
 {
+    mpr_list list;
     char expr[128];
     int iter = 4;
 
@@ -156,6 +157,13 @@ int setup_maps(int calibrate)
 
     eprintf("map initialized with expression '%s'\n",
             mpr_obj_get_prop_as_str(map, MPR_PROP_EXPR, NULL));
+
+    list = mpr_sig_get_maps(sendsig, MPR_DIR_OUT);
+    if (list) {
+        /* switch 'map' pointer to source device's copy */
+        map = (mpr_map)*list;
+        mpr_list_free(list);
+    }
 
     return 0;
 }

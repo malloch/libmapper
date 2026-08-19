@@ -228,22 +228,24 @@ void mpr_graph_cleanup(mpr_graph g)
         mpr_map map = (mpr_map)*maps;
         int status = mpr_obj_get_status((mpr_obj)map, 0);
         maps = mpr_list_get_next(maps);
-        if (   !mpr_obj_get_is_local((mpr_obj)map)
-            || (status & (MPR_STATUS_ACTIVE | MPR_STATUS_REMOVED)) == MPR_STATUS_ACTIVE)
-            continue;
 
 #ifdef DEBUG
         trace_graph(g, "  checking map: ");
         mpr_prop_print(1, MPR_MAP, map);
-        printf(", status=%d\n", status);
+        printf(", id=%"PR_MPR_ID", status=%d\n", ((mpr_obj)map)->id, status);
 #endif
 
+        if (   !mpr_obj_get_is_local((mpr_obj)map)
+            || (status & (MPR_STATUS_ACTIVE | MPR_STATUS_REMOVED)) == MPR_STATUS_ACTIVE) {
+            trace_graph(g, "    skipping active map\n");
+            continue;
+        }
         if (status & MPR_STATUS_REMOVED) {
-            trace_graph(g, "  removing map\n");
+            trace_graph(g, "    removing map\n");
             mpr_graph_remove_map(g, map, MPR_STATUS_REMOVED);
         }
         else if (status & MPR_STATUS_EXPIRED) {
-            trace_graph(g, "  removing expired map\n");
+            trace_graph(g, "    removing expired map\n");
             mpr_graph_remove_map(g, map, MPR_STATUS_EXPIRED);
         }
         else {
@@ -252,10 +254,11 @@ void mpr_graph_cleanup(mpr_graph g)
                 status = mpr_local_map_update_status((mpr_local_map)map);
                 if (status & MPR_SLOT_DEV_KNOWN) {
                     /* Try pushing the map to the distributed graph */
-                    trace_graph(g, "  pushing staged map to network\n");
+                    trace_graph(g, "    pushing staged map to network\n");
                     mpr_obj_push((mpr_obj)map);
                 }
             }
+            trace_graph(g, "    decrementing map status\n");
             mpr_map_status_decr(map);
             ++staged;
         }
@@ -829,7 +832,8 @@ mpr_map mpr_graph_add_map(mpr_graph g, mpr_id id, int num_src, const char **src_
 void mpr_graph_remove_map(mpr_graph g, mpr_map m, mpr_graph_evt e)
 {
     RETURN_UNLESS(m);
-    mpr_map_process_before_free(m);
+    if (mpr_obj_get_is_local((mpr_obj)m))
+        mpr_local_map_process_before_free((mpr_local_map)m);
     mpr_list_remove_item((void**)&g->maps, m);
     if (mpr_obj_get_status((mpr_obj)m, 0) & MPR_STATUS_ACTIVE)
         mpr_graph_call_cbs(g, (mpr_obj)m, MPR_MAP, e);
