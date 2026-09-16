@@ -96,6 +96,16 @@ mpr_value mpr_value_realloc(mpr_value v, unsigned int vlen, mpr_type type, unsig
             b->full = 0;
         }
     }
+    else if (num_inst < v->num_inst) {
+        for (i = num_inst; i < v->num_inst; i++) {
+            mpr_value_buffer b = &v->inst[i];
+            FUNC_IF(free, b->samps);
+            FUNC_IF(free, b->times);
+            FUNC_IF(mpr_bitflags_free, b->known);
+        }
+        v->inst = realloc(v->inst, sizeof(mpr_value_buffer_t) * num_inst);
+        v->num_inst = num_inst;
+    }
 
     if (reset || vlen != v->vlen || type != v->type) {
         /* reallocate old instances (v->num_inst has not yet been updated) */

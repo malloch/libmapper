@@ -375,14 +375,24 @@ mpr_map mpr_map_new(int num_src, mpr_sig *src, int num_dst, mpr_sig *dst)
             if (o) {
                 trace("  intersecting list with src[%d] '%s'\n", i,
                       mpr_obj_get_prop_as_str(o, MPR_PROP_NAME, NULL));
+                mpr_list isect = NULL;
                 mpr_list temp = get_maps_by_sig(g, (mpr_sig)o, MPR_DIR_OUT);
-                maps = mpr_list_get_isect(maps, temp);
+                if (temp && (isect = mpr_list_get_isect(maps, temp))) {
+                    maps = isect;
+                }
+                else {
+                    mpr_list_free(maps);
+                    maps = NULL;
+                    if (temp) {
+                        mpr_list_free(temp);
+                    }
+                }
             }
             else {
                 trace("  graph has no signal record for src[%d] '%s'\n", i,
                       mpr_obj_get_prop_as_str(o, MPR_PROP_NAME, NULL));
                 mpr_list_free(maps);
-                maps = 0;
+                maps = NULL;
             }
             if (!maps)
                 break;
@@ -1290,11 +1300,14 @@ static void mpr_local_map_free_values(mpr_local_map m)
             if (m->var_names[i]) {
                 snprintf(tmp, 128, "var@%s", m->var_names[i]);
                 mpr_tbl_remove_record(m->obj.props.synced, MPR_PROP_EXTRA, tmp, MPR_TBL_MOD_LOC);
+                free((void*)m->var_names[i]);
             }
             FUNC_IF(mpr_value_free, m->var_vals[i]);
         }
         free(m->var_vals);
         m->var_vals = NULL;
+        free(m->var_names);
+        m->var_names = NULL;
     }
 
     FUNC_IF(free, m->var_names);
@@ -1364,9 +1377,9 @@ void mpr_map_alloc_values(mpr_local_map m, int quiet)
             }
             if (j < m->num_vars) {
                 /* copy old variable */
-                vars[i] = m->var_vals[j];
+                vars[i] = mpr_value_realloc(m->var_vals[j], vlen, mpr_expr_get_var_type(e, i),
+                                            1, var_num_inst, 0);
                 m->var_vals[j] = 0;
-                mpr_value_realloc(vars[i], vlen, mpr_expr_get_var_type(e, i), 1, var_num_inst, 0);
             }
             else {
                 vars[i] = mpr_value_new(vlen, mpr_expr_get_var_type(e, i), 1, var_num_inst);
@@ -1426,10 +1439,7 @@ void mpr_map_alloc_values(mpr_local_map m, int quiet)
     m->var_names = var_names;
     m->num_vars = num_vars;
 
-    if (m->next_inst_val)
-        mpr_value_realloc(m->next_inst_val, 1, MPR_DBL, 1, num_inst, 0);
-    else
-        m->next_inst_val = mpr_value_new(1, MPR_DBL, 1, num_inst);
+    m->next_inst_val = mpr_value_realloc(m->next_inst_val, 1, MPR_DBL, 1, num_inst, 0);
 
     /* allocate update bitflags */
     if (m->updated_inst)
@@ -1830,6 +1840,7 @@ static int set_expr(mpr_local_map m, const char *expr_str)
             mpr_expr_free(m->expr);
             m->expr = NULL;
         }
+        mpr_local_map_free_values(m);
         m->is_self_timed = 0;
         goto done;
     }
