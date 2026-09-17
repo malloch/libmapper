@@ -1120,10 +1120,11 @@ void estack_update_eval_flags(estack stk, int num_inputs)
             return;
         }
     }
+
     /* if no inputs cause evaluation conditional evaluation can be handled at map-level */
     for (i = 0; i < stk->num_tokens; i++) {
         etoken_t *tok = stk->tokens;
-        if (   TOK_ASSIGN_TT == tok[i].toktype
+        if (   (TOK_VAR & tok[i].toktype || TOK_TT == tok[i].toktype)
             && tok[i].var.idx >= VAR_X_NEWEST
             && !(tok->gen.flags & VAR_MUTED))
             break;

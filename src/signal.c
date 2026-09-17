@@ -308,7 +308,6 @@ static void process_maps(mpr_local_sig sig, int id_map_idx)
         mpr_slot_set_value(src_slot, inst_idx, mpr_value_get_value(sig->value, inst_idx, 0), time);
 
         if (!mpr_slot_get_causes_update((mpr_slot)src_slot)) {
-            trace("slot update does not cause expression evaluation\n");
             continue;
         }
 

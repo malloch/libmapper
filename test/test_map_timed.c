@@ -4,6 +4,19 @@
 #include <string.h>
 #include <signal.h>
 #include <stdlib.h>
+#ifdef WIN32
+#include <io.h>
+#else
+#include <unistd.h>
+#endif
+
+#if defined(WIN32) || defined(_MSC_VER)
+#define HAVE_WIN32_THREADS 1
+#define SLEEP_MS(x) Sleep(x)
+#else
+#include <pthread.h>
+#define SLEEP_MS(x) usleep((x)*1000)
+#endif
 
 // TODO: test running multiple self-timed maps simultaneously
 
@@ -385,6 +398,8 @@ void loop()
 
         if (!shared_graph)
             mpr_dev_poll(src, period);
+        else
+            SLEEP_MS(period);
 
         if (!verbose) {
             printf("\r  Received: %4i", received);
