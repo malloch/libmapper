@@ -203,6 +203,7 @@ It is possible to call any of the [scalar functions](#function-list) listed abov
 
 * `angle(a, b)` – output the angle between vectors `a` and `b`
 * `dot(a, b)` – output the dot product of vectors `a` and `b`
+* `rev(x)` or `x.rev()` – reverse the order of vector elements
 * `sort(x, d)` or `x.sort(d)` – output a sorted version of the vector. The output will be sorted in ascending order if `d` is positive or descending order if `d` is negative.
 
 <h2 id="fir-and-iir-filters">FIR and IIR Filters</h2>
