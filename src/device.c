@@ -93,6 +93,7 @@ struct _mpr_local_dev {
 /* prototypes */
 static int check_registration(mpr_local_dev dev);
 static void process_maps(mpr_local_dev dev);
+static void _dev_set_time(mpr_local_dev ldev, mpr_time time, int force);
 
 size_t mpr_dev_get_struct_size(int is_local)
 {
@@ -460,7 +461,7 @@ static void process_maps(mpr_local_dev dev)
     mpr_list list;
     mpr_graph graph;
     int updated = dev->updated;
-    RETURN_UNLESS(updated && !(dev->locked++));
+    RETURN_UNLESS(updated && (1 == ++dev->locked));
 
     graph = dev->obj.graph;
     /* process and send updated maps */
@@ -543,7 +544,7 @@ int mpr_local_dev_update_maps(mpr_local_dev dev) {
     mpr_time t;
     mpr_time_set(&t, MPR_NOW);
     mpr_time_add_dbl(&t, dev->clk_offset);
-    mpr_dev_set_time((mpr_dev)dev, t);
+    _dev_set_time(dev, t, 1);
 
     if (dev->timed) {
         int next_ms = floor(mpr_time_get_diff(dev->t_next, t) * 1000);
@@ -611,23 +612,26 @@ mpr_time mpr_dev_get_time(mpr_dev dev)
     mpr_time_set(&t, MPR_NOW);
     mpr_time_add_dbl(&t, dev->clk_offset);
 
-    if (dev->obj.is_local && ((mpr_local_dev)dev)->time_is_stale)
-        mpr_dev_set_time(dev, t);
+    if (dev->obj.is_local && ((mpr_local_dev)dev)->time_is_stale) {
+        _dev_set_time((mpr_local_dev)dev, t, 0);
+    }
     return t;
 }
 
-void mpr_dev_set_time(mpr_dev dev, mpr_time time)
+static void _dev_set_time(mpr_local_dev ldev, mpr_time time, int force)
 {
-    mpr_local_dev ldev = (mpr_local_dev)dev;
     mpr_time now;
 
-    RETURN_UNLESS(dev && dev->obj.is_local && memcmp(&time, &(ldev->time), sizeof(mpr_time)));
+    if (memcmp(&time, &(ldev->time), sizeof(mpr_time))) {
+        mpr_time_set(&now, MPR_NOW);
+        mpr_dev_set_offset((mpr_dev)ldev, mpr_time_get_diff(time, now), ldev->clk_offset ? 0.1 : 1.0);
 
-    mpr_time_set(&now, MPR_NOW);
-    mpr_dev_set_offset(dev, mpr_time_get_diff(time, now), dev->clk_offset ? 0.1 : 1.0);
-
-    mpr_time_set(&ldev->time, time);
-    ldev->time_is_stale = 0;
+        mpr_time_set(&ldev->time, time);
+        ldev->time_is_stale = 0;
+    }
+    else if (!force) {
+        return;
+    }
 
     if (!ldev->locked) {
         /* process any updates made under the old timestamp */
@@ -641,6 +645,12 @@ void mpr_dev_set_time(mpr_dev dev, mpr_time time)
             process_maps(ldev);
         }
     }
+}
+
+void mpr_dev_set_time(mpr_dev dev, mpr_time time)
+{
+    if (dev && dev->obj.is_local)
+        _dev_set_time((mpr_local_dev)dev, time, 0);
 }
 
 void mpr_dev_reserve_id_map(mpr_local_dev dev)
