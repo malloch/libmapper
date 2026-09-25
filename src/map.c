@@ -171,6 +171,7 @@ static void mpr_local_map_init(mpr_local_map map)
         map->protocol = mpr_link_get_dev_dir(link, dst_dev) ? MPR_PROTO_TCP : MPR_PROTO_UDP;
         map->locality = MPR_LOC_BOTH;
 
+        // TODO: handle convergent maps with self-map component
         if (map->one_src && dst_sig == mpr_slot_get_sig((mpr_slot)map->src[0])) {
             map->is_self_map = 1;
         }
@@ -1117,26 +1118,29 @@ mpr_time mpr_map_process(mpr_local_map m, mpr_time t_now)
                     continue;
                 }
 
-                /* check if source signals have a value for this instance */
-                /* TODO: check whether source signal is actually referenced in the map expression */
-                for (j = 0; j < m->num_src; j++) {
-                    if (   mpr_local_slot_get_is_used(m->src[0])
-                        && !mpr_value_get_has_value(src_vals[0], i))
-                        break;
-                }
-                if (j < m->num_src) {
-                    trace("  map missing value for source %d instance %d, adding 100ms delay\n", j, i);
-                    /* add arbitrary 100ms delay here before rechecking instance */
-                    mpr_time_set(&t_next_inst, t_now);
-                    mpr_time_add_dbl(&t_next_inst, 0.1);
-                    /* set the instance t_next to MPR_TIME_MAX so we can tell it apart */
-                    mpr_value_set_time(m->next_inst_val, i, 0, MPR_TIME_MAX);
-                    if (mpr_time_cmp(t_next_inst, m->t_next) < 0.) {
-                        m->t_next = t_next_inst;
-                        trace("    set m->t_next to %f (%+gms) (2)\n", mpr_time_as_dbl(m->t_next),
-                               mpr_time_get_diff(m->t_next, t_now) * 1000);
+                // TODO: handle convergent maps with self-map component
+                if (!m->is_self_map) {
+                    /* check if source signals have a value for this instance */
+                    /* TODO: check whether source signal is actually referenced in the map expression */
+                    for (j = 0; j < m->num_src; j++) {
+                        if (   mpr_local_slot_get_is_used(m->src[0])
+                            && !mpr_value_get_has_value(src_vals[0], i))
+                            break;
                     }
-                    continue;
+                    if (j < m->num_src) {
+                        trace("  map missing value for source %d instance %d, adding 100ms delay\n", j, i);
+                        /* add arbitrary 100ms delay here before rechecking instance */
+                        mpr_time_set(&t_next_inst, t_now);
+                        mpr_time_add_dbl(&t_next_inst, 0.1);
+                        /* set the instance t_next to MPR_TIME_MAX so we can tell it apart */
+                        mpr_value_set_time(m->next_inst_val, i, 0, MPR_TIME_MAX);
+                        if (mpr_time_cmp(t_next_inst, m->t_next) < 0.) {
+                            m->t_next = t_next_inst;
+                            trace("    set m->t_next to %f (%+gms) (2)\n", mpr_time_as_dbl(m->t_next),
+                                  mpr_time_get_diff(m->t_next, t_now) * 1000);
+                        }
+                        continue;
+                    }
                 }
 
                 /* this instance is ready for next scheduled evaluation */
@@ -1511,10 +1515,30 @@ static int replace_expr_str(mpr_local_map m, const char *expr_str)
     FUNC_IF(mpr_expr_free, m->expr);
     m->expr = expr;
 
-    if (m->expr_str == expr_str)
-        return 0;
-    mpr_tbl_add_record(m->obj.props.synced, MPR_PROP_EXPR, NULL, 1, MPR_STR, expr_str, MPR_TBL_MOD_REM);
-    mpr_tbl_remove_record(m->obj.props.staged, MPR_PROP_EXPR, NULL, 0);
+    if (m->is_self_timed != mpr_expr_get_manages_time(m->expr)) {
+        mpr_local_dev dev = 0;
+        int i;
+
+        m->is_self_timed = mpr_expr_get_manages_time(m->expr);
+
+        if (MPR_LOC_DST == m->process_loc) {
+            mpr_sig sig = mpr_slot_get_sig((mpr_slot)m->dst);
+            if (mpr_obj_get_is_local((mpr_obj)sig))
+                mpr_local_dev_check_map_timing((mpr_local_dev)mpr_sig_get_dev(sig));
+        }
+
+        for (i = 0; i < m->num_src; i++) {
+            mpr_sig sig = mpr_slot_get_sig((mpr_slot)m->src[i]);
+            if (mpr_obj_get_is_local((mpr_obj)sig) && (dev != (mpr_local_dev)mpr_sig_get_dev(sig)))
+                mpr_local_dev_check_map_timing((dev = (mpr_local_dev)mpr_sig_get_dev(sig)));
+        }
+    }
+
+    if (expr_str) {
+        mpr_tbl_add_record(m->obj.props.synced, MPR_PROP_EXPR, NULL,
+                           1, MPR_STR, expr_str, MPR_TBL_MOD_REM);
+        mpr_tbl_remove_record(m->obj.props.staged, MPR_PROP_EXPR, NULL, 0);
+    }
     return 0;
 }
 
