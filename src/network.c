@@ -1800,6 +1800,12 @@ static mpr_map find_map(mpr_net net, const char *types, int ac, lo_arg **av, mpr
             }
         }
         trace("%s local dst signal: '%s*'\n", map ? "found" : "couldn't find", dst_name);
+
+        /* reject maps if the destination is an output signal */
+        if (sig && (MPR_DIR_OUT == mpr_sig_get_dir(sig))) {
+            trace("error in /map: destination cannot be output signal.")
+            return MPR_MAP_ERROR;
+        }
         RETURN_ARG_UNLESS(is_loc || MPR_LOC_DST != loc, MPR_MAP_ERROR);
     }
     if (!sig && MPR_LOC_SRC & loc) {
