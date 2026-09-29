@@ -1072,11 +1072,15 @@ int expr_parser_build_stack(mpr_expr expr, const char *str,
                     }
                     else
                         tok.fn.arity = vfn_tbl[tok.fn.idx].arity;
+                    /* copy type and vector length from last token */
+                    tok.gen.datatype = (estack_peek(out, ESTACK_TOP))->gen.datatype;
+                    tok.gen.vec_len = (estack_peek(out, ESTACK_TOP))->gen.vec_len;
                     estack_push(out, &tok);
                     {FAIL_IF(!estack_check_type(out, vars, 1), "Malformed expression (7)");}
                 }
-                /* copy type from last token */
+                /* copy type and vector length from last token */
                 newtok.gen.datatype = (estack_peek(out, ESTACK_TOP))->gen.datatype;
+                newtok.gen.vec_len = (estack_peek(out, ESTACK_TOP))->gen.vec_len;
 
                 if (RFN_CENTER == rfn || RFN_MEAN == rfn || RFN_SIZE == rfn || RFN_CONCAT == rfn) {
                     tok.toktype = TOK_SP_ADD;

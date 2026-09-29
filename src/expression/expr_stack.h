@@ -1102,6 +1102,10 @@ void estack_update_eval_flags(estack stk, int num_inputs)
 {
     int i;
 
+#if TRACE_PARSE
+    printf("updating evaluation flags for %d subexpressions\n", stk->num_subexpr);
+#endif
+
     if (1 == stk->num_subexpr) {
         /* conditional evaluation can be handled at map-level */
         return;

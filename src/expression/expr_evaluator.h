@@ -1112,6 +1112,7 @@ int mpr_expr_eval(mpr_expr expr, ebuffer buff, mpr_value *v_in, mpr_value *v_var
             if (hidx) {
                 assert(types[dp] == MPR_INT32 && types[dp - 1] == MPR_DBL);
                 hidx = vals[sp].i;
+                INCR_STACK_PTR(-1);
 #if TRACE_EVAL
                 printf("{N=%d}", hidx);
 #endif
