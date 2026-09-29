@@ -353,6 +353,9 @@ int parse_and_eval(int expectation, int check_val, int exp_updates,
     for (i = 0; i < mpr_expr_get_num_vars(e); i++) {
         int vlen = mpr_expr_get_var_vlen(e, i);
         mpr_type type = mpr_expr_get_var_type(e, i);
+        eprintf("Allocating user variable %d '%s' with type %c and vector length %d.\n",
+                i, mpr_expr_get_var_name(e, i), mpr_expr_get_var_type(e, i),
+                mpr_expr_get_var_vlen(e, i));
         mpr_value_realloc(user_vars[i], vlen, type, 1, 1, 0);
         mpr_value_reset_inst(user_vars[i], 0, time_in);
         mpr_value_incr_idx(user_vars[i], 0, MPR_NOW);

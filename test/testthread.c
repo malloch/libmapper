@@ -171,7 +171,7 @@ void *update_thread(void *context)
     const char *name = mpr_obj_get_prop_as_str((mpr_obj)sendsig, MPR_PROP_NAME, NULL);
     mpr_graph gf = mpr_obj_get_graph((mpr_obj)src);
     /* try creating and destroying a device */
-    mpr_dev dev2 = mpr_dev_new("foo", gf);
+    mpr_dev dev2 = mpr_dev_new("testthread-temp", gf);
     while ((!terminate || sent < 50) && !done) {
         eprintf("Updating signal %s to %d\n", name, sent);
         mpr_sig_set_value(sendsig, 0, 1, MPR_INT32, &sent);

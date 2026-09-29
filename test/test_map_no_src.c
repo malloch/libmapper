@@ -159,7 +159,7 @@ void loop(void)
     int i = 0;
 
     eprintf("Polling device..\n");
-    while ((!terminate || received < 50) && i < 500 && !done) {
+    while ((!terminate || received < expected) && i < 500 && !done) {
         mpr_dev_poll(dev, period);
         i++;
 

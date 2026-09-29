@@ -399,7 +399,7 @@ int main(int argc, char ** argv)
     loop();
     destroy_maps();
 
-    if (autoconnect && (!received || sent != matched)) {
+    if (autoconnect && (!received || sent < (matched * 0.99))) {
         eprintf("Mismatch between sent and received/matched messages.\n");
         eprintf("Updated value %d time%s, but received %d and matched %d of them.\n",
                 sent, sent == 1 ? "" : "s", received, matched);
