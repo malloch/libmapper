@@ -376,18 +376,7 @@ mpr_map mpr_map_new(int num_src, mpr_sig *src, int num_dst, mpr_sig *dst)
             if (o) {
                 trace("  intersecting list with src[%d] '%s'\n", i,
                       mpr_obj_get_prop_as_str(o, MPR_PROP_NAME, NULL));
-                mpr_list isect = NULL;
-                mpr_list temp = get_maps_by_sig(g, (mpr_sig)o, MPR_DIR_OUT);
-                if (temp && (isect = mpr_list_get_isect(maps, temp))) {
-                    maps = isect;
-                }
-                else {
-                    mpr_list_free(maps);
-                    maps = NULL;
-                    if (temp) {
-                        mpr_list_free(temp);
-                    }
-                }
+                maps = mpr_list_get_isect(maps, get_maps_by_sig(g, (mpr_sig)o, MPR_DIR_OUT));
             }
             else {
                 trace("  graph has no signal record for src[%d] '%s'\n", i,

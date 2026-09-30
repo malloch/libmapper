@@ -514,7 +514,13 @@ mpr_list mpr_list_get_union(mpr_list list1, mpr_list list2)
 mpr_list mpr_list_get_isect(mpr_list list1, mpr_list list2)
 {
     mpr_list_header_t *lh1, *lh2;
-    RETURN_ARG_UNLESS(list1 && list2, 0);
+    if (!list1 || !list2) {
+        if (list1)
+            mpr_list_free(list1);
+        if (list2)
+            mpr_list_free(list2);
+        return 0;
+    }
     lh1 = mpr_list_header_by_self(list1);
     lh2 = mpr_list_header_by_self(list2);
     return mpr_list_start(mpr_list_new_query((const void **)lh1->start, (void*)cmp_parallel_query,

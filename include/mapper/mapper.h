@@ -591,19 +591,22 @@ void mpr_map_block_origin(mpr_map map, mpr_dev device);
 mpr_list mpr_list_filter(mpr_list list, mpr_prop property, const char *key, int length,
                          mpr_type type, const void *value, mpr_op op);
 
-/*! Get the union of two object lists (objects matching list1 OR list2).
+/*! Get the union of two object lists (objects matching list1 OR list2). The argument lists are consumed/managed
+ *  by the returned list and should not be free'd.
  *  \param list1        The first object list.
  *  \param list2        The second object list.
  *  \return             A list of results.  Use `mpr_list_get_next()` to iterate. */
 mpr_list mpr_list_get_union(mpr_list list1, mpr_list list2);
 
-/*! Get the intersection of two object lists (objects matching list1 AND list2).
+/*! Get the intersection of two object lists (objects matching list1 AND list2). The argument lists are consumed/managed
+ *  by the returned list and should not be free'd.
  *  \param list1        The first object list.
  *  \param list2        The second object list.
  *  \return             A list of results.  Use `mpr_list_get_next()` to iterate. */
 mpr_list mpr_list_get_isect(mpr_list list1, mpr_list list2);
 
-/*! Get the difference between two object lists (objects in list1 but NOT list2).
+/*! Get the difference between two object lists (objects in list1 but NOT list2). The argument lists are consumed/managed
+ *  by the returned list and should not be free'd.
  *  \param list1        The first object list.
  *  \param list2        The second object list.
  *  \return             A list of results.  Use `mpr_list_get_next()` to iterate. */
