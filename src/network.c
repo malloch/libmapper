@@ -1763,6 +1763,7 @@ static mpr_map find_map(mpr_net net, const char *types, int ac, lo_arg **av, mpr
                 trace("restoring released map\n");
                 mpr_obj_set_status((mpr_obj)map, 0,
                                    MPR_STATUS_ACTIVE | MPR_MAP_STATUS_READY | MPR_STATUS_REMOVED | MPR_STATUS_EXPIRED);
+                mpr_obj_set_version((mpr_obj)map, 0);
             }
 
             return map;
@@ -1788,7 +1789,7 @@ static mpr_map find_map(mpr_net net, const char *types, int ac, lo_arg **av, mpr
 
     if (MPR_LOC_DST & loc) {
         /* check if we are the destination */
-        trace("checking for local destination\n");
+        trace("checking for local destination...\n");
         for (i = 0; i < net->num_devs; i++) {
             mpr_local_dev dev = net->devs[i];
             if (!mpr_dev_get_is_registered((mpr_dev)dev))
@@ -1799,7 +1800,7 @@ static mpr_map find_map(mpr_net net, const char *types, int ac, lo_arg **av, mpr
                 break;
             }
         }
-        trace("%s local dst signal: '%s*'\n", map ? "found" : "couldn't find", dst_name);
+        trace(  "%s local dst signal: '%s*'\n", sig ? "found" : "couldn't find", dst_name);
 
         /* reject maps if the destination is an output signal */
         if (sig && (MPR_DIR_OUT == mpr_sig_get_dir(sig))) {
@@ -1810,7 +1811,7 @@ static mpr_map find_map(mpr_net net, const char *types, int ac, lo_arg **av, mpr
     }
     if (!sig && MPR_LOC_SRC & loc) {
         /* check if we are a source – all sources must match! */
-        trace("checking for local sources\n");
+        trace("checking for local sources...\n");
         for (i = 0; i < num_src; i++) {
             int j;
             is_loc = 0;
@@ -1825,9 +1826,7 @@ static mpr_map find_map(mpr_net net, const char *types, int ac, lo_arg **av, mpr
                 }
             }
 #ifdef DEBUG
-            if (!is_loc) {
-                trace("%s local src signal: '%s'", map ? "found" : "couldn't find", src_names[i]);
-            }
+            trace(  "%s local src signal: '%s*'\n", sig ? "found" : "couldn't find", src_names[i]);
 #endif
             RETURN_ARG_UNLESS(is_loc || MPR_LOC_SRC != loc, MPR_MAP_ERROR);
         }
@@ -1835,7 +1834,18 @@ static mpr_map find_map(mpr_net net, const char *types, int ac, lo_arg **av, mpr
     RETURN_ARG_UNLESS(!loc || is_loc, MPR_MAP_ERROR);
 
     map = mpr_graph_get_map_by_names(net->graph, num_src, src_names, dst_name);
-    if (!map && (flags & ADD)) {
+    if (map) {
+        trace("found existing map with id %"PR_MPR_ID"\n", mpr_obj_get_id((mpr_obj)map));
+        if (id && id != mpr_obj_get_id((mpr_obj)map)) {
+            if (mpr_obj_get_status((mpr_obj)map, 0) & (MPR_STATUS_REMOVED | MPR_STATUS_EXPIRED)) {
+                trace("restoring released map with new id\n");
+                mpr_obj_set_status((mpr_obj)map, 0,
+                                   MPR_STATUS_ACTIVE | MPR_MAP_STATUS_READY | MPR_STATUS_REMOVED | MPR_STATUS_EXPIRED);
+                mpr_obj_set_version((mpr_obj)map, 0);
+            }
+        }
+    }
+    else if (flags & ADD) {
         /* safety check: make sure we don't already have an outgoing map from sig -> src. */
         if (sig && mpr_local_sig_check_outgoing((mpr_local_sig)sig, num_src, src_names)) {
             trace("error in /map: potential loop detected.")
