@@ -1,6 +1,7 @@
 #include <mapper/mapper.h>
 #include <assert.h>
 #include <stdio.h>
+#include <ctype.h>
 #include <stdlib.h>
 #include <stdarg.h>
 #include <math.h>
@@ -13,6 +14,7 @@
 #include <signal.h>
 
 #define MAX_NUM_MAP_SRC 8
+#define NUM_CONFIGS 4
 
 int num_sources = 3;
 int verbose = 1;
@@ -21,7 +23,7 @@ int shared_graph = 0;
 int autoconnect = 1;
 int done = 0;
 int period = 100;
-int config, num_configs = 4;
+int current_config;
 
 mpr_dev *srcs = 0;
 mpr_dev dst = 0;
@@ -174,72 +176,14 @@ int setup_maps(void)
         mpr_dev_poll(dst, 100);
     }
 
-    switch (config) {
+    switch (current_config) {
         case 0: {
-            /* build expression string with combination function and muted sources */
-            int offset = 2, len = num_sources * 5 + 5;
-            char *expr;
-
-            eprintf("Configuration 0: combination function and muted sources\n");
-
-            if (!(map = mpr_map_new(num_sources, sendsigs, 1, &recvsig))) {
-                eprintf("Failed to create map\n");
-                return 1;
-            }
-
-            expr = (char*)malloc(len * sizeof(char));
-            snprintf(expr, 3, "y=");
-            for (i = 0; i < num_sources; i++) {
-                if (i == 0) {
-                    /* set the first source to trigger evaluation */
-                    snprintf(expr + offset, len - offset, "-x$%d",
-                             mpr_map_get_sig_idx(map, sendsigs[i], MPR_LOC_SRC));
-                    offset += 4;
-                }
-                else {
-                    /* mute the remaining sources so they don't trigger evaluation */
-                    snprintf(expr + offset, len - offset, "-_x$%d",
-                             mpr_map_get_sig_idx(map, sendsigs[i], MPR_LOC_SRC));
-                    offset += 5;
-                }
-            }
-            mpr_obj_set_prop(map, MPR_PROP_EXPR, NULL, 1, MPR_STR, expr, 1);
-            free(expr);
-            mpr_obj_push(map);
-            break;
-        }
-        case 1:
-            /* build expression string with combination function and buddy logic */
-            eprintf("Configuration 1: combination function and buddy logic\n");
-
-            if (!(map = mpr_map_new(num_sources, sendsigs, 1, &recvsig))) {
-                eprintf("Failed to create map\n");
-                return 1;
-            }
-
-            mpr_obj_set_prop(map, MPR_PROP_EXPR, NULL, 1, MPR_STR,
-                             "alive=(t_x$0>t_y{-1})&&(t_x$1>t_y{-1})&&(t_x$2>t_y{-1});"
-                             "y=x$0+x$1+x$2;", 1);
-            mpr_obj_push(map);
-            break;
-        case 2:
-            /* create/modify map with format string and signal arguments */
-            eprintf("Configuration 2: format string and signal arguments\n");
-
-            if (!(map = mpr_map_new_from_str("%y=%x-_%x+_%x", recvsig, sendsigs[0],
-                                             sendsigs[1], sendsigs[2]))) {
-                eprintf("Failed to create map\n");
-                return 1;
-            }
-            mpr_obj_push(map);
-            break;
-        case 3: {
             /* create the map using a 3rd party graph */
             mpr_sig *sendsigs2 = calloc(1, sizeof(mpr_sig) * num_sources);
             mpr_sig recvsig2;
             int synced = 0;
 
-            eprintf("Configuration 3: create the map using a 3rd party graph\n");
+            eprintf("Configuration 1: create the map using a 3rd party graph\n");
 
             g2 = mpr_graph_new(MPR_OBJ);
 
@@ -286,6 +230,64 @@ int setup_maps(void)
             mpr_obj_push(map);
             break;
         }
+        case 1: {
+            /* build expression string with combination function and muted sources */
+            int offset = 2, len = num_sources * 5 + 5;
+            char *expr;
+
+            eprintf("Configuration 2: combination function and muted sources\n");
+
+            if (!(map = mpr_map_new(num_sources, sendsigs, 1, &recvsig))) {
+                eprintf("Failed to create map\n");
+                return 1;
+            }
+
+            expr = (char*)malloc(len * sizeof(char));
+            snprintf(expr, 3, "y=");
+            for (i = 0; i < num_sources; i++) {
+                if (i == 0) {
+                    /* set the first source to trigger evaluation */
+                    snprintf(expr + offset, len - offset, "-x$%d",
+                             mpr_map_get_sig_idx(map, sendsigs[i], MPR_LOC_SRC));
+                    offset += 4;
+                }
+                else {
+                    /* mute the remaining sources so they don't trigger evaluation */
+                    snprintf(expr + offset, len - offset, "-_x$%d",
+                             mpr_map_get_sig_idx(map, sendsigs[i], MPR_LOC_SRC));
+                    offset += 5;
+                }
+            }
+            mpr_obj_set_prop(map, MPR_PROP_EXPR, NULL, 1, MPR_STR, expr, 1);
+            free(expr);
+            mpr_obj_push(map);
+            break;
+        }
+        case 2:
+            /* build expression string with combination function and buddy logic */
+            eprintf("Configuration 3: combination function and buddy logic\n");
+
+            if (!(map = mpr_map_new(num_sources, sendsigs, 1, &recvsig))) {
+                eprintf("Failed to create map\n");
+                return 1;
+            }
+
+            mpr_obj_set_prop(map, MPR_PROP_EXPR, NULL, 1, MPR_STR,
+                             "alive=(t_x$0>t_y{-1})&&(t_x$1>t_y{-1})&&(t_x$2>t_y{-1});"
+                             "y=x$0+x$1+x$2;", 1);
+            mpr_obj_push(map);
+            break;
+        case 3:
+            /* create/modify map with format string and signal arguments */
+            eprintf("Configuration 4: format string and signal arguments\n");
+
+            if (!(map = mpr_map_new_from_str("%y=%x-_%x+_%x", recvsig, sendsigs[0],
+                                             sendsigs[1], sendsigs[2]))) {
+                eprintf("Failed to create map\n");
+                return 1;
+            }
+            mpr_obj_push(map);
+            break;
     }
 
     /* wait until mappings have been established */
@@ -351,20 +353,20 @@ void loop(void)
     eprintf("Polling device..\n");
 
     while ((!terminate || i < 50) && !done) {
-        switch (config) {
+        switch (current_config) {
             case 0:
-                expected[0] = expected[1] = expected[2] = i * -3.f;
-                break;
-            case 1:
-                expected[0] = expected[1] = expected[2] = i * 3.f;
-                break;
-            case 2:
-                expected[0] = expected[1] = expected[2] = i;
-                break;
-            case 3:
                 expected[0] = i;
                 expected[1] = i + 1;
                 expected[2] = i + 2;
+                break;
+            case 1:
+                expected[0] = expected[1] = expected[2] = i * -3.f;
+                break;
+            case 2:
+                expected[0] = expected[1] = expected[2] = i * 3.f;
+                break;
+            case 3:
+                expected[0] = expected[1] = expected[2] = i;
                 break;
         }
 
@@ -402,7 +404,7 @@ void ctrlc(int sig)
 
 int main(int argc, char **argv)
 {
-    int i, j, result = 0;
+    int i, j, result = 0, config_start = 0, config_stop = NUM_CONFIGS;
     char *iface = 0;
     mpr_graph g;
 
@@ -449,6 +451,33 @@ int main(int argc, char **argv)
                             iface = argv[i];
                             j = len;
                         }
+                        else if (strcmp(argv[i], "--config")==0 && argc>i+1) {
+                            i++;
+                            config_start = atoi(argv[i]);
+                            if (config_start > 0 && config_start <= NUM_CONFIGS) {
+                                config_stop = config_start;
+                                --config_start;
+                            }
+                            else {
+                                printf("config start argument must be between 1 and %d\n", NUM_CONFIGS);
+                                return 1;
+                            }
+                            if (i + 1 < argc) {
+                                if (strcmp(argv[i + 1], "...")==0) {
+                                    config_stop = NUM_CONFIGS;
+                                    ++i;
+                                }
+                                else if (isdigit(argv[i + 1][0])) {
+                                    config_stop = atoi(argv[i + 1]);
+                                    if (config_stop <= config_start || config_stop > NUM_CONFIGS) {
+                                        printf("config stop argument must be between config start and %d\n",
+                                               NUM_CONFIGS);
+                                        return 1;
+                                    }
+                                    ++i;
+                                }
+                            }
+                        }
                         break;
                     default:
                         break;
@@ -481,14 +510,15 @@ int main(int argc, char **argv)
     }
 
     if (autoconnect) {
-        for (i = num_configs - 1; i >= 0; i--) {
-            config = i;
+        current_config = config_start;
+        while (!done && current_config < config_stop) {
             if (setup_maps()) {
                 eprintf("Error setting map (1).\n");
                 result = 1;
                 goto done;
             }
             loop();
+            ++current_config;
         }
     }
     else
