@@ -2072,7 +2072,14 @@ int run_tests()
     if (parse_and_eval(PARSE_SUCCESS | EVAL_SUCCESS, 1, iterations, 1, 4))
         return 1;
 
-//    /* 168) Signal count() */
+    /* 168) null-coalescing operator */
+    set_expr_str("y=x??0;");
+    setup_test(MPR_FLT, 1, MPR_DBL, 2);
+    expect_dbl[0] = expect_dbl[1] = src_flt[0];
+    if (parse_and_eval(PARSE_SUCCESS | EVAL_SUCCESS, 1, iterations, 1, 4))
+        return 1;
+
+//    /* 169) Signal count() */
 //    set_expr_str("y=x / x.signal.count();");
 //    types[0] = MPR_FLT;
 //    types[1] = MPR_INT32;

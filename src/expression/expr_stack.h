@@ -516,15 +516,15 @@ done:
 /* Note: this function may return an incorrect length if it is run on an expression stack that has
  * already undergone expansion of postfix increment/decrement operators, since the stack may
  * contain extra assignment tokens. */
-static int estack_get_substack_len(estack stk, int start_idx)
+static int estack_get_substack_len(estack stk, int end_idx)
 {
     int idx, arity = 0;
     etoken_t *tokens = stk->tokens;
 
-    if (start_idx < 0)
-        start_idx += stk->num_tokens;
-    assert(start_idx >= 0 && start_idx < stk->num_tokens);
-    idx = start_idx;
+    if (end_idx < 0)
+        end_idx += stk->num_tokens;
+    assert(end_idx >= 0 && end_idx < stk->num_tokens);
+    idx = end_idx;
 
     do {
         if ((tokens[idx].toktype & TOKEN_MASK) < TOK_LOOP_START)
@@ -532,7 +532,7 @@ static int estack_get_substack_len(estack stk, int start_idx)
         arity += etoken_get_arity(&tokens[idx]);
         --idx;
     } while (arity >= 0 && idx >= 0);
-    return start_idx - idx;
+    return end_idx - idx;
 }
 
 static int estack_get_reduce_types(estack stk)
@@ -1096,6 +1096,42 @@ static int estack_get_eval_buffer_size(estack stk)
     return eval_buffer_len;
 }
 
+/* Calculate bitflags representing which source variables are required to evaluate a subexpression.
+ * Runs recursively to handle nested null-coalesce operators. */
+int find_req_src(estack stk, int first, int last)
+{
+    int i, src_req = 0;
+    for (i = last; i >= first; i--) {
+        etoken t = &stk->tokens[i];
+        switch (t->toktype) {
+            case TOK_VAR:
+            case TOK_VAR_NUM_INST:
+            case TOK_TT: {
+                if (t->var.idx >= VAR_X_NEWEST) {
+                    /* include flag for VAR_X_NEWEST */
+                    src_req |= (0x1 << (t->var.idx - VAR_X_NEWEST));
+                }
+                break;
+            }
+            case TOK_OP: {
+                if (OP_NULL_COALESCE == t->op.idx) {
+                    --i;
+                    int j = estack_get_substack_len(stk, i);
+                    /* scan rh argument */
+                    src_req |= find_req_src(stk, i - j + 1, i);
+                    /* skip lh argument */
+                    i -= j + estack_get_substack_len(stk, i - j);
+                }
+            }
+            default:
+                break;
+        }
+    }
+    if (src_req & ~0x1)
+        src_req &= ~0x1;
+    return src_req;
+}
+
 /* Check each subexpression and insert conditional evaluation tokens as necessary to enable
  * skipping evaluation if criteria are not met.
  * Don't bother inserting conditional execution tokens for:
@@ -1105,17 +1141,21 @@ static int estack_get_eval_buffer_size(estack stk)
  * - subexpressions using signal reduce
  * - subexpressions that are otherwise affected by all inputs
  */
-void estack_update_eval_flags(estack stk, int num_inputs)
+int estack_update_eval_flags(estack stk, int num_inputs)
 {
-    int i;
+    int i, src_req = 0;
 
 #if TRACE_PARSE
     printf("updating evaluation flags for %d subexpressions\n", stk->num_subexpr);
 #endif
 
+    /* TODO: refactor - merge this loop with below */
+    /* TODO: could allow parts of expression to be evaluated even if other parts are waiting for input */
+    src_req = find_req_src(stk, 0, stk->num_tokens - 1);
+
     if (1 == stk->num_subexpr) {
         /* conditional evaluation can be handled at map-level */
-        return;
+        return src_req;
     }
     if (1 == num_inputs) {
         /* check if expression includes self-timing tokens */
@@ -1128,7 +1168,7 @@ void estack_update_eval_flags(estack stk, int num_inputs)
         if (i >= stk->num_tokens) {
             /* no need for conditional evaluation tokens */
             /* TODO: remove this if future development includes support for multiple output vars */
-            return;
+            return src_req;
         }
     }
 
@@ -1141,7 +1181,7 @@ void estack_update_eval_flags(estack stk, int num_inputs)
             break;
     }
     if (i >= stk->num_tokens) {
-        return;
+        return src_req;
     }
 
     /* create a conditional expression token for each subexpr */
@@ -1238,6 +1278,7 @@ void estack_update_eval_flags(estack stk, int num_inputs)
                                            &newtoks[i], ESTACK_PREPEND);
     }
     free(newtoks);
+    return src_req;
 }
 
 /* checks if the stack contains references to input variables that do not occur within a reduce

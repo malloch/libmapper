@@ -77,6 +77,7 @@ typedef struct _mpr_local_map {
     int num_vars;                   /*!< Number of user variables. */
     int num_old_vars;               /*!< Number of user variables. */
     int num_inst;                   /*!< Number of local instances. */
+    uint8_t needs_src;
 
     uint8_t locality;               /* requires 3 bits -----XXX */
     uint8_t one_src;                /* requires 1 bit */
@@ -1111,10 +1112,20 @@ mpr_time mpr_map_process(mpr_local_map m, mpr_time t_now)
                 if (!m->is_self_map) {
                     /* check if source signals have a value for this instance */
                     /* TODO: check whether source signal is actually referenced in the map expression */
+                    /* set map-level flags for req_src
+                     * - iterate through req_src flags instead of maps srcs
+                     */
                     for (j = 0; j < m->num_src; j++) {
-                        if (   mpr_local_slot_get_is_used(m->src[0])
-                            && !mpr_value_get_has_value(src_vals[0], i))
+                        if (!mpr_value_get_has_value(src_vals[0], i)) {
+                            if (m->needs_src & (0x1 << (j + 1))) {
+                                break;
+                            }
+                        }
+                        else if (0x1 == m->needs_src) {
+                            /* expression just needs ANY input - skip remaining tests and continue */
+                            j = m->num_src;
                             break;
+                        }
                     }
                     if (j < m->num_src) {
                         trace("  map missing value for source %d instance %d, adding 100ms delay\n", j, i);
@@ -1140,6 +1151,23 @@ mpr_time mpr_map_process(mpr_local_map m, mpr_time t_now)
             else {
                 continue;
             }
+        }
+
+        int j;
+        for (j = 0; j < m->num_src; j++) {
+            if (!mpr_value_get_has_value(src_vals[0], i)) {
+                if (m->needs_src & (0x1 << (j + 1))) {
+                    break;
+                }
+            }
+            else if (0x1 == m->needs_src) {
+                j = m->num_src;
+                break;
+            }
+        }
+        if (j < m->num_src) {
+            trace("missing required value for source %d\n", j);
+            continue;
         }
 
         trace("  processing instance %d\n", i);
@@ -1503,6 +1531,8 @@ static int replace_expr_str(mpr_local_map m, const char *expr_str)
     }
     FUNC_IF(mpr_expr_free, m->expr);
     m->expr = expr;
+
+    m->needs_src = mpr_expr_get_needs_src(m->expr);
 
     if (m->is_self_timed != mpr_expr_get_manages_time(m->expr)) {
         mpr_local_dev dev = 0;
@@ -2008,17 +2038,21 @@ void mpr_local_map_activate(mpr_local_map m)
         }
     }
 
+    m->needs_src = mpr_expr_get_needs_src(m->expr);
+
     /* Special case: if we are the receiver and the new expression evaluates to
      * a constant we can update immediately. */
     /* TODO: should call handler for all instances updated through this map. */
     if (!m->use_inst && mpr_obj_get_is_local((mpr_obj)dst_sig)) {
         int num_src = mpr_expr_get_num_src(m->expr), i;
         for (i = 0; i < num_src; i++) {
-            if (mpr_expr_get_src_is_used(m->expr, i)) {
+            if ((m->needs_src == 0x1) || (m->needs_src & 0x1 << (i + 1))) {
+                /* source value is needed for evaluation */
                 break;
             }
         }
         if (i >= num_src) {
+            trace("expression can be evaluated without source values\n");
             /* apply update to all active destination instances */
             mpr_value dst_val = mpr_slot_get_value(m->dst);
             void *value = mpr_value_get_value(dst_val, i, 0);
@@ -2029,7 +2063,7 @@ void mpr_local_map_activate(mpr_local_map m)
 
     /* check whether each source slot is referenced and should trigger evaluation */
     for (i = 0; i < m->num_src; i++) {
-        mpr_local_slot_set_is_used(m->src[i], mpr_expr_get_src_is_used(m->expr, i));
+        mpr_local_slot_set_is_used(m->src[i], 0 != (m->needs_src & (0x1 << (i + 1))));
         mpr_slot_set_causes_update((mpr_slot)m->src[i], mpr_expr_get_src_causes_update(m->expr, i));
     }
 

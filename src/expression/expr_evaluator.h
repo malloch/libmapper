@@ -45,6 +45,18 @@
         break;                                                      \
     }
 
+#define NULL_COALESCE_CASE(T)                                       \
+    case OP_NULL_COALESCE: {                                        \
+        if (found_null) {                                           \
+            int i, j;                                               \
+            for (i = 0, j = sp; i < lens[dp]; i++, j++)             \
+                vals[j].T = vals[sp + vlen + i % rlen].T;           \
+            found_null = 0;                                         \
+            break;                                                  \
+        }                                                           \
+        break;                                                      \
+    }
+
 #define OP_CASES_META(EL)                                   \
     BINARY_OP_CASE(OP_ADD, +, EL);                          \
     BINARY_OP_CASE(OP_SUBTRACT, -, EL);                     \
@@ -58,7 +70,8 @@
     BINARY_OP_CASE(OP_LOGICAL_AND, &&, EL);                 \
     BINARY_OP_CASE(OP_LOGICAL_OR, ||, EL);                  \
     UNARY_OP_CASE(OP_LOGICAL_NOT, =!, EL);                  \
-    CONDITIONAL_CASES(EL);
+    CONDITIONAL_CASES(EL);                                  \
+    NULL_COALESCE_CASE(EL);
 
 MPR_INLINE static int _max(int a, int b)
 {
@@ -112,8 +125,8 @@ int mpr_expr_eval(mpr_expr expr, ebuffer buff, mpr_value *v_in, mpr_value *v_var
     estack stk = expr->stack;
     etoken_t *tok = stk->tokens, *end = tok + stk->num_tokens, *init = tok + stk->init_offset;
     int dp = -1, sp = -stk->vec_len, status = 1 | EXPR_EVAL_DONE;
-    /* Note: signal, history, and vector reduce are currently limited to 255 items here */
-    uint8_t alive = 1, muted = 0, cache = 0, vlen = stk->vec_len;
+    /* Note: signal, history, and vector reduce are currently limited to 255 tokens here */
+    uint8_t alive = 1, muted = 0, found_null = 0, cache = 0, vlen = stk->vec_len;
     uint8_t hist_offset = 0, sig_offset = 0, vec_offset = 0;
     mpr_value x = NULL;
     mpr_time then;
@@ -333,10 +346,20 @@ int mpr_expr_eval(mpr_expr expr, ebuffer buff, mpr_value *v_in, mpr_value *v_var
                 goto error;
 
             if (mpr_value_get_num_samps(v, inst_idx) <= 0) {
+                if (    tok->var.idx >= VAR_X_NEWEST
+                    && !(expr->src_req & (0x1 << (tok->var.idx - VAR_X_NEWEST)))) {
 #if TRACE_EVAL
-                printf("\r\t\t\t\t\tno values! exiting...\n");
+                    printf("\r\t\t\t\t\tno values but source is not required! continuing...\n");
 #endif
-                return 0;
+                    found_null = 1;
+
+                }
+                else {
+#if TRACE_EVAL
+                    printf("\r\t\t\t\t\tno values! exiting...\n");
+#endif
+                    return 0;
+                }
             }
 
             if (tok->gen.flags & VAR_HIST_IDX) {
@@ -401,10 +424,12 @@ int mpr_expr_eval(mpr_expr expr, ebuffer buff, mpr_value *v_in, mpr_value *v_var
                 SET_TYPE(mpr_value_get_type(v));
                 SET_LEN(tok->gen.vec_len ? tok->gen.vec_len : mpr_value_get_vlen(v));
                 switch (mpr_value_get_type(v)) {
-#define COPY_TYPED(MTYPE, TYPE, T)                                                  \
-                    case MTYPE: {                                                   \
-                        int i, j, vlen = mpr_value_get_vlen(v);                     \
+#define COPY_TYPED(MTYPE, TYPE, T)                                                      \
+                    case MTYPE: {                                                       \
+                        int i, j, vlen = mpr_value_get_vlen(v);                         \
                         TYPE *a = (TYPE*)mpr_value_get_value(v, inst_idx, hidx);        \
+                        if (!a)                                                         \
+                            break;                                                      \
                         if (vwt) {                                                      \
                             register TYPE temp;                                         \
                             register float ivwt = 1 - vwt;                              \
@@ -490,13 +515,14 @@ int mpr_expr_eval(mpr_expr expr, ebuffer buff, mpr_value *v_in, mpr_value *v_var
                 BAIL_UNLESS(v_out);
                 vals[sp].i = mpr_value_get_num_active_inst(v_out);
             }
-            else if (VAR_X_NEWEST == tok->var.idx) {
-                int newest_idx = _newest_val_idx(v_in, expr->num_src, inst_idx);
-                vals[sp].i = mpr_value_get_num_active_inst(v_in[newest_idx]);
-            }
-            else if (tok->var.idx >= VAR_X) {
+            else if (tok->var.idx >= VAR_X_NEWEST) {
                 BAIL_UNLESS(v_in);
-                vals[sp].i = mpr_value_get_num_active_inst(v_in[tok->var.idx - VAR_X]);
+                if (VAR_X_NEWEST == tok->var.idx) {
+                    int newest_idx = _newest_val_idx(v_in, expr->num_src, inst_idx);
+                    vals[sp].i = mpr_value_get_num_active_inst(v_in[newest_idx]);
+                }
+                else
+                    vals[sp].i = mpr_value_get_num_active_inst(v_in[tok->var.idx - VAR_X]);
             }
             else if (v_vars)
                 vals[sp].i = mpr_value_get_num_active_inst(v_vars[tok->var.idx]);
