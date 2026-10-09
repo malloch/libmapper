@@ -10,6 +10,7 @@
 typedef struct _ebuffer
 {
     evalue vals;
+    mpr_time *times;
     mpr_type *types;
     uint8_t *lens;
     unsigned int size;
@@ -35,6 +36,10 @@ void ebuffer_realloc(ebuffer buff, uint8_t num_slots, uint8_t vec_len)
             buff->lens = realloc(buff->lens, buff->len * sizeof(uint8_t));
         else
             buff->lens = malloc(buff->len * sizeof(uint8_t));
+        if (buff->times)
+            buff->times = realloc(buff->times, buff->len * sizeof(mpr_time));
+        else
+            buff->times = malloc(buff->len * sizeof(mpr_time));
     }
 
     /* evaluation buffer size needs to multiplied by vector length */
@@ -52,6 +57,7 @@ void ebuffer_realloc(ebuffer buff, uint8_t num_slots, uint8_t vec_len)
 void ebuffer_free(ebuffer buff)
 {
     FUNC_IF(free, buff->vals);
+    FUNC_IF(free, buff->times);
     FUNC_IF(free, buff->types);
     FUNC_IF(free, buff->lens);
     free(buff);

@@ -132,6 +132,7 @@ int mpr_expr_eval(mpr_expr expr, ebuffer buff, mpr_value *v_in, mpr_value *v_var
     mpr_time then;
 
     evalue vals = buff->vals;
+    mpr_time *times = buff->times;
     uint8_t *lens = buff->lens, src_updated = 0;
     mpr_type *types = buff->types;
 
@@ -249,8 +250,9 @@ int mpr_expr_eval(mpr_expr expr, ebuffer buff, mpr_value *v_in, mpr_value *v_var
                 default:
                     goto error;
             }
+            mpr_time_set(&times[dp], MPR_TIME_0);
 #if TRACE_EVAL
-            evalue_print(vals + sp, types[dp], lens[dp], dp);
+            evalue_print(vals + sp, times[dp], types[dp], lens[dp], dp);
 #endif
             break;
         case TOK_VAR:
@@ -282,9 +284,10 @@ int mpr_expr_eval(mpr_expr expr, ebuffer buff, mpr_value *v_in, mpr_value *v_var
                     vals[i].d = t_d;
                 SET_TYPE(MPR_DBL);
                 SET_LEN(tok->gen.vec_len);
+                mpr_time_set(&times[dp], *time);
 #if TRACE_EVAL
                 printf("\r\t\t\t\t\t");
-                evalue_print(vals + sp, types[dp], lens[dp], dp);
+                evalue_print(vals + sp, times[dp], types[dp], lens[dp], dp);
 #endif
                 break;
             }
@@ -420,6 +423,18 @@ int mpr_expr_eval(mpr_expr expr, ebuffer buff, mpr_value *v_in, mpr_value *v_var
 
             SET_STACK_PTR(idxp + 1);
 
+            mpr_time_set(&times[dp], mpr_value_get_time(v, inst_idx, hidx));
+            if (0 == mpr_time_cmp(times[dp], MPR_TIME_0)) {
+                mpr_time_set(&times[dp], mpr_value_get_start(v, inst_idx));
+            }
+            if (hwt) {
+                mpr_time then = mpr_value_get_time(v, inst_idx, hidx - 1);
+                if (0 == mpr_time_cmp(then, MPR_TIME_0)) {
+                    then = mpr_value_get_start(v, inst_idx);
+                }
+                mpr_time_add_dbl(&times[dp], mpr_time_get_diff(times[dp], then) * -hwt);
+            }
+
             if (TOK_VAR == tok->toktype) {
                 SET_TYPE(mpr_value_get_type(v));
                 SET_LEN(tok->gen.vec_len ? tok->gen.vec_len : mpr_value_get_vlen(v));
@@ -483,26 +498,16 @@ int mpr_expr_eval(mpr_expr expr, ebuffer buff, mpr_value *v_in, mpr_value *v_var
                 }
             }
             else {
+                /* (TOK_TT == tok->toktype) */
                 int i;
-                double t_d;
-                mpr_time t = mpr_value_get_time(v, inst_idx, hidx);
-                if (0 == mpr_time_cmp(t, MPR_TIME_0)) {
-                    t = mpr_value_get_start(v, inst_idx);
-                }
-                t_d = mpr_time_as_dbl(t);
-                if (hwt) {
-                    t = mpr_value_get_time(v, inst_idx, hidx - 1);
-                    if (0 == mpr_time_cmp(t, MPR_TIME_0))
-                        t = mpr_value_get_start(v, inst_idx);
-                    t_d = t_d * hwt + mpr_time_as_dbl(t) * (1 - hwt);
-                }
+                double t_d = mpr_time_as_dbl(times[dp]);
                 for (i = sp; i < sp + tok->gen.vec_len; i++)
                     vals[i].d = t_d;
                 SET_TYPE(MPR_DBL);
                 SET_LEN(tok->gen.vec_len);
             }
 #if TRACE_EVAL
-            evalue_print(vals + sp, types[dp], lens[dp], dp);
+            evalue_print(vals + sp, times[dp], types[dp], lens[dp], dp);
 #endif
             break;
         }
@@ -530,8 +535,11 @@ int mpr_expr_eval(mpr_expr expr, ebuffer buff, mpr_value *v_in, mpr_value *v_var
                 goto error;
             for (i = 1; i < tok->gen.vec_len; i++)
                 vals[sp + i].i = vals[sp].i;
+
+            /* TODO: perhaps we should load most recent timestamp from active instance? */
+            mpr_time_set(&times[dp], *time);
 #if TRACE_EVAL
-            evalue_print(vals + sp, types[dp], lens[dp], dp);
+            evalue_print(vals + sp, times[dp], types[dp], lens[dp], dp);
 #endif
             break;
         }
@@ -542,18 +550,26 @@ int mpr_expr_eval(mpr_expr expr, ebuffer buff, mpr_value *v_in, mpr_value *v_var
             SET_LEN(tok->gen.vec_len);
             for (i = 0; i < tok->gen.vec_len; i++)
                 vals[sp + i].i = inst_idx;
+            times[dp] = MPR_TIME_0;
 #if TRACE_EVAL
-            evalue_print(vals + sp, types[dp], lens[dp], dp);
+            evalue_print(vals + sp, times[dp], types[dp], lens[dp], dp);
 #endif
             break;
         }
         case TOK_OP: {
+            // use most recent timestamp in args
             uint8_t i, max_len, rlen, arity = tok->op.arity;
             INCR_STACK_PTR(1 - arity);
             /* first copy vals[sp] elements if necessary */
             max_len = lens[dp];
-            for (i = 1; i < arity; i++)
+            for (i = 1; i < arity; i++) {
                 max_len = _max(max_len, lens[dp + i]);
+
+                /* use most recent timestamp within operator arity */
+                if (0 > mpr_time_cmp(times[dp], times[dp + i])) {
+                    mpr_time_set(&times[dp], times[dp + i]);
+                }
+            }
             for (i = 0; i < arity; i++) {
                 int diff = max_len - lens[dp];
                 while (diff > 0) {
@@ -626,21 +642,27 @@ int mpr_expr_eval(mpr_expr expr, ebuffer buff, mpr_value *v_in, mpr_value *v_var
             }
             SET_TYPE(tok->gen.datatype);
 #if TRACE_EVAL
-            evalue_print(vals + sp, types[dp], lens[dp], dp);
+            evalue_print(vals + sp, times[dp], types[dp], lens[dp], dp);
 #endif
             if (errno || fetestexcept(FE_DIVBYZERO | FE_INVALID))
                 goto skip_assignment;
             break;
         }
         case TOK_FN: {
-            int i, diff;
-            uint8_t max_len, llen, rlen = 0, arity = tok->fn.arity;
+            int diff;
+            uint8_t i, max_len, llen, rlen = 0, arity = tok->fn.arity;
             INCR_STACK_PTR(1 - arity);
             /* TODO: use preprocessor macro or inline func here */
             /* first copy vals[sp] elements if necessary */
             max_len = lens[dp];
-            for (i = 1; i < arity; i++)
+            for (i = 1; i < arity; i++) {
                 max_len = _max(max_len, lens[dp + i]);
+
+                /* use most recent timestamp within operator arity */
+                if (0 > mpr_time_cmp(times[dp], times[dp + i])) {
+                    mpr_time_set(&times[dp], times[dp + i]);
+                }
+            }
             diff = max_len - lens[dp];
             while (diff > 0) {
                 int min_diff = lens[dp] > diff ? diff : lens[dp];
@@ -694,7 +716,7 @@ int mpr_expr_eval(mpr_expr expr, ebuffer buff, mpr_value *v_in, mpr_value *v_var
                 goto error;
             }
 #if TRACE_EVAL
-            evalue_print(vals + sp, types[dp], lens[dp], dp);
+            evalue_print(vals + sp, times[dp], types[dp], lens[dp], dp);
 #endif
             if (errno || fetestexcept(FE_DIVBYZERO | FE_INVALID))
                 goto skip_assignment;
@@ -703,6 +725,14 @@ int mpr_expr_eval(mpr_expr expr, ebuffer buff, mpr_value *v_in, mpr_value *v_var
         case TOK_VFN: {
             uint8_t i, arity = tok->fn.arity;
             INCR_STACK_PTR(1 - arity);
+
+            /* use most recent timestamp within operator arity */
+            for (i = 1; i < arity; i++) {
+                if (0 > mpr_time_cmp(times[dp], times[dp + i])) {
+                    mpr_time_set(&times[dp], times[dp + i]);
+                }
+            }
+
             if (VFN_CONCAT != tok->fn.idx
                 && (arity > 1 || VFN_DOT == tok->fn.idx)) {
                 int max_len = tok->gen.vec_len;
@@ -740,12 +770,12 @@ int mpr_expr_eval(mpr_expr expr, ebuffer buff, mpr_value *v_in, mpr_value *v_var
                 SET_LEN(tok->gen.vec_len);
             }
 #if TRACE_EVAL
-            evalue_print(vals + sp, types[dp], lens[dp], dp);
+            evalue_print(vals + sp, times[dp], types[dp], lens[dp], dp);
             if (   VFN_MAXMIN == tok->fn.idx
                 || VFN_SUMNUM == tok->fn.idx
                 || VFN_CONCAT == tok->fn.idx) {
                 printf("\t\t\t\t\t");
-                evalue_print(vals + sp + vlen, types[dp + 1], lens[dp + 1], dp + 1);
+                evalue_print(vals + sp + vlen, times[dp], types[dp + 1], lens[dp + 1], dp + 1);
             }
 #endif
             if (errno == EDOM || fetestexcept(FE_DIVBYZERO | FE_INVALID))
@@ -783,7 +813,7 @@ int mpr_expr_eval(mpr_expr expr, ebuffer buff, mpr_value *v_in, mpr_value *v_var
                     ++cache;
 #if TRACE_EVAL
                     printf("Caching instance idx %d on the eval stack: ", inst_idx);
-                    evalue_print(vals + sp, MPR_INT32, 1, dp);
+                    evalue_print(vals + sp, times[dp], MPR_INT32, 1, dp);
 #endif
                     if (x) {
                         int i;
@@ -808,7 +838,7 @@ int mpr_expr_eval(mpr_expr expr, ebuffer buff, mpr_value *v_in, mpr_value *v_var
         case TOK_SP_ADD:
             INCR_STACK_PTR(tok->lit.val.i);
 #if TRACE_EVAL
-            evalue_print(vals + sp, types[dp], lens[dp], dp);
+            evalue_print(vals + sp, times[dp], types[dp], lens[dp], dp);
             printf("\n");
 #endif
             break;
@@ -851,7 +881,8 @@ int mpr_expr_eval(mpr_expr expr, ebuffer buff, mpr_value *v_in, mpr_value *v_var
 #if TRACE_EVAL
                         printf("Instance loop done; restoring instance idx from offset %d: ",
                                tok->ctl.cache_offset * -1);
-                        evalue_print(vals + sp - tok->ctl.cache_offset * vlen, MPR_INT32, 1,
+                        evalue_print(vals + sp - tok->ctl.cache_offset * vlen,
+                                     times[dp - tok->ctl.cache_offset], MPR_INT32, 1,
                                      dp - tok->ctl.cache_offset);
 #endif
                         inst_idx = vals[sp - tok->ctl.cache_offset * vlen].i;
@@ -936,8 +967,9 @@ int mpr_expr_eval(mpr_expr expr, ebuffer buff, mpr_value *v_in, mpr_value *v_var
                 evalue_cpy(&vals[sp], &vals[sp_from + vec_offset], tok->gen.vec_len);
             else
                 evalue_cpy(&vals[sp], &vals[sp_from], tok->gen.vec_len);
+            mpr_time_set(&times[dp], times[dp_from]);
 #if TRACE_EVAL
-            evalue_print(vals + sp, types[dp], lens[dp], dp);
+            evalue_print(vals + sp, times[dp], types[dp], lens[dp], dp);
 #endif
             break;
         }
@@ -949,22 +981,28 @@ int mpr_expr_eval(mpr_expr expr, ebuffer buff, mpr_value *v_in, mpr_value *v_var
             SET_TYPE(types[dp_from]);
             SET_LEN(lens[dp_from]);
 #if TRACE_EVAL
-            evalue_print(vals + sp, types[dp], lens[dp], dp);
+            evalue_print(vals + sp, times[dp], types[dp], lens[dp], dp);
 #endif
             break;
         }
         case TOK_VECTORIZE: {
-            int i, j;
+            uint8_t i, arity = tok->fn.arity;
+            int j;
             /* don't need to copy vector elements from first token */
-            INCR_STACK_PTR(1 - tok->fn.arity);
-            for (i = 1, j = lens[dp]; i < tok->fn.arity; i++) {
+            INCR_STACK_PTR(1 - arity);
+            for (i = 1, j = lens[dp]; i < arity; i++) {
                 evalue_cpy(&vals[sp + j], &vals[sp + i * vlen], lens[dp + i]);
                 j += lens[dp + i];
+
+                /* use most recent timestamp within operator arity */
+                if (0 > mpr_time_cmp(times[dp], times[dp + i])) {
+                    mpr_time_set(&times[dp], times[dp + i]);
+                }
             }
             SET_TYPE(tok->gen.datatype);
             SET_LEN(j);
 #if TRACE_EVAL
-            evalue_print(vals + sp, types[dp], lens[dp], dp);
+            evalue_print(vals + sp, times[dp], types[dp], lens[dp], dp);
 #endif
             break;
         }
@@ -1042,13 +1080,15 @@ int mpr_expr_eval(mpr_expr expr, ebuffer buff, mpr_value *v_in, mpr_value *v_var
             printf("{%s%d}", tok->gen.flags & VAR_HIST_IDX ? "N=" : "", hidx);
             printf("[%s%d]", tok->gen.flags & VAR_VEC_IDX ? "N=" : "", vidx);
             printf(" (%c%u)\t", types[dp], tok->gen.vec_len);
-            evalue_print(vals + sp, types[dp], lens[dp], dp);
+            evalue_print(vals + sp, times[dp], types[dp], lens[dp], dp);
 #endif
 
-            /* Copy time from input (VAR_Y time already set) */
+            /* Copy time from stack (VAR_Y time already set) */
             /* TODO: isn't it enough to set some of output mpr_value sample? */
-            if (time)
+            if (time && (0 == mpr_time_cmp(times[dp], MPR_TIME_0)))
                 mpr_value_set_time(v, inst_idx, hidx, *time);
+            else
+                mpr_value_set_time(v, inst_idx, hidx, times[dp]);
 
             switch (mpr_value_get_type(v)) {
 #define TYPED_CASE(MTYPE, TYPE, T)                                                              \
@@ -1157,7 +1197,7 @@ int mpr_expr_eval(mpr_expr expr, ebuffer buff, mpr_value *v_in, mpr_value *v_var
 
 #if TRACE_EVAL
             printf("\t\t");
-            evalue_print(vals + sp + vidx, MPR_DBL, 1, dp);
+            evalue_print(vals + sp + vidx, times[dp], MPR_DBL, 1, dp);
             printf("\n");
 #endif
 
@@ -1206,7 +1246,7 @@ int mpr_expr_eval(mpr_expr expr, ebuffer buff, mpr_value *v_in, mpr_value *v_var
             }
             SET_TYPE(tok->gen.casttype);
 #if TRACE_EVAL
-            evalue_print(vals + sp, types[dp], lens[dp], dp);
+            evalue_print(vals + sp, times[dp], types[dp], lens[dp], dp);
 #endif
         }
         ++tok;

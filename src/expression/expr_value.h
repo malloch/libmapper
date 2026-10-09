@@ -15,10 +15,10 @@ MPR_INLINE static void evalue_cpy(void *dst, const void *src, size_t size)
 }
 
 #if TRACE_EVAL
-static void evalue_print(evalue val, mpr_type type, int len, int prefix)
+static void evalue_print(evalue val, mpr_time time, mpr_type type, int len, int prefix)
 {
     int i;
-    printf("%d|", prefix);
+    printf("%d|%08x.%08x | ", prefix, time.sec, time.frac);
     if (!len) {
         printf("[]%c\n", type);
         return;
