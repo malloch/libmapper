@@ -4,6 +4,7 @@
 #include <string.h>
 #include <signal.h>
 #include <stdlib.h>
+#include <math.h>
 #ifdef WIN32
 #include <io.h>
 #else
@@ -41,6 +42,8 @@ int current_config = -1;
 int sent = 0;
 int received = 0;
 int matched = 0;
+float mean_period_ms;
+float mean_abs_deviation_ms;
 
 mpr_time t_last = {0, 0}, t_now;
 double expected = 0;
@@ -315,8 +318,30 @@ void handler(mpr_sig sig, mpr_sig_evt event, mpr_id instance, int length,
     mpr_time_set(&t_now, MPR_NOW);
     if (MPR_STATUS_UPDATE_REM == event) {
         ++received;
-        eprintf("  received: %d (%gms)\n", received,
-                (mpr_time_as_dbl(t_now) - mpr_time_as_dbl(t_last)) * 1000);
+
+        float period_ms = (mpr_time_as_dbl(t_now) - mpr_time_as_dbl(t_last)) * 1000;
+        float deviation_ms;
+        if (1 == received) {
+            mean_period_ms = period_ms;
+            deviation_ms = 0;
+            mean_abs_deviation_ms = 0;
+        }
+        else {
+            float mult = 2.0 / received;
+            mean_period_ms += (period_ms - mean_period_ms) * mult;
+            deviation_ms = period_ms - mean_period_ms;
+            mean_abs_deviation_ms += (fabs(deviation_ms) - mean_abs_deviation_ms) * mult;
+        }
+        printf("\r%d\t\t%g\t\t%g\t\t%+g\r\t\t\t\t\t\t\t\t%g", received,
+               period_ms, mean_period_ms, deviation_ms, mean_abs_deviation_ms);
+        if (verbose) {
+            printf("\n");
+        }
+        else {
+            fflush(stdout);
+            printf("\r");
+        }
+
         if (terminate && received == num_iterations) {
             /* release map */
             mpr_list maps;
@@ -386,12 +411,10 @@ int wait_ready(void)
 
 void loop()
 {
-    eprintf("Polling device..\n");
     received = 0;
     mpr_dev_start_polling(dst, 100);
 
     while ((!terminate || received < num_iterations) && !done) {
-
         ++sent;
         if (sent % 3)
             mpr_sig_set_value(sendsig, 0, 1, MPR_INT32, &sent);
@@ -400,11 +423,6 @@ void loop()
             mpr_dev_poll(src, period);
         else
             SLEEP_MS(period);
-
-        if (!verbose) {
-            printf("\r  Received: %4i", received);
-            fflush(stdout);
-        }
     }
 
     mpr_dev_stop_polling(dst);
@@ -491,6 +509,8 @@ int run_test(test_config *cfg)
     mpr_time_set(&t_start, MPR_NOW);
     t_last = t_start;
 
+    printf("\rreceived\tinterval\tavg period\tdeviation\tavg abs deviation\n");
+
     loop();
 
     if (terminate) {
@@ -512,7 +532,7 @@ int run_test(test_config *cfg)
             printf("PROC: %s", cfg->process_loc == MPR_LOC_SRC ? "src" : "dst");
             printf("; EXPR: \"%s\"\n", expr);
         }
-        printf(" in %.2fs (expected %.2fs–%.2fs)", elapsed_sec, min_expected_sec, max_expected_sec);
+        printf("\nCompleted in %.2fs (expected %.2fs–%.2fs)", elapsed_sec, min_expected_sec, max_expected_sec);
 
         result = elapsed_sec < min_expected_sec || elapsed_sec > (max_expected_sec);
     }
