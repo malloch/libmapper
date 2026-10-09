@@ -2053,7 +2053,26 @@ int run_tests()
     if (parse_and_eval(PARSE_SUCCESS | EVAL_SUCCESS, 1, iterations, 1, 7))
         return 1;
 
-//    /* 165) Signal count() */
+    /* 165) integer operator with floating point left argument */
+    set_expr_str("y=x<<2;");
+    setup_test(MPR_FLT, 1, MPR_FLT, 1);
+    if (parse_and_eval(PARSE_FAILURE, 1, iterations, 1, 4))
+        return 1;
+
+    /* 165) integer operator with floating point right argument */
+    set_expr_str("y=x&2.5;");
+    setup_test(MPR_INT32, 1, MPR_FLT, 1);
+    if (parse_and_eval(PARSE_FAILURE, 1, iterations, 1, 4))
+        return 1;
+
+    /* 167) integer operator with floating point output (stack type promotion check) */
+    set_expr_str("y=x>>2;");
+    setup_test(MPR_INT32, 1, MPR_FLT, 1);
+    expect_flt[0] = (float)(src_int[0] >> 2);
+    if (parse_and_eval(PARSE_SUCCESS | EVAL_SUCCESS, 1, iterations, 1, 4))
+        return 1;
+
+//    /* 168) Signal count() */
 //    set_expr_str("y=x / x.signal.count();");
 //    types[0] = MPR_FLT;
 //    types[1] = MPR_INT32;

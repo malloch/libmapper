@@ -542,6 +542,23 @@ int expr_parser_build_stack(mpr_expr expr, const char *str,
                         estack_push(out, estack_pop(op));
                         {FAIL_IF(!estack_check_type(out, vars, 1), "Malformed expression (2)");}
                     }
+                    switch (tok.op.idx) {
+                        case OP_LEFT_BIT_SHIFT:
+                        case OP_RIGHT_BIT_SHIFT:
+                        case OP_BITWISE_AND:
+                        case OP_BITWISE_XOR:
+                        case OP_BITWISE_OR: {
+                            /* these operators require integer arguments */
+                            etoken t = estack_peek(out, ESTACK_TOP);
+                            {FAIL_IF(MPR_INT32 != t->gen.datatype,
+                                     "operator requires integer argument.");}
+                            /* lock token datatype */
+                            tok.gen.flags |= TYPE_LOCKED;
+                            break;
+                        }
+                        default:
+                            break;
+                    }
                     estack_push(op, &tok);
                     allow_toktype = OBJECT_TOKENS & ~TOK_OP;
                     if (op_tbl[tok.op.idx].arity <= 1)

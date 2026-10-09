@@ -625,6 +625,13 @@ static etoken estack_check_type(estack stk, expr_var_t *vars, int enable_optimiz
 #endif
                 return 0;
             }
+            if (tokens[sp].gen.flags & TYPE_LOCKED) {
+                /* check preceding token for type match */
+                if (tokens[sp].gen.datatype != tokens[sp - 1].gen.datatype) {
+                    trace("Operator requires argument type '%c'\n", tokens[sp].gen.datatype);
+                    return 0;
+                }
+            }
             arity = op_tbl[tokens[sp].op.idx].arity;
             break;
         case TOK_FN:
