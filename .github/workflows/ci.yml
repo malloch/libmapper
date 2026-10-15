@@ -319,7 +319,7 @@ jobs:
     timeout-minutes: 10
     strategy:
       matrix:
-        flags: [-qtf, -qtfs, -qtfp, -qtfps]
+        flags: [-tf, -qtfs, -tfp, -qtfps]
     steps:
       - name: download libraries
         uses: actions/download-artifact@v8
