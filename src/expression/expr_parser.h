@@ -542,22 +542,13 @@ int expr_parser_build_stack(mpr_expr expr, const char *str,
                         estack_push(out, estack_pop(op));
                         {FAIL_IF(!estack_check_type(out, vars, 1), "Malformed expression (2)");}
                     }
-                    switch (tok.op.idx) {
-                        case OP_LEFT_BIT_SHIFT:
-                        case OP_RIGHT_BIT_SHIFT:
-                        case OP_BITWISE_AND:
-                        case OP_BITWISE_XOR:
-                        case OP_BITWISE_OR: {
-                            /* these operators require integer arguments */
-                            etoken t = estack_peek(out, ESTACK_TOP);
-                            {FAIL_IF(MPR_INT32 != t->gen.datatype,
-                                     "operator requires integer argument.");}
-                            /* lock token datatype */
-                            tok.gen.flags |= TYPE_LOCKED;
-                            break;
-                        }
-                        default:
-                            break;
+                    if (eop_is_int_only(tok.op.idx)) {
+                        /* operator require integer arguments */
+                        etoken t = estack_peek(out, ESTACK_TOP);
+                        {FAIL_IF(MPR_INT32 != t->gen.datatype,
+                                 "operator requires integer argument.");}
+                        /* lock token datatype */
+                        tok.gen.flags |= TYPE_LOCKED;
                     }
                     estack_push(op, &tok);
                     allow_toktype = OBJECT_TOKENS & ~TOK_OP;
@@ -2041,6 +2032,13 @@ int expr_parser_build_stack(mpr_expr expr, const char *str,
             /* include variable indexes/indexing subexpressions but not the value to be assigned */
             int j, assign_len = 1, arg_substack_len, var_substack_len = 1;
             etoken_t newtok;
+
+            if (eop_is_int_only(t->var.op_idx)) {
+                /* operator require integer arguments */
+                etoken a = estack_peek(out, i-1);
+                {FAIL_IF(MPR_INT32 != t->gen.datatype || MPR_INT32 != a->gen.datatype,
+                    "augmented assignment operator requires integer argument.");}
+            }
 
 #if TRACE_PARSE
             printf("expanding compound assignment token at index %d\n", i);

@@ -79,4 +79,19 @@ static struct {
     { "IFTHENELSE", 3, 0,  NONE     | NONE     <<4 | NONE     <<8 | NONE     <<12, 0 },
 };
 
+int eop_is_int_only(expr_op_t op)
+{
+    switch (op) {
+        case OP_LEFT_BIT_SHIFT:
+        case OP_RIGHT_BIT_SHIFT:
+        case OP_BITWISE_AND:
+        case OP_BITWISE_XOR:
+        case OP_BITWISE_OR: {
+            return 1;
+        }
+        default:
+            return 0;
+    }
+}
+
 #endif /* __MPR_EXPR_OPERATOR_H__ */

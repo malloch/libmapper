@@ -2053,33 +2053,52 @@ int run_tests()
     if (parse_and_eval(PARSE_SUCCESS | EVAL_SUCCESS, 1, iterations, 1, 7))
         return 1;
 
-    /* 165) integer operator with floating point left argument */
+    /* 165) check all augmented assignment operators */
+    set_expr_str("y+=1; y<<=1; y>>=1; y*=1.1; y%=1; y|=5; y&=4; y-=2; y/=2; y^=3");
+    setup_test(MPR_INT32, 1, MPR_INT32, 1);
+    expect_int[0] = 2;
+    if (parse_and_eval(PARSE_SUCCESS | EVAL_SUCCESS, 1, iterations, 10, 40))
+        return 1;
+
+    /* 166) integer operator with floating point left argument */
     set_expr_str("y=x<<2;");
     setup_test(MPR_FLT, 1, MPR_FLT, 1);
     if (parse_and_eval(PARSE_FAILURE, 1, iterations, 1, 4))
         return 1;
 
-    /* 165) integer operator with floating point right argument */
+    /* 167) integer operator with floating point right argument */
     set_expr_str("y=x&2.5;");
     setup_test(MPR_INT32, 1, MPR_FLT, 1);
     if (parse_and_eval(PARSE_FAILURE, 1, iterations, 1, 4))
         return 1;
 
-    /* 167) integer operator with floating point output (stack type promotion check) */
+    /* 168) integer augmented assignment operator with floating point left argument */
+    set_expr_str("y|=x;");
+    setup_test(MPR_INT32, 1, MPR_FLT, 1);
+    if (parse_and_eval(PARSE_FAILURE, 1, iterations, 1, 4))
+        return 1;
+
+    /* 169) integer augmented assignment operator with floating point right argument */
+    set_expr_str("y|=x;");
+    setup_test(MPR_FLT, 1, MPR_INT32, 1);
+    if (parse_and_eval(PARSE_FAILURE, 1, iterations, 1, 4))
+        return 1;
+
+    /* 170) integer operator with floating point output (stack type promotion check) */
     set_expr_str("y=x>>2;");
     setup_test(MPR_INT32, 1, MPR_FLT, 1);
     expect_flt[0] = (float)(src_int[0] >> 2);
     if (parse_and_eval(PARSE_SUCCESS | EVAL_SUCCESS, 1, iterations, 1, 4))
         return 1;
 
-    /* 168) null-coalescing operator */
+    /* 171) null-coalescing operator */
     set_expr_str("y=x??0;");
     setup_test(MPR_FLT, 1, MPR_DBL, 2);
     expect_dbl[0] = expect_dbl[1] = src_flt[0];
     if (parse_and_eval(PARSE_SUCCESS | EVAL_SUCCESS, 1, iterations, 1, 4))
         return 1;
 
-//    /* 169) Signal count() */
+//    /* 172) Signal count() */
 //    set_expr_str("y=x / x.signal.count();");
 //    types[0] = MPR_FLT;
 //    types[1] = MPR_INT32;
