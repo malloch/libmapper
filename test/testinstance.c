@@ -533,6 +533,9 @@ int loop(test_config *config)
             }
         }
 
+        printf("\r  Iteration: %4d, Received: %4d/%4d (+/-%d)\n", i, count_received,
+               count_expected, count_epsilon);
+
         if (verbose) {
             printf("ID:     ");
             if (SNGL == config->src1_type)
@@ -579,11 +582,11 @@ int loop(test_config *config)
                 print_instance_status(multirecv);
             printf("\n");
         }
-        else {
-            printf("\r  Iteration: %4d, Received: %4d/%4d (+/-%d)", i, count_received,
-                   count_expected, count_epsilon);
-            fflush(stdout);
-        }
+//        else {
+//            printf("\r  Iteration: %4d, Received: %4d/%4d (+/-%d)", i, count_received,
+//                   count_expected, count_epsilon);
+//            fflush(stdout);
+//        }
     }
     if (INST == config->src1_type) {
         for (j = 0; j < num_parallel_inst; j++) {
