@@ -1839,6 +1839,7 @@ static mpr_map find_map(mpr_net net, const char *types, int ac, lo_arg **av, mpr
         if (id && id != mpr_obj_get_id((mpr_obj)map)) {
             if (mpr_obj_get_status((mpr_obj)map, 0) & (MPR_STATUS_REMOVED | MPR_STATUS_EXPIRED)) {
                 trace("restoring released map with new id\n");
+                ((mpr_obj)map)->id = id;
                 mpr_obj_set_status((mpr_obj)map, 0,
                                    MPR_STATUS_ACTIVE | MPR_MAP_STATUS_READY | MPR_STATUS_REMOVED | MPR_STATUS_EXPIRED);
                 mpr_obj_set_version((mpr_obj)map, 0);
