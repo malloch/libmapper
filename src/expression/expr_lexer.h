@@ -75,11 +75,8 @@ static int var_lookup(etoken tok, const char *s, int len)
                 tok->var.idx = VAR_X + atoi(s+2);
                 return num_digits + 1;
             }
-            else
-                tok->var.idx = VAR_X;
         }
-        else
-            tok->var.idx = VAR_X;
+        tok->var.idx = VAR_X;
     }
     return 0;
 }

@@ -9,7 +9,12 @@
 
 /* Macros to help express stack operations in parser. */
 #if TRACE_PARSE
-#define FAIL(msg) {     \
+#define FAIL(msg)       \
+{                       \
+    printf("%s\n", str);\
+    while(lex_idx-- > 0)\
+        printf(" ");    \
+    printf("^");        \
     trace("%s\n", msg); \
     goto error;         \
 }
@@ -22,11 +27,13 @@
 #define FAIL_IF(condition, msg) \
     if (condition) {FAIL(msg)}
 
-#define GET_NEXT_TOKEN(x)                   \
-{                                           \
-    x.toktype = TOK_UNKNOWN;                \
-    lex_idx = expr_lex(str, lex_idx, &x);   \
-    {FAIL_IF(!lex_idx, "Error in lexer.");} \
+#define GET_NEXT_TOKEN(x)               \
+{                                       \
+    register int idx;                   \
+    x.toktype = TOK_UNKNOWN;            \
+    idx = expr_lex(str, lex_idx, &x);   \
+    {FAIL_IF(!idx, "lexer error");}     \
+    lex_idx = idx;                      \
 }
 
 #define ADD_TO_VECTOR()                                         \
@@ -163,7 +170,7 @@ int expr_parser_build_stack(mpr_expr expr, const char *str,
 
     /* ignoring spaces at start of expression */
     while (str[lex_idx] == ' ') ++lex_idx;
-    {FAIL_IF(!str[lex_idx], "No expression found.");}
+    {FAIL_IF(!str[lex_idx], "no expression found");}
 
     assigning = 1;
     allow_toktype = TOK_VAR | TOK_TT | TOK_OPEN_SQUARE | TOK_OP_UNARY;
@@ -208,10 +215,7 @@ int expr_parser_build_stack(mpr_expr expr, const char *str,
         /* TODO: streamline handling assigning and lambda_allowed flags */
         if (TOK_LAMBDA == tok.toktype) {
             if (!lambda_allowed) {
-#if TRACE_PARSE
-                printf("Illegal token sequence (1)\n");
-#endif
-                goto error;
+                {FAIL("illegal token sequence");}
             }
         }
         else if (!(tok.toktype & allow_toktype)) {
@@ -220,10 +224,7 @@ int expr_parser_build_stack(mpr_expr expr, const char *str,
                 /* continue parsing */
             }
             else {
-#if TRACE_PARSE
-                printf("Illegal token sequence (2)\n");
-#endif
-                goto error;
+                {FAIL("illegal token sequence");}
             }
         }
         switch (tok.toktype & TOKEN_MASK) {
@@ -258,7 +259,7 @@ int expr_parser_build_stack(mpr_expr expr, const char *str,
                     printf("found reference to local input variable '%s'\n", found_in->in_name);
 #endif
                     {FAIL_IF(!found_in->loop_start_pos,
-                             "local input variable used before lambda token.");}
+                             "local input variable used before lambda token");}
                     /* find offset of the value to be copied on the evaluation stack */
                     i = found_in->loop_start_pos + 1;
                     while (i < out->num_tokens) {
@@ -270,7 +271,7 @@ int expr_parser_build_stack(mpr_expr expr, const char *str,
                     tok.ctl.cache_offset = offset;
 
                     i = out->num_tokens - 1 - offset;
-                    {FAIL_IF(i < 0, "Compilation error (1)");}
+                    {FAIL_IF(i < 0, "compilation error");}
                     if (reduce_types & RT_VECTOR)
                         tok.ctl.vec_len = 1;
                     else
@@ -301,7 +302,7 @@ int expr_parser_build_stack(mpr_expr expr, const char *str,
                            found_accum->accum_name);
 #endif
                     {FAIL_IF(!found_accum->loop_start_pos,
-                             "local input variable used before lambda token.");}
+                             "local input variable used before lambda token");}
                     while (pos < out->num_tokens) {
                         if (TOK_SP_ADD == out->tokens[pos].toktype)
                             stack_offset += out->tokens[pos].lit.val.i;
@@ -334,7 +335,7 @@ int expr_parser_build_stack(mpr_expr expr, const char *str,
                 }
                 else if (tok.var.idx >= VAR_X) {
                     int slot = tok.var.idx - VAR_X;
-                    {FAIL_IF(slot >= num_src, "Input slot index > number of sources.");}
+                    {FAIL_IF(slot >= num_src, "input slot index out of range");}
                     tok.gen.datatype = src_types[slot];
                     tok.gen.vec_len = src_lens[slot];
                     tok.gen.flags |= (TYPE_LOCKED | VEC_LEN_LOCKED);
@@ -364,7 +365,7 @@ int expr_parser_build_stack(mpr_expr expr, const char *str,
                             tok.gen.flags |= VEC_LEN_LOCKED;
                     }
                     else {
-                        {FAIL_IF(num_var >= N_USER_VARS, "Maximum number of variables exceeded. (2)");}
+                        {FAIL_IF(num_var >= N_USER_VARS, "maximum number of variables exceeded");}
                         /* need to store new variable */
                         expr_var_set(&vars[num_var], varname, len, type_hi, 0, 0);
 #if TRACE_PARSE
@@ -449,7 +450,7 @@ int expr_parser_build_stack(mpr_expr expr, const char *str,
                 estack_push(op, &tok);
 
                 GET_NEXT_TOKEN(newtok);
-                {FAIL_IF(newtok.toktype != TOK_OPEN_PAREN, "missing open parenthesis. (1)");}
+                {FAIL_IF(newtok.toktype != TOK_OPEN_PAREN, "missing open parenthesis");}
                 if (dot && tok.fn.arity > 1)
                     newtok.fn.arity = 2;
                 else
@@ -459,7 +460,7 @@ int expr_parser_build_stack(mpr_expr expr, const char *str,
 
                 switch (tok.fn.arity - dot) {
                     case -1:
-                        {FAIL("Dot function syntax requires arity > 0");}
+                        {FAIL("dot function syntax requires arity > 0");}
                     case 0:
                         allow_toktype = TOK_CLOSE_PAREN;
                         break;
@@ -475,7 +476,7 @@ int expr_parser_build_stack(mpr_expr expr, const char *str,
                 int memory = vfn_tbl[tok.fn.idx].memory;
                 if (memory) {
                     {FAIL_IF((num_var + memory) >= N_USER_VARS,
-                             "Maximum number of variables exceeded. (3)");}
+                             "maximum number of variables exceeded");}
                     is_const = 0;
                 }
                 tok.toktype = TOK_VFN;
@@ -528,7 +529,7 @@ int expr_parser_build_stack(mpr_expr expr, const char *str,
                         /* increment/decrement prefix operator: ++i, --i */
                         etoken t = estack_peek(op, ESTACK_TOP);
                         {FAIL_IF(t && TOK_OP == t->toktype,
-                                 "bad syntax for prefix increment/decrement operator");}
+                                 "illegal syntax for prefix increment/decrement operator");}
                         estack_push(op, &tok);
                         allow_toktype = TOK_VAR;
                     }
@@ -542,13 +543,13 @@ int expr_parser_build_stack(mpr_expr expr, const char *str,
                             || (op_tbl[op_top->op.idx].precedence < op_tbl[tok.op.idx].precedence))
                             break;
                         estack_push(out, estack_pop(op));
-                        {FAIL_IF(!estack_check_type(out, vars, 1), "Malformed expression (2)");}
+                        {FAIL_IF(!estack_check_type(out, vars, 1), "type check error");}
                     }
                     if (eop_is_int_only(tok.op.idx)) {
                         /* operator require integer arguments */
                         etoken t = estack_peek(out, ESTACK_TOP);
                         {FAIL_IF(MPR_INT32 != t->gen.datatype,
-                                 "operator requires integer argument.");}
+                                 "operator requires integer left argument");}
                         /* lock token datatype */
                         tok.gen.flags |= TYPE_LOCKED;
                     }
@@ -567,12 +568,12 @@ int expr_parser_build_stack(mpr_expr expr, const char *str,
                     if (VFN_DIFF2 != tok.fn.idx) {
                         etoken_t newtok;
                         GET_NEXT_TOKEN(newtok);
-                        {FAIL_IF(newtok.toktype != TOK_OPEN_PAREN, "missing open parenthesis. (2)");}
+                        {FAIL_IF(newtok.toktype != TOK_OPEN_PAREN, "missing open parenthesis");}
                     }
                     int memory = vfn_tbl[tok.fn.idx].memory;
                     if (memory) {
                         {FAIL_IF((num_var + memory) >= N_USER_VARS,
-                                 "Maximum number of variables exceeded. (4)");}
+                                 "Maximum number of variables exceeded");}
                         is_const = 0;
                     }
                     tok.toktype = TOK_VFN;
@@ -616,7 +617,7 @@ int expr_parser_build_stack(mpr_expr expr, const char *str,
                                     allow_toktype = OBJECT_TOKENS;
                                 }
                                 else
-                                    {FAIL("missing close parenthesis. (1)");}
+                                    {FAIL("missing close parenthesis");}
                             }
                         }
 #if TRACE_PARSE
@@ -640,10 +641,10 @@ int expr_parser_build_stack(mpr_expr expr, const char *str,
                     rt = _reduce_type_from_fn_idx(tok.fn.idx);
                     /* fail if input is another reduce function */
                     {FAIL_IF(TOK_LOOP_END == (estack_peek(out, ESTACK_TOP))->toktype,
-                             "Reduce functions may be nested but not chained.");}
+                             "reduce functions may be nested but not chained");}
                     /* fail if same-type reduction already on the operator stack (nested) */
                     {FAIL_IF(estack_get_reduce_types(op) & rt,
-                             "Syntax error: nested reduce functions of the same type.");}
+                             "nested reduce functions of the same type");}
                     tok.fn.arity = rfn_tbl[tok.fn.idx].arity;
                     tok.gen.datatype = MPR_INT32;
                     estack_push(op, &tok);
@@ -657,10 +658,10 @@ int expr_parser_build_stack(mpr_expr expr, const char *str,
                             /* TODO: allow variable + maximum instead e.g. history(n, 10) */
                             /* TODO: allow range instead e.g. history(-5:-2) */
                             GET_NEXT_TOKEN(tok);
-                            {FAIL_IF(tok.toktype != TOK_OPEN_PAREN, "missing open parenthesis. (3)");}
+                            {FAIL_IF(tok.toktype != TOK_OPEN_PAREN, "missing open parenthesis");}
                             GET_NEXT_TOKEN(tok);
                             {FAIL_IF(tok.toktype != TOK_LITERAL || tok.lit.datatype != MPR_INT32,
-                                     "'history' must be followed by integer argument.");}
+                                     "'history' must be followed by integer argument");}
                             lit_val = abs(tok.lit.val.i);
 
                             for (i = 0; i < len; i++) {
@@ -683,7 +684,7 @@ int expr_parser_build_stack(mpr_expr expr, const char *str,
                             }
                             /* TODO: reduce prefix could include BOTH x and y */
                             if (y_ref && x_ref)
-                                {FAIL("mixed history reduce is ambiguous.");}
+                                {FAIL("mixed history reduce is ambiguous");}
                             else if (y_ref) {
                                 etoken t = estack_peek(op, ESTACK_TOP);
                                 t->ctl.reduce_start = lit_val;
@@ -694,8 +695,10 @@ int expr_parser_build_stack(mpr_expr expr, const char *str,
                                 t->ctl.reduce_start = lit_val - 1;
                                 t->ctl.reduce_stop = 0;
                             }
-                            else
-                                {FAIL("history reduce requires reference to 'x' or 'y'.");}
+                            else {
+                                /* TODO: enable reduce on user variable histories */
+                                {FAIL("history reduce requires reference to 'x' or 'y'");}
+                            }
 
                             for (i = 0; i < sslen; i++) {
                                 etoken t_op, t_out = estack_peek(out, ESTACK_TOP - i);
@@ -705,7 +708,7 @@ int expr_parser_build_stack(mpr_expr expr, const char *str,
                                 mpr_expr_update_mlen(expr, t_out->var.idx, t_op->ctl.reduce_start);
                             }
                             GET_NEXT_TOKEN(tok);
-                            {FAIL_IF(tok.toktype != TOK_CLOSE_PAREN, "missing close parenthesis. (2)");}
+                            {FAIL_IF(tok.toktype != TOK_CLOSE_PAREN, "missing close parenthesis");}
                             break;
                         }
                         case RT_INSTANCE: {
@@ -726,7 +729,7 @@ int expr_parser_build_stack(mpr_expr expr, const char *str,
                                     break;
                                 }
                             }
-                            {FAIL_IF(!v_ref, "instance reduce requires reference to 'x' or 'y'.");}
+                            {FAIL_IF(!v_ref, "instance reduce requires reference to 'x' or 'y'");}
                             break;
                         }
                         case RT_SIGNAL: {
@@ -744,7 +747,7 @@ int expr_parser_build_stack(mpr_expr expr, const char *str,
                                     }
                                 }
                             }
-                            {FAIL_IF(!x_ref, "signal reduce requires reference to input 'x'.");}
+                            {FAIL_IF(!x_ref, "signal reduce requires reference to input 'x'");}
                             if (type_hi == type_lo) /* homogeneous types, no casting necessary */
                                 break;
                             t = estack_peek(out, ESTACK_TOP);
@@ -757,9 +760,9 @@ int expr_parser_build_stack(mpr_expr expr, const char *str,
                                 /* promote datatype and casttype */
                                 t->var.datatype = type_lo;
                                 t->var.casttype = type_hi;
-                                {FAIL_IF(!estack_check_type(out, vars, 1), "Malformed expression (3).");}
+                                {FAIL_IF(!estack_check_type(out, vars, 1), "type check error");}
                             }
-                            {FAIL_IF(!estack_check_type(out, vars, 0), "Malformed expression (4)");}
+                            {FAIL_IF(!estack_check_type(out, vars, 0), "type check error");}
                             break;
                         }
                         case RT_VECTOR: {
@@ -786,19 +789,19 @@ int expr_parser_build_stack(mpr_expr expr, const char *str,
                             break;
                         }
                         default:
-                            {FAIL("unhandled reduce function identifier.");}
+                            {FAIL("unhandled reduce function identifier");}
                     }
                     break;
                 }
                 else {
                     GET_NEXT_TOKEN(newtok);
-                    {FAIL_IF(newtok.toktype != TOK_OPEN_PAREN, "missing open parenthesis. (4)");}
+                    {FAIL_IF(newtok.toktype != TOK_OPEN_PAREN, "missing open parenthesis");}
                 }
                 assert(op->num_tokens);
                 etoken_cpy(&newtok, estack_peek(op, ESTACK_TOP));
                 rt = _reduce_type_from_fn_idx((estack_peek(op, ESTACK_TOP))->fn.idx);
                 /* fail unless reduction already on the stack */
-                {FAIL_IF(RT_UNKNOWN == rt, "Syntax error: missing reduce function prefix.");}
+                {FAIL_IF(RT_UNKNOWN == rt, "missing reduce function prefix");}
                 newtok.ctl.flags |= rt;
                 estack_pop(op);
                 /* TODO: check if there is possible conflict here between vfn and rfn */
@@ -821,7 +824,7 @@ int expr_parser_build_stack(mpr_expr expr, const char *str,
                         t->gen.datatype = MPR_INT32;
                         allow_toktype = JOIN_TOKENS;
                         GET_NEXT_TOKEN(newtok);
-                        {FAIL_IF(newtok.toktype != TOK_CLOSE_PAREN, "missing close parenthesis. (3)");}
+                        {FAIL_IF(newtok.toktype != TOK_CLOSE_PAREN, "missing close parenthesis");}
                         break;
                     }
                 }
@@ -839,7 +842,7 @@ int expr_parser_build_stack(mpr_expr expr, const char *str,
                     is_const = 0;
                     allow_toktype = JOIN_TOKENS;
                     GET_NEXT_TOKEN(newtok);
-                    {FAIL_IF(newtok.toktype != TOK_CLOSE_PAREN, "missing close parenthesis. (4)");}
+                    {FAIL_IF(newtok.toktype != TOK_CLOSE_PAREN, "missing close parenthesis");}
                     break;
                 }
 
@@ -850,7 +853,7 @@ int expr_parser_build_stack(mpr_expr expr, const char *str,
                     default:                                        pre = 2; break;
                 }
 
-                {FAIL_IF(out->num_tokens + pre > STACK_SIZE, "Stack size exceeded. (3)");}
+                {FAIL_IF(out->num_tokens + pre > STACK_SIZE, "stack size exceeded");}
 
                 /* find source token(s) for reduce input */
                 idx = out->num_tokens - 1;
@@ -874,7 +877,7 @@ int expr_parser_build_stack(mpr_expr expr, const char *str,
                     && TOK_VAR != (estack_peek(out, idx))->toktype) {
                     /* make a new copy of this substack */
                     sslen = estack_get_substack_len(out, idx);
-                    {FAIL_IF(out->num_tokens + sslen + pre > STACK_SIZE, "Stack size exceeded. (3)");}
+                    {FAIL_IF(out->num_tokens + sslen + pre > STACK_SIZE, "stack size exceeded");}
 
                     /* Copy destacked reduce input substack */
                     for (i = 0; i < sslen; i++)
@@ -910,9 +913,9 @@ int expr_parser_build_stack(mpr_expr expr, const char *str,
                     temp_var_cache var_cache;
                     char *temp, *in_name, *accum_name;
                     int len;
-                    {FAIL_IF(num_var >= N_USER_VARS, "Maximum number of variables exceeded. (1)");}
+                    {FAIL_IF(num_var >= N_USER_VARS, "maximum number of variables exceeded");}
                     GET_NEXT_TOKEN(tok);
-                    {FAIL_IF(tok.toktype != TOK_VAR, "'reduce()' requires variable arguments.");}
+                    {FAIL_IF(tok.toktype != TOK_VAR, "'reduce()' requires variable arguments");}
 
                     /* cache variable arg used for representing input */
                     temp = (char*)_get_var_str_and_len(str, lex_idx - 1, &len);
@@ -925,12 +928,12 @@ int expr_parser_build_stack(mpr_expr expr, const char *str,
                     GET_NEXT_TOKEN(tok);
                     if (tok.toktype != TOK_COMMA) {
                         free(in_name);
-                        {FAIL("missing comma.");}
+                        {FAIL("missing comma");}
                     }
                     GET_NEXT_TOKEN(tok);
                     if (tok.toktype != TOK_VAR) {
                         free(in_name);
-                        {FAIL("'reduce()' requires variable arguments.");}
+                        {FAIL("'reduce()' requires variable arguments");}
                     }
 
                     /* cache variable arg used for representing accumulator */
@@ -966,7 +969,7 @@ int expr_parser_build_stack(mpr_expr expr, const char *str,
                         ++sslen;
                         for (i = 0; i < sslen; i++) {
                             etoken out_top = estack_push(out, estack_pop(op));
-                            {FAIL_IF(!out_top, "Stack size exceeded.");}
+                            {FAIL_IF(!out_top, "stack size exceeded");}
                             if (TOK_LOOP_START == out_top->toktype)
                                 var_cache->loop_start_pos = (out->num_tokens - 1);
                         }
@@ -974,7 +977,7 @@ int expr_parser_build_stack(mpr_expr expr, const char *str,
                     else {
                         free(in_name);
                         free(accum_name);
-                        {FAIL("'reduce()' missing lambda operator '->'.");}
+                        {FAIL("'reduce()' missing lambda operator '->'");}
                     }
                     allow_toktype = OBJECT_TOKENS;
                     break;
@@ -985,7 +988,7 @@ int expr_parser_build_stack(mpr_expr expr, const char *str,
                     {FAIL_IF(TOK_LITERAL != newtok.toktype || MPR_INT32 != newtok.gen.datatype,
                              "concat() requires an integer argument");}
                     {FAIL_IF(newtok.lit.val.i <= 1 || newtok.lit.val.i > 64,
-                             "concat() max size must be between 2 and 64.");}
+                             "concat() max size must be between 2 and 64");}
 
                     estack_update_vec_len(out, newtok.lit.val.i);
                     tok.gen.vec_len = 0;
@@ -1047,7 +1050,7 @@ int expr_parser_build_stack(mpr_expr expr, const char *str,
                 for (i = 0; i < sslen; i++) {
                     estack_push(out, estack_pop(op));
                 }
-                {FAIL_IF(!op->num_tokens, "Malformed expression (5).");}
+                {FAIL_IF(!op->num_tokens, "no tokens remaining on operator stack");}
 
                 if (TOK_COPY_FROM == (estack_peek(out, ESTACK_TOP))->toktype) {
                     /* TODO: simplified reduce functions do not need separate cache for input */
@@ -1057,7 +1060,7 @@ int expr_parser_build_stack(mpr_expr expr, const char *str,
                     etoken_set_op(&tok, rfn_tbl[rfn].op);
                     /* don't use macro here since we don't want to optimize away initialization args */
                     estack_push(out, &tok);
-                    {FAIL_IF(!estack_check_type(out, vars, 0), "Malformed expression (6).");}
+                    {FAIL_IF(!estack_check_type(out, vars, 0), "type check error");}
                 }
                 if (VFN_UNKNOWN != rfn_tbl[rfn].vfn) {
                     tok.toktype = TOK_VFN;
@@ -1074,7 +1077,7 @@ int expr_parser_build_stack(mpr_expr expr, const char *str,
                     tok.gen.datatype = (estack_peek(out, ESTACK_TOP))->gen.datatype;
                     tok.gen.vec_len = (estack_peek(out, ESTACK_TOP))->gen.vec_len;
                     estack_push(out, &tok);
-                    {FAIL_IF(!estack_check_type(out, vars, 1), "Malformed expression (7)");}
+                    {FAIL_IF(!estack_check_type(out, vars, 1), "type check error");}
                 }
                 /* copy type and vector length from last token */
                 newtok.gen.datatype = (estack_peek(out, ESTACK_TOP))->gen.datatype;
@@ -1110,17 +1113,17 @@ int expr_parser_build_stack(mpr_expr expr, const char *str,
 
                     etoken_set_op(&tok, OP_MULTIPLY);
                     estack_push(out, &tok);
-                    {FAIL_IF(!estack_check_type(out, vars, 0), "Malformed expression (8)");}
+                    {FAIL_IF(!estack_check_type(out, vars, 0), "type check error");}
                 }
                 else if (RFN_MEAN == rfn) {
                     etoken_set_op(&tok, OP_DIVIDE);
                     estack_push(out, &tok);
-                    {FAIL_IF(!estack_check_type(out, vars, 0), "Malformed expression (9)");}
+                    {FAIL_IF(!estack_check_type(out, vars, 0), "type check error");}
                 }
                 else if (RFN_SIZE == rfn) {
                     etoken_set_op(&tok, OP_SUBTRACT);
                     estack_push(out, &tok);
-                    {FAIL_IF(!estack_check_type(out, vars, 0), "Malformed expression (10)");}
+                    {FAIL_IF(!estack_check_type(out, vars, 0), "type check error");}
                 }
                 else if (RFN_CONCAT == rfn) {
                     tok.toktype = TOK_SP_ADD;
@@ -1128,7 +1131,7 @@ int expr_parser_build_stack(mpr_expr expr, const char *str,
                     estack_push(out, &tok);
                 }
                 GET_NEXT_TOKEN(tok);
-                {FAIL_IF(tok.toktype != TOK_CLOSE_PAREN, "missing close parenthesis. (5)");}
+                {FAIL_IF(tok.toktype != TOK_CLOSE_PAREN, "missing close parenthesis");}
                 allow_toktype = JOIN_TOKENS;
                 if (RFN_CONCAT == rfn) {
                     /* Allow chaining another dot function after concat() */
@@ -1143,11 +1146,11 @@ int expr_parser_build_stack(mpr_expr expr, const char *str,
                 while (op->num_tokens && (estack_peek(op, ESTACK_TOP))->toktype != TOK_OPEN_PAREN) {
                     estack_push(out, estack_pop(op));
                     etoken out_top = estack_check_type(out, vars, 1);
-                    {FAIL_IF(!out_top, "Malformed expression (11)");}
+                    {FAIL_IF(!out_top, "type check error");}
                     if (TOK_LOOP_START == out_top->toktype)
                         temp_vars->loop_start_pos = (out->num_tokens - 1);
                 }
-                {FAIL_IF(!op->num_tokens, "Unmatched parentheses. (1)");}
+                {FAIL_IF(!op->num_tokens, "unmatched parentheses");}
                 /* Don't pop the left parenthesis yet */
 
                 lambda_allowed = 0;
@@ -1175,9 +1178,9 @@ int expr_parser_build_stack(mpr_expr expr, const char *str,
                     if (op_top->toktype == TOK_OPEN_PAREN || op_top->toktype == TOK_VECTORIZE)
                         break;
                     estack_push(out, estack_pop(op));
-                    {FAIL_IF(!estack_check_type(out, vars, 1), "Malformed expression (12).");}
+                    {FAIL_IF(!estack_check_type(out, vars, 1), "type check error");}
                 }
-                {FAIL_IF(!op->num_tokens, "Unmatched parentheses, brackets, or misplaced comma. (1)");}
+                {FAIL_IF(!op->num_tokens, "unmatched parentheses, brackets, or misplaced comma");}
 
                 if (TOK_VECTORIZE == op_top->toktype) {
                     op_top->gen.flags |= VEC_LEN_LOCKED;
@@ -1185,7 +1188,7 @@ int expr_parser_build_stack(mpr_expr expr, const char *str,
                     estack_lock_vec_len(out);
                     if (op_top->fn.arity > 1) {
                         estack_push(out, estack_pop(op));
-                        {FAIL_IF(!estack_check_type(out, vars, 1), "Malformed expression (13)");}
+                        {FAIL_IF(!estack_check_type(out, vars, 1), "type check error");}
                     }
                     else {
                         /* we do not need vectorizer token if vector length == 1 */
@@ -1217,13 +1220,13 @@ int expr_parser_build_stack(mpr_expr expr, const char *str,
                         etoken top = estack_peek(out, ESTACK_TOP);
                         etoken top_m1 = estack_peek(out, ESTACK_TOP - 1);
                         {FAIL_IF(TOK_VAR != top->toktype || VAR_X != top->var.idx,
-                                 "Signal index used on incompatible token.");}
-                        {FAIL_IF(top->gen.flags & VAR_SIG_IDX, "Signal index already set.");}
+                                 "signal index used on incompatible token");}
+                        {FAIL_IF(top->gen.flags & VAR_SIG_IDX, "signal index already set");}
                         if (TOK_LITERAL == top_m1->toktype) {
                             /* Optimize by storing signal idx in variable token */
                             int sig_idx;
                             {FAIL_IF(MPR_INT32 != top_m1->gen.datatype,
-                                     "Signal index must be an integer.");}
+                                     "signal index must be an integer");}
                             sig_idx = top_m1->lit.val.i % num_src;
                             if (sig_idx < 0)
                                 sig_idx += num_src;
@@ -1258,7 +1261,7 @@ int expr_parser_build_stack(mpr_expr expr, const char *str,
                         switch (arity) {
                             case 2:
                                 /* max delay should be at the top of the output stack */
-                                {FAIL_IF(t->toktype != TOK_LITERAL, "non-constant max history.");}
+                                {FAIL_IF(t->toktype != TOK_LITERAL, "non-constant max history");}
                                 switch (t->gen.datatype) {
 #define TYPED_CASE(MTYPE, T)                                            \
                                     case MTYPE:                         \
@@ -1271,18 +1274,18 @@ int expr_parser_build_stack(mpr_expr expr, const char *str,
                                     default:
                                         break;
                                 }
-                                {FAIL_IF(buffer_size < 0, "negative history buffer size detected.");}
+                                {FAIL_IF(buffer_size < 0, "negative history buffer size detected");}
                                 estack_pop(out);
                                 t = estack_peek(out, ESTACK_TOP);
                                 buffer_size = buffer_size * -1;
                             case 1:
                                 /* variable should be at the top of the output stack */
                                 {FAIL_IF(t->toktype != TOK_VAR && t->toktype != TOK_TT,
-                                         "delay on non-variable token.");}
+                                         "delay on non-variable token");}
                                 t = estack_peek(out, ESTACK_TOP - 1);
                                 if (!buffer_size) {
                                     {FAIL_IF(t->toktype != TOK_LITERAL,
-                                             "variable history indices must include maximum value.");}
+                                             "variable history indices must include maximum value");}
                                     switch (t->gen.datatype) {
 #define TYPED_CASE(MTYPE, T)                                                        \
                                         case MTYPE:                                 \
@@ -1296,7 +1299,7 @@ int expr_parser_build_stack(mpr_expr expr, const char *str,
                                             break;
                                     }
                                     {FAIL_IF(buffer_size < 0 || buffer_size > MAX_HIST_SIZE,
-                                             "Illegal history index.");}
+                                             "illegal history index");}
                                 }
                                 if (!buffer_size) {
 #if TRACE_PARSE
@@ -1319,7 +1322,7 @@ int expr_parser_build_stack(mpr_expr expr, const char *str,
                                 estack_pop(op);
                                 break;
                             default:
-                                {FAIL("Illegal arity for variable delay.");}
+                                {FAIL("illegal arity for variable delay");}
                         }
 
                         t = estack_peek(out, ESTACK_TOP);
@@ -1334,8 +1337,8 @@ int expr_parser_build_stack(mpr_expr expr, const char *str,
                         etoken top = estack_peek(out, ESTACK_TOP);
                         etoken top_m1 = estack_peek(out, ESTACK_TOP - 1);
 
-                        {FAIL_IF(arity != 1, "vector index arity != 1.");}
-                        {FAIL_IF(top->toktype != TOK_VAR, "Missing variable for vector indexing");}
+                        {FAIL_IF(arity != 1, "vector index arity != 1");}
+                        {FAIL_IF(top->toktype != TOK_VAR, "missing variable for vector indexing");}
 
                         top->gen.flags |= VAR_VEC_IDX;
                         estack_pop(op);
@@ -1424,7 +1427,7 @@ int expr_parser_build_stack(mpr_expr expr, const char *str,
                         if (arity != fn_tbl[op_top->fn.idx].arity) {
                             /* check for overloaded functions */
                             if (arity != 1)
-                                {FAIL("Function arity mismatch (1).");}
+                                {FAIL("function arity mismatch");}
                             if (op_top->fn.idx == FN_MIN) {
                                 op_top->toktype = TOK_VFN;
                                 op_top->fn.idx = VFN_MIN;
@@ -1434,19 +1437,18 @@ int expr_parser_build_stack(mpr_expr expr, const char *str,
                                 op_top->fn.idx = VFN_MAX;
                             }
                             else
-                                {FAIL("Function arity mismatch (2).");}
+                                {FAIL("function arity mismatch");}
                         }
                         estack_push(out, estack_pop(op));
-                        {FAIL_IF(!estack_check_type(out, vars, 1), "Malformed expression (14)");}
+                        {FAIL_IF(!estack_check_type(out, vars, 1), "type check error");}
                     }
-
                 }
                 else if (TOK_VFN == op_top->toktype) {
                     /* check arity */
                     etoken t = estack_pop(op);
-                    {FAIL_IF(arity != vfn_tbl[t->fn.idx].arity, "VFN arity mismatch.");}
+                    {FAIL_IF(arity != vfn_tbl[t->fn.idx].arity, "vector function arity mismatch");}
                     estack_push(out, t);
-                    {FAIL_IF(!estack_check_type(out, vars, 1), "Malformed expression (15)");}
+                    {FAIL_IF(!estack_check_type(out, vars, 1), "type check error");}
 
                     if (vfn_tbl[t->fn.idx].memory) {
                         int memory = vfn_tbl[t->fn.idx].memory;
@@ -1458,7 +1460,7 @@ int expr_parser_build_stack(mpr_expr expr, const char *str,
                             int j;
                             etoken tmp = estack_pop(op);
                             {FAIL_IF(!(tmp->toktype & TOK_ASSIGN),
-                                     "VFN missing memory assignment tokens.");}
+                                     "vector function missing memory assignment tokens");}
                             /* copy datatype and vector length from vfn token */
                             tmp->gen.datatype = t->gen.datatype;
                             tmp->gen.vec_len = t->gen.vec_len;
@@ -1487,7 +1489,7 @@ int expr_parser_build_stack(mpr_expr expr, const char *str,
 
                     cache_pos = var_cache->loop_start_pos;
                     t = estack_peek(out, cache_pos);
-                    {FAIL_IF(t->toktype != TOK_LOOP_START, "Compilation error (2)");}
+                    {FAIL_IF(t->toktype != TOK_LOOP_START, "compilation error");}
 
                     free((char*)var_cache->in_name);
                     free((char*)var_cache->accum_name);
@@ -1521,7 +1523,7 @@ int expr_parser_build_stack(mpr_expr expr, const char *str,
                     && (estack_peek(op, ESTACK_TOP))->toktype & TOK_ASSIGN
                     && (estack_peek(op, ESTACK_TOP))->toktype & ASSIGN_KEEP_ARG) {
                     estack_push(out, estack_pop(op));
-                    {FAIL_IF(!estack_check_type(out, vars, 1), "Malformed expression (16).");}
+                    {FAIL_IF(!estack_check_type(out, vars, 1), "type check error");}
                 }
                 break;
             }
@@ -1531,15 +1533,15 @@ int expr_parser_build_stack(mpr_expr expr, const char *str,
                 while ((t = estack_peek(op, ESTACK_TOP)) && t->toktype != TOK_OPEN_PAREN
                        && t->toktype != TOK_VECTORIZE) {
                     estack_push(out, estack_pop(op));
-                    {FAIL_IF(!estack_check_type(out, vars, 1), "Malformed expression (17)");}
+                    {FAIL_IF(!estack_check_type(out, vars, 1), "type check error");}
                 }
-                {FAIL_IF(!(t = estack_peek(op, ESTACK_TOP)), "Malformed expression (18).");}
+                {FAIL_IF(!(t = estack_peek(op, ESTACK_TOP)), "no tokens on operator stack");}
                 if (TOK_VECTORIZE == t->toktype) {
                     ADD_TO_VECTOR();
                 }
                 else {
                     /* check if paren is attached to a function */
-                    {FAIL_IF(FN_UNKNOWN == t->fn.idx, "Misplaced comma.");}
+                    {FAIL_IF(FN_UNKNOWN == t->fn.idx, "misplaced comma");}
                     ++t->fn.arity;
                 }
                 allow_toktype = OBJECT_TOKENS;
@@ -1552,9 +1554,9 @@ int expr_parser_build_stack(mpr_expr expr, const char *str,
                        && (op_top->toktype != TOK_OP || op_top->op.idx != OP_IF)
                        && (op_top->toktype != TOK_FN || op_top->fn.idx != FN_VEC_IDX)) {
                     estack_push(out, estack_pop(op));
-                    {FAIL_IF(!estack_check_type(out, vars, 1), "Malformed expression (19)");}
+                    {FAIL_IF(!estack_check_type(out, vars, 1), "type check error");}
                 }
-                {FAIL_IF(!(op_top = estack_peek(op, ESTACK_TOP)), "Unmatched colon.");}
+                {FAIL_IF(!(op_top = estack_peek(op, ESTACK_TOP)), "unmatched colon");}
 
                 if (op_top->toktype == TOK_FN) {
                     etoken out_top;
@@ -1566,32 +1568,32 @@ int expr_parser_build_stack(mpr_expr expr, const char *str,
                     /* Pop parenthesis from output stack, top should now be variable */
                     estack_pop(out);
                     {FAIL_IF(TOK_VAR != (estack_peek(out, ESTACK_TOP))->toktype,
-                             "Variable not found for colon indexing.");}
+                             "variable not found for colon indexing");}
 
                     /* Push variable back to operator stack */
                     op_top = estack_push(op, estack_pop(out));
-                    {FAIL_IF(!op_top, "Stack size exceeded.");}
+                    {FAIL_IF(!op_top, "stack size exceeded");}
 
                     /* Check if left index is an integer */
                     out_top = estack_peek(out, ESTACK_TOP);
                     {FAIL_IF(TOK_LITERAL != out_top->toktype || MPR_INT32 != out_top->gen.datatype,
-                             "Non-integer left vector index used with colon.");}
+                             "non-integer left vector index used with colon");}
                     op_top->var.vec_idx = out_top->lit.val.i;
                     op_top->var.vec_idx = out_top->lit.val.i;
                     estack_pop(out);
                     estack_push(out, estack_pop(op));
-                    {FAIL_IF(!(out_top = estack_check_type(out, vars, 1)), "Malformed expression (20)");}
+                    {FAIL_IF(!(out_top = estack_check_type(out, vars, 1)), "type check error");}
 
                     /* Get right index and verify that it is an integer */
                     GET_NEXT_TOKEN(tok);
                     {FAIL_IF(tok.toktype != TOK_LITERAL || tok.gen.datatype != MPR_INT32,
-                             "Non-integer right vector index used with colon.");}
+                             "non-integer right vector index used with colon");}
                     out_top->var.vec_len = tok.lit.val.i - out_top->var.vec_idx + 1;
                     if (tok.lit.val.i < out_top->var.vec_idx)
                         out_top->var.vec_len += vec_len_ctx;
                     out_top->gen.flags |= VEC_LEN_LOCKED;
                     GET_NEXT_TOKEN(tok);
-                    {FAIL_IF(tok.toktype != TOK_CLOSE_SQUARE, "Unmatched bracket.");}
+                    {FAIL_IF(tok.toktype != TOK_CLOSE_SQUARE, "unmatched bracket");}
                     /* vector index set */
                     allow_toktype = (JOIN_TOKENS | TOK_VFN_DOT | TOK_RFN);
                     if (assigning)
@@ -1611,9 +1613,9 @@ int expr_parser_build_stack(mpr_expr expr, const char *str,
                 while (   op->num_tokens
                        && (op_top = estack_peek(op, ESTACK_TOP)) && op_top->toktype < TOK_ASSIGN) {
                     if (op_top->toktype == TOK_OPEN_PAREN)
-                        {FAIL("Unmatched parentheses or misplaced comma. (2)");}
+                        {FAIL("unmatched parentheses or misplaced comma");}
                     out_top = estack_push(out, estack_pop(op));
-                    {FAIL_IF(!estack_check_type(out, vars, 1), "Malformed expression (21)");}
+                    {FAIL_IF(!estack_check_type(out, vars, 1), "type check error");}
                 }
 
                 if ((op_top = estack_peek(op, ESTACK_TOP))) {
@@ -1647,7 +1649,7 @@ int expr_parser_build_stack(mpr_expr expr, const char *str,
                                     int num_tokens = out->num_tokens;
                                     t2->gen.datatype = vars[var_idx].datatype;
                                     out->num_tokens = i + 1;
-                                    {FAIL_IF(!estack_check_type(out, vars, 1), "Malformed expression (21)");}
+                                    {FAIL_IF(!estack_check_type(out, vars, 1), "type check error");}
                                     out->num_tokens = num_tokens;
                                 }
                             }
@@ -1662,13 +1664,13 @@ int expr_parser_build_stack(mpr_expr expr, const char *str,
                     /* pop assignment operators to output */
                     while (op->num_tokens && (op_top = estack_peek(op, ESTACK_TOP))) {
                         if (op_top->toktype == TOK_OPEN_PAREN)
-                            {FAIL("Unmatched parentheses or misplaced comma. (4)");}
+                            {FAIL("unmatched parentheses or misplaced comma");}
                         if ((op->num_tokens == 1) && op_top->toktype < TOK_ASSIGN)
-                            {FAIL("Malformed expression (22)");}
+                            {FAIL("missing assignment token");}
                         estack_push(out, estack_pop(op));
                         if (   ASSIGN_KEEP_ARG & op_top->toktype
                             && estack_check_assign_type_and_len(out, vars) == -1)
-                            {FAIL("Malformed expression (23)");}
+                            {FAIL("assignment type check error");}
                         if (!is_const && ASSIGN_CONSTANT & op_top->toktype)
                             estack_peek(out, ESTACK_TOP)->toktype &= ~ASSIGN_CONSTANT;
                     }
@@ -1677,7 +1679,7 @@ int expr_parser_build_stack(mpr_expr expr, const char *str,
 
                     /* check vector length and type */
                     if (estack_check_assign_type_and_len(out, vars) == -1)
-                        {FAIL("Malformed expression (24)");}
+                        {FAIL("assignment type check error");}
                 }
                 else {
                     /* only allow increment/decrement postfix operator here */
@@ -1701,12 +1703,12 @@ int expr_parser_build_stack(mpr_expr expr, const char *str,
                                     out_top->gen.flags |= (TYPE_LOCKED | CLEAR_STACK);
                                     break;
                                 default:
-                                    {FAIL("Unmatched parentheses or misplaced comma. (3)");}
+                                    {FAIL("unmatched parentheses or misplaced comma");}
                             }
                         }
                     }
                     else {
-                        {FAIL("Unmatched parentheses or misplaced comma. (3)");}
+                        {FAIL("unmatched parentheses or misplaced comma");}
                     }
                 }
 
@@ -1718,13 +1720,13 @@ int expr_parser_build_stack(mpr_expr expr, const char *str,
             }
             case TOK_DOLLAR: {
                 etoken out_top = estack_peek(out, ESTACK_TOP);
-                {FAIL_IF(TOK_VAR != out_top->toktype, "Signal index on non-variable type.");}
+                {FAIL_IF(TOK_VAR != out_top->toktype, "signal index on non-variable type");}
                 {FAIL_IF(VAR_X != out_top->var.idx || out_top->gen.flags & VAR_SIG_IDX,
-                         "Signal index on non-input type or index already set.");}
+                         "signal index on non-input type or index already set");}
 
                 GET_NEXT_TOKEN(tok);
                 {FAIL_IF(TOK_OPEN_PAREN != tok.toktype,
-                         "Signal index token must be followed by an integer or use parentheses.");}
+                         "signal index token must be followed by an integer or use parentheses");}
 
                 /* push a FN_SIG_IDX to operator stack */
                 tok.toktype = TOK_FN;
@@ -1749,7 +1751,7 @@ int expr_parser_build_stack(mpr_expr expr, const char *str,
                 if (decorating_var) { /* vector index */
                     etoken t;
                     {FAIL_IF(TOK_VAR != (estack_peek(out, ESTACK_TOP))->toktype,
-                             "error: vector index on non-variable type. (1)");}
+                             "vector index on non-variable type");}
 
                     /* push a FN_VEC_IDX to operator stack */
                     tok.toktype = TOK_FN;
@@ -1763,13 +1765,13 @@ int expr_parser_build_stack(mpr_expr expr, const char *str,
 
                     /* move variable from output to operator stack */
                     t = estack_push(op, estack_pop(out));
-                    {FAIL_IF(!t, "Stack size exceeded.");}
+                    {FAIL_IF(!t, "stack size exceeded");}
 
                     if (t->gen.flags & VAR_SIG_IDX) {
                         /* Move sig_idx substack from output to operator */
                         for (i = estack_get_substack_len(out, ESTACK_TOP); i > 0; i--) {
                             t = estack_push(op, estack_pop(out));
-                            {FAIL_IF(!t, "Stack size exceeded.");}
+                            {FAIL_IF(!t, "stack size exceeded");}
                         }
                     }
 
@@ -1783,7 +1785,7 @@ int expr_parser_build_stack(mpr_expr expr, const char *str,
                     break;
                 }
                 else {
-                    {FAIL_IF(vectorizing, "Nested (multidimensional) vectors not allowed.");}
+                    {FAIL_IF(vectorizing, "nested (multidimensional) vectors not allowed");}
                     tok.toktype = TOK_VECTORIZE;
                     tok.gen.vec_len = 0;
                     tok.fn.arity = 0;
@@ -1796,7 +1798,7 @@ int expr_parser_build_stack(mpr_expr expr, const char *str,
                 uint8_t flags;
                 etoken out_top = estack_peek(out, ESTACK_TOP);
                 {FAIL_IF(TOK_VAR != out_top->toktype && TOK_TT != out_top->toktype,
-                         "error: history index on non-variable type.");}
+                         "history index on non-variable type");}
                 flags = out_top->gen.flags;
 
                 /* push a FN_DEL_IDX to operator stack */
@@ -1936,14 +1938,14 @@ int expr_parser_build_stack(mpr_expr expr, const char *str,
             case TOK_ASSIGN: {
                 etoken out_top = estack_peek(out, ESTACK_TOP);
                 /* assignment to variable */
-                {FAIL_IF(!assigning, "Misplaced assignment operator.");}
+                {FAIL_IF(!assigning, "misplaced assignment operator");}
                 {FAIL_IF(op->num_tokens || !out->num_tokens,
-                         "Malformed expression left of assignment.");}
+                         "malformed expression left of assignment");}
 
                 if (out_top->toktype == TOK_VAR) {
                     int var = out_top->var.idx;
                     if (var >= VAR_X_NEWEST)
-                        {FAIL("Cannot assign to input variable 'x' (2)");}
+                        {FAIL("cannot assign to input variable 'x'");}
                     if (out_top->gen.flags & VAR_HIST_IDX) {
                         /* unlike variable lookup, history assignment index must be an integer */
                         int idx = 1;
@@ -1983,7 +1985,7 @@ int expr_parser_build_stack(mpr_expr expr, const char *str,
                     {FAIL_IF(out_top->var.idx > VAR_Y, "cannot assign timetag on input variable");}
                     /* disable writing to current timetag for now */
                     {FAIL_IF(out_top->var.idx == VAR_Y && !(out_top->gen.flags & VAR_HIST_IDX),
-                             "Only past samples of output timetag are writable.");}
+                             "only past samples of output timetag are writable");}
                     i = estack_get_substack_len(out, ESTACK_TOP);
                     out_top->toktype = TOK_ASSIGN_TT;
                     out_top->var.offset = 0;
@@ -2004,10 +2006,10 @@ int expr_parser_build_stack(mpr_expr expr, const char *str,
                     estack_pop(out);
 
                     out_top = estack_peek(out, ESTACK_TOP);
-                    {FAIL_IF(out_top->toktype != TOK_VAR, "Bad token left of assignment. (1)");}
+                    {FAIL_IF(out_top->toktype != TOK_VAR, "non-variable token left of assignment");}
                     var = out_top->var.idx;
                     if (var >= VAR_X_NEWEST)
-                        {FAIL("Cannot assign to input variable 'x' (3)");}
+                        {FAIL("cannot assign to input variable 'x'");}
                     else if (!(out_top->gen.flags & VAR_HIST_IDX)) {
                         if (var == VAR_Y)
                             ++out_assigned;
@@ -2018,9 +2020,9 @@ int expr_parser_build_stack(mpr_expr expr, const char *str,
                     for (i = 0; i < arity; i++) {
                         out_top = estack_peek(out, ESTACK_TOP);
                         if (out_top->toktype != TOK_VAR)
-                            {FAIL("Bad token left of assignment. (2)");}
+                            {FAIL("non-variable token left of assignment");}
                         else if (out_top->var.idx != var)
-                            {FAIL("Cannot mix variables in vector assignment.");}
+                            {FAIL("cannot mix variables in vector assignment");}
                         j = estack_get_substack_len(out, ESTACK_TOP);
                         out_top->toktype = TOK_ASSIGN;
                         if (ASSIGN_COMPOUND & tok.toktype) {
@@ -2046,13 +2048,13 @@ int expr_parser_build_stack(mpr_expr expr, const char *str,
                     }
                 }
                 else
-                    {FAIL("Malformed expression left of assignment.");}
+                    {FAIL("malformed expression left of assignment");}
                 assigning = 0;
                 allow_toktype = OBJECT_TOKENS;
                 break;
             }
             default:
-                {FAIL("Unknown token type.");}
+                {FAIL("unknown token type");}
                 break;
         }
 #if TRACE_PARSE
@@ -2061,7 +2063,7 @@ int expr_parser_build_stack(mpr_expr expr, const char *str,
 #endif
     }
 
-    {FAIL_IF(allow_toktype & TOK_LITERAL || !out_assigned, "Expression has no output assignment.");}
+    {FAIL_IF(allow_toktype & TOK_LITERAL || !out_assigned, "expression has no output assignment");}
 
     if (TOK_SEMICOLON != tok.toktype) {
 #if TRACE_PARSE
@@ -2071,7 +2073,7 @@ int expr_parser_build_stack(mpr_expr expr, const char *str,
         goto again;
     }
 
-    {FAIL_IF(op->num_tokens, "Unmerged tokens on operator stack");}
+    {FAIL_IF(op->num_tokens, "unmerged tokens on operator stack");}
 
 #if TRACE_PARSE
     printf("checking whether user-defined variables should be singleton or instanced\n");
@@ -2131,7 +2133,7 @@ int expr_parser_build_stack(mpr_expr expr, const char *str,
                 /* operator require integer arguments */
                 etoken a = estack_peek(out, i-1);
                 {FAIL_IF(MPR_INT32 != t->gen.datatype || MPR_INT32 != a->gen.datatype,
-                    "augmented assignment operator requires integer argument.");}
+                         "augmented assignment operator requires integer argument");}
             }
 
 #if TRACE_PARSE
@@ -2140,7 +2142,7 @@ int expr_parser_build_stack(mpr_expr expr, const char *str,
 
             for (j = NUM_VAR_IDXS(t->gen.flags); j > 0; j--) {
                 var_substack_len += 1 + estack_get_substack_len(out, i - var_substack_len);
-                {FAIL_IF(var_substack_len >= i, "error calculating variable subexpression length.\n");}
+                {FAIL_IF(var_substack_len >= i, "error calculating variable subexpression length");}
             }
 
             /* check if there are additional assignment tokens (cf. assignment swizzling) */
@@ -2292,7 +2294,7 @@ int expr_parser_build_stack(mpr_expr expr, const char *str,
 
             /* add var substack and convert to assign with keep_arg flag */
             t = estack_insert(out, ++i, substack_len, estack_peek(out, var_idx - substack_len + 1), ESTACK_APPEND);
-            {FAIL_IF(t->toktype != TOK_VAR, "error!");}
+            {FAIL_IF(t->toktype != TOK_VAR, "error");}
             t->toktype = TOK_ASSIGN;
             t->var.offset = 0;
             if (pre)
@@ -2318,14 +2320,14 @@ int expr_parser_build_stack(mpr_expr expr, const char *str,
         switch (t->toktype & TOKEN_MASK) {
             case TOK_VAR:
             case TOK_ASSIGN:
-                {FAIL_IF(VAR_NOW == t->var.idx || VAR_NEXT == t->var.idx, "Illegal variable index.");}
+                {FAIL_IF(VAR_NOW == t->var.idx || VAR_NEXT == t->var.idx, "illegal variable index");}
                 break;
             case TOK_TT:
                 {FAIL_IF(VAR_NOW == t->var.idx && NUM_VAR_IDXS(t->gen.flags),
-                         "'now' timestamp does not accept indices.");}
+                         "'now' timestamp does not accept indices");}
                 break;
             case TOK_ASSIGN_TT:
-                {FAIL_IF(VAR_NOW == t->var.idx, "Cannot assign to 'now' timestamp.");}
+                {FAIL_IF(VAR_NOW == t->var.idx, "cannot assign to 'now' timestamp");}
                 break;
             default:
                 break;
@@ -2335,14 +2337,14 @@ int expr_parser_build_stack(mpr_expr expr, const char *str,
 
     /* check that all used-defined variables were assigned */
     for (i = 0; i < num_var; i++) {
-        {FAIL_IF(!(vars[i].flags & VAR_ASSIGNED), "User-defined variable not assigned.");}
+        {FAIL_IF(!(vars[i].flags & VAR_ASSIGNED), "user-defined variable not assigned");}
     }
 
     /* check vector length and type */
-    {FAIL_IF(estack_check_assign_type_and_len(out, vars) == -1, "Malformed expression (27).");}
+    {FAIL_IF(estack_check_assign_type_and_len(out, vars) == -1, "assignment type check error");}
 
     /* replace special constants with their typed values */
-    {FAIL_IF(estack_replace_special_constants(out), "Error replacing special constants."); }
+    {FAIL_IF(estack_replace_special_constants(out), "error replacing special constants"); }
 
     estack_sort(out);
 

@@ -205,7 +205,7 @@ int mpr_expr_eval(mpr_expr expr, ebuffer buff, mpr_value *v_in, mpr_value *v_var
         switch (tok->toktype & TOKEN_MASK) {
         case TOK_COND_EVAL: {
 #if TRACE_EVAL
-            printf("\n");
+            printf("COND EVAL\n");
 #endif
             if (v_in && v_out) {
                 /* calculate bitflags for updated sources */
@@ -220,6 +220,10 @@ int mpr_expr_eval(mpr_expr expr, ebuffer buff, mpr_value *v_in, mpr_value *v_var
             if (  !(tok->cnd.eval_flags & src_updated)
                 && (mpr_time_get_diff(mpr_value_get_time(v_next, inst_idx, 0), *time) > 0.001)) {
                 tok += tok->cnd.jump_offset;
+#if TRACE_EVAL
+                printf("condition not met – skipping %d tokens to next subexpression.\n",
+                       tok->cnd.jump_offset);
+#endif
             }
             break;
         }

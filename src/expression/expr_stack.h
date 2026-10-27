@@ -197,9 +197,9 @@ void estack_cpy(estack to, estack from)
     memcpy(to->subexpr_starts, from->subexpr_starts, sizeof(uint8_t) * (size_t)from->num_subexpr);
 
 #if TRACE_PARSE
-    printf("Copied %d tokens to expression\n", from->num_tokens);
+    printf("copied %d tokens to expression\n", from->num_tokens);
     estack_print(NULL, to, NULL, 0);
-    printf("Copied vec_len %d\n", to->vec_len);
+    printf("copied vec_len %d\n", to->vec_len);
 #endif
 }
 
@@ -621,14 +621,14 @@ static etoken estack_check_type(estack stk, expr_var_t *vars, int enable_optimiz
         case TOK_OP:
             if (tokens[sp].op.idx == OP_IF) {
 #if TRACE_PARSE
-                trace("Ternary operator is missing operand.\n");
+                trace("ternary operator is missing operand\n");
 #endif
                 return 0;
             }
             if (tokens[sp].gen.flags & TYPE_LOCKED) {
                 /* check preceding token for type match */
                 if (tokens[sp].gen.datatype != tokens[sp - 1].gen.datatype) {
-                    trace("Operator requires argument type '%c'\n", tokens[sp].gen.datatype);
+                    trace("operator requires argument type '%c'\n", tokens[sp].gen.datatype);
                     return 0;
                 }
             }
@@ -769,7 +769,7 @@ static etoken estack_check_type(estack stk, expr_var_t *vars, int enable_optimiz
             switch (optimize) {
                 case BAD_EXPR:
 #if TRACE_PARSE
-                    trace("Operator '%s' cannot have zero operand.\n", op_tbl[tokens[sp].op.idx].name);
+                    trace("operator '%s' cannot have zero operand\n", op_tbl[tokens[sp].op.idx].name);
 #endif
                     return 0;
                 case GET_ZERO:
@@ -926,7 +926,7 @@ static etoken estack_check_type(estack stk, expr_var_t *vars, int enable_optimiz
 #endif
         if (precompute(stk, arity + 1)) {
 #if TRACE_PARSE
-            trace("Error precomputing subexpression.\n");
+            trace("error precomputing subexpression\n");
 #endif
             return 0;
         }
@@ -957,7 +957,7 @@ static int estack_check_assign_type_and_len(estack stk, expr_var_t *vars)
 
     if (expr_len > sp + 1) {
 #if TRACE_PARSE
-        trace("Malformed expression (1)\n");
+        trace("error calculating subexpression length for type check\n");
 #endif
         return -1;
     }
