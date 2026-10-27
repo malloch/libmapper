@@ -674,8 +674,6 @@ int expr_parser_build_stack(mpr_expr expr, const char *str,
                                 len += etoken_get_arity(t);
                                 if (TOK_VAR != t->toktype && TOK_TT != t->toktype)
                                     continue;
-                                {FAIL_IF(t->gen.flags & VAR_HIST_IDX,
-                                         "History indexes not allowed within history reduce function.");}
                                 if (VAR_Y == t->var.idx) {
                                     y_ref = 1;
                                     break;
@@ -711,7 +709,6 @@ int expr_parser_build_stack(mpr_expr expr, const char *str,
                             break;
                         }
                         case RT_INSTANCE: {
-                            /* TODO: fail if var has instance index (once they are implemented) */
                             int v_ref = 0, len = sslen;
                             for (i = 0; i < len; i++) {
                                 int idx = out->num_tokens - 1 - i;
@@ -733,18 +730,12 @@ int expr_parser_build_stack(mpr_expr expr, const char *str,
                             break;
                         }
                         case RT_SIGNAL: {
-                            /* Fail if variables in substack have signal idx other than zero */
                             uint8_t x_ref = 0;
                             etoken t;
                             for (i = 0; i < sslen; i++) {
                                 etoken t = estack_peek(out, ESTACK_TOP - i);
-                                if (   (TOK_VAR != t->toktype && TOK_TT != t->toktype)
-                                    || t->var.idx < VAR_Y)
+                                if (TOK_VAR != t->toktype && TOK_TT != t->toktype)
                                     continue;
-                                {FAIL_IF(t->var.idx == VAR_Y,
-                                         "Cannot call signal reduce function on output.");}
-                                {FAIL_IF(t->var.idx > VAR_X,
-                                         "Signal indexes not allowed within signal reduce function.");}
                                 if (VAR_X == t->var.idx) {
                                     x_ref = 1;
                                     if (TOK_VAR == t->toktype) {
@@ -774,14 +765,11 @@ int expr_parser_build_stack(mpr_expr expr, const char *str,
                         case RT_VECTOR: {
                             uint8_t vec_len = 0;
                             etoken t;
-                            /* Fail if variables in substack have vector idx other than zero */
                             /* TODO: use start variable or expr instead */
                             for (i = 0; i < sslen; i++) {
                                 etoken t = estack_peek(out, ESTACK_TOP - i);
                                 if (t->toktype != TOK_VAR && t->toktype != TOK_COPY_FROM)
                                     continue;
-                                {FAIL_IF(TOK_VAR == t->toktype && t->var.vec_idx && t->var.vec_len == 1,
-                                         "Vector indexes not allowed within vector reduce function.");}
                                 if (t->gen.vec_len > vec_len)
                                     vec_len = t->gen.vec_len;
                                 /* Set token vec_len to 1 since we will be iterating over elements */
