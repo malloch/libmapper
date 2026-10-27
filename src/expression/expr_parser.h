@@ -290,6 +290,8 @@ int expr_parser_build_stack(mpr_expr expr, const char *str,
                         allow_toktype |= TOK_OPEN_SQUARE;
                     if (!(reduce_types & RT_HISTORY))
                         allow_toktype |= TOK_OPEN_CURLY;
+                    if (!(reduce_types & RT_INSTANCE))
+                        allow_toktype |= TOK_HASH;
                     break;
                 }
                 if (found_accum) {
@@ -421,7 +423,7 @@ int expr_parser_build_stack(mpr_expr expr, const char *str,
                 estack_push(out, &tok);
 
                 /* variables can have vector and history indices */
-                allow_toktype = TOK_OPEN_SQUARE | TOK_OPEN_CURLY | TOK_RFN;
+                allow_toktype = TOK_OPEN_SQUARE | TOK_OPEN_CURLY | TOK_HASH | TOK_RFN;
                 if (VAR_X == tok.var.idx)
                     allow_toktype |= TOK_DOLLAR;
                 if (assigning)
@@ -1259,6 +1261,8 @@ int expr_parser_build_stack(mpr_expr expr, const char *str,
                             allow_toktype |= TOK_OPEN_SQUARE;
                         if (!(top->gen.flags & VAR_HIST_IDX))
                             allow_toktype |= TOK_OPEN_CURLY;
+                        if (!(top->gen.flags & VAR_INST_IDX))
+                            allow_toktype |= TOK_HASH;
                     }
                     else if (FN_DEL_IDX == op_top->fn.idx) {
                         int buffer_size = 0;
@@ -1335,6 +1339,8 @@ int expr_parser_build_stack(mpr_expr expr, const char *str,
                             allow_toktype |= TOK_DOLLAR;
                         if (!(t->gen.flags & VAR_VEC_IDX) && !t->var.vec_idx)
                             allow_toktype |= TOK_OPEN_SQUARE;
+                        if (!(t->gen.flags & VAR_INST_IDX))
+                            allow_toktype |= TOK_HASH;
                     }
                     else if (FN_VEC_IDX == op_top->fn.idx) {
                         etoken top = estack_peek(out, ESTACK_TOP);
@@ -1392,7 +1398,24 @@ int expr_parser_build_stack(mpr_expr expr, const char *str,
                             allow_toktype |= TOK_DOLLAR;
                         if (!(top->gen.flags & VAR_HIST_IDX))
                             allow_toktype |= TOK_OPEN_CURLY;
+                        if (!(top->gen.flags & VAR_INST_IDX))
+                            allow_toktype |= TOK_HASH;
                         break;
+                    }
+                    else if (FN_INST_IDX == op_top->fn.idx) {
+                        etoken top = estack_peek(out, ESTACK_TOP);
+                        {FAIL_IF(TOK_VAR != top->toktype,
+                                 "instance index used on incompatible token");}
+                        top->gen.flags |= VAR_INST_IDX;
+                        estack_pop(op);
+
+                        /* instance index set */
+                        if (!(top->gen.flags & VAR_SIG_IDX) && VAR_X == top->var.idx)
+                            allow_toktype |= TOK_DOLLAR;
+                        if (!(top->gen.flags & VAR_HIST_IDX))
+                            allow_toktype |= TOK_OPEN_CURLY;
+                        if (!(top->gen.flags & VAR_VEC_IDX))
+                            allow_toktype |= TOK_OPEN_SQUARE;
                     }
                     else if (FN_PERIODIC == op_top->fn.idx) {
                         /* add a token for a 3rd argument */
@@ -1812,17 +1835,100 @@ int expr_parser_build_stack(mpr_expr expr, const char *str,
             }
             case TOK_HASH: {
                 etoken out_top = estack_peek(out, ESTACK_TOP);
-                if (out_top && TOK_VAR == out_top->toktype) {
+                if (out_top && (TOK_VAR == out_top->toktype || TOK_TT == out_top->toktype)) {
+                    etoken_t t, *tvar = estack_peek(out, ESTACK_TOP);
+
                     /* we are specifying signal instance index */
-                    // fail for now
-                    {FAIL_IF(1, "Specifying instance index is not currently supported.")}
+                    {FAIL_IF(TOK_VAR != tvar->toktype && TOK_TT != tvar->toktype,
+                             "instance index on non-variable type");}
+
+                    GET_NEXT_TOKEN(tok);
+                    if (TOK_OPEN_PAREN == tok.toktype) {
+                        /* push a FN_INST_IDX to operator stack */
+                        tok.toktype = TOK_FN;
+                        tok.fn.idx = FN_INST_IDX;
+                        tok.fn.arity = 1;
+                        estack_push(op, &tok);
+                    }
+                    else {
+                        {FAIL_IF(TOK_LITERAL != tok.toktype && TOK_VAR != tok.toktype,
+                                 "illegal instance index");}
+                    }
+
+                    /* also push an open parenthesis */
+                    t.toktype = TOK_OPEN_PAREN;
+                    estack_push(op, &t);
+
+                    /* move variable from output to operator stack */
+                    tvar = estack_push(op, estack_pop(out));
+                    {FAIL_IF(!tvar, "stack size exceeded");}
+
+                    if (tvar->gen.flags & VAR_SIG_IDX) {
+                        /* Move sig_idx substack from output to operator */
+                        for (i = estack_get_substack_len(out, ESTACK_TOP); i > 0; i--) {
+                            {FAIL_IF(!estack_push(op, estack_pop(out)), "stack size exceeded");}
+                        }
+                    }
+
+                    if (tvar->gen.flags & VAR_HIST_IDX) {
+                        /* Move hist_idx substack from output to operator */
+                        for (i = estack_get_substack_len(out, ESTACK_TOP); i > 0; i--) {
+                            {FAIL_IF(!estack_push(op, estack_pop(out)), "stack size exceeded");}
+                        }
+                    }
+
+                    if (tvar->gen.flags & VAR_VEC_IDX) {
+                        /* Move vec_idx substack from output to operator */
+                        for (i = estack_get_substack_len(out, ESTACK_TOP); i > 0; i--) {
+                            {FAIL_IF(!estack_push(op, estack_pop(out)), "stack size exceeded");}
+                        }
+                    }
+
+                    if (TOK_OPEN_PAREN == tok.toktype) {
+                        /* left parenthesis already on operator stack */
+                        allow_toktype = OBJECT_TOKENS;
+                    }
+                    else {
+                        etoken tp;
+                        /* push instance index to output */
+                        estack_push(out, &tok);
+
+                        /* pop tokens back to output until left parenthesis found */
+                        while (op->num_tokens) {
+                            tp = estack_pop(op);
+                            if (TOK_OPEN_PAREN == tp->toktype) {
+                                break;
+                            }
+                            estack_push(out, tp);
+                            etoken out_top = estack_check_type(out, vars, 1);
+                            {FAIL_IF(!out_top, "type check error");}
+                            if (TOK_LOOP_START == out_top->toktype)
+                                temp_vars->loop_start_pos = (out->num_tokens - 1);
+                        }
+
+                        tvar = estack_peek(out, ESTACK_TOP);
+                        {FAIL_IF(!tvar || (TOK_VAR != tvar->toktype && TOK_TT != tvar->toktype),
+                                 "missing variable token");}
+                        tvar->gen.flags |= VAR_INST_IDX;
+
+                        allow_toktype = JOIN_TOKENS;
+                        if (!(tvar->gen.flags & VAR_SIG_IDX) && VAR_X == tvar->var.idx)
+                            allow_toktype |= TOK_DOLLAR;
+                        if (!(tvar->gen.flags & VAR_HIST_IDX))
+                            allow_toktype |= TOK_OPEN_CURLY;
+                        if (!(tvar->gen.flags & VAR_VEC_IDX))
+                            allow_toktype |= TOK_OPEN_SQUARE;
+                        if (assigning)
+                            allow_toktype |= TOK_ASSIGN | TOK_ASSIGN_TT;
+                    }
                 }
                 else {
                     /* we are retrieving signal instance index */
                     /* evaluator will keep track of local instance being processed, so we don't
                      * need to know which variable is being addressed */
                     GET_NEXT_TOKEN(tok);
-                    {FAIL_IF(tok.toktype != TOK_VAR, "Misplaced instance index query.");}
+                    {FAIL_IF(TOK_VAR != tok.toktype && TOK_TT != tok.toktype,
+                             "misplaced instance index query");}
                     tok.toktype = TOK_VAR_INST_IDX;
                     estack_push(out, &tok);
                     allow_toktype = JOIN_TOKENS | TOK_DOLLAR;

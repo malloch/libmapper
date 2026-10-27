@@ -550,11 +550,16 @@ static void etoken_print(etoken tok, expr_var_t *vars, int show_locks)
             break;
         }
         case TOK_VAR_INST_IDX:
-            d = snprintf(s, l, "INST_IDX[?]\t");
-            break;
         case TOK_VAR_NUM_INST:
-            d = snprintf(s, l, "NUM_INST\t");
-            if (tok->var.idx == VAR_Y)
+            if (TOK_VAR_INST_IDX == (tok->toktype & TOKEN_MASK))
+                d = snprintf(s, l, "INST_IDX\t");
+            else
+                d = snprintf(s, l, "NUM_INST\t");
+            if (tok->var.idx == VAR_NOW)
+                snprintf(s + d, l - d, "var[now]");
+            else if (tok->var.idx == VAR_NEXT)
+                snprintf(s + d, l - d, "var[next]");
+            else if (tok->var.idx == VAR_Y)
                 snprintf(s + d, l - d, "var[y]");
             else if (tok->var.idx == VAR_X_NEWEST)
                 snprintf(s + d, l - d, "var[x$$]");

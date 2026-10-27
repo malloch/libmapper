@@ -10,7 +10,7 @@
  *      input signals (in the case of VAR_X only)
  *      historic samples
  *      vector elements
- *      signal instances (not currently indexable)
+ *      signal instances
  * Bitflags are used to keep track of which indices are provided, therefore the indices or
  * sub-expressions that compute the indices need to be presented in the same order. On the output
  * stack they are stored in the order: INST_IDX, VEC_IDX, HIST_IDX, SIG_IDX. On the operator stack

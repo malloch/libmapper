@@ -570,6 +570,7 @@ typedef enum {
     FN_TRUNC,
     /* place functions which should never be precomputed below this point */
     FN_DEL_IDX,
+    FN_INST_IDX,
     FN_SIG_IDX,
     FN_VEC_IDX,
     FN_NORMAL,
@@ -659,6 +660,7 @@ static struct {
     { "trunc",    1, 0,            (void*)truncf,    (void*)trunc     },
     /* place functions which should never be precomputed below this point */
     { "delay",    1, (void*)1,     0,                0                },
+    { "inst_idx", 1, (void*)1,     0,                0                },
     { "sig_idx",  1, (void*)1,     0,                0                },
     { "vec_idx",  1, (void*)1,     0,                0                },
     { "normal",   1, 0,            (void*)normalf,   (void*)normald   },

@@ -22,61 +22,134 @@ generated output.
   <tbody>
     <tr style="border:0px">
       <th colspan="2" style="background:#555555;color:white;">Arithmetic operators</th>
-      <th rowspan="14" style="border:0px;margin:0px;padding:5px"></th>
-      <th colspan="2" style="background:#555555;color:white;">Bitwise operators</th>
+      <th style="background:#555555;color:white;">Augmented assignment</th>
     </tr>
     <tr>
-      <td><code> + </code></td><td>addition</td>
-      <td><code> << </code></td><td>left bitshift</td>
+      <td><code> + </code></td>
+      <td>addition</td>
+      <td><code> += </code></td>
     </tr>
     <tr>
-      <td><code> - </code></td><td>subtraction</td>
-      <td><code> >> </code></td><td>right bitshift</td>
+      <td><code> - </code></td>
+      <td>subtraction</td>
+      <td><code> -= </code></td>
     </tr>
     <tr>
-      <td><code> * </code></td><td>multiplication</td>
-      <td><code> & </code></td><td>bitwise AND</td>
+      <td><code> * </code></td>
+      <td>multiplication</td>
+      <td><code> *= </code></td>
     </tr>
     <tr>
-      <td><code> / </code></td><td>division</td>
-      <td><code> | </code></td><td>bitwise OR</td>
+      <td><code> / </code></td>
+      <td>division</td>
+      <td><code> /= </code></td>
     </tr>
     <tr>
-      <td><code> % </code></td><td>modulo</td>
-      <td><code> ^ </code></td><td>bitwise XOR (exclusive OR)</td>
+      <td><code> % </code></td>
+      <td>modulo</td>
+      <td><code> %= </code></td>
     </tr>
     <tr>
-      <td><code> ++ </code></td><td>increment (prefix or postfix)</td>
-      <th colspan="2" style="background:#555555;color:white">Logical operators</th>
+      <td><code> ++ </code></td>
+      <td>increment (prefix or postfix)</td>
+      <td style="background:gray"></td>
     </tr>
     <tr>
-      <td><code> -- </code></td><td>decrement (prefix or postfix)</td>
-      <td><code> ! </code></td><td>logical NOT</td>
+      <td><code> -- </code>
+      </td><td>decrement (prefix or postfix)</td>
+      <td style="background:gray"></td>
     </tr>
     <tr>
-      <th colspan="2" style="background:#555555;color:white">Comparison operators</th>
-      <td><code> && </code></td><td>logical AND</td>
+      <th colspan="3" style="background:#555555;color:white">Comparison operators</th>
     </tr>
     <tr>
-      <td><code> > </code></td><td>greater than</td>
-      <td><code> || </code></td><td>logical OR</td></tr>
+      <td><code> > </code></td>
+      <td>greater than</td>
+      <td style="background:gray"></td>
     </tr>
     <tr>
-      <td><code> >= </code></td><td>greater than or equal</td>
-      <th colspan="2" style="background:#555555;color:white">Conditional operator</th>
+      <td><code> >= </code></td>
+      <td>greater than or equal</td>
+      <td style="background:gray"></td>
     </tr>
     <tr>
-      <td><code> < </code></td><td>less than</td>
-      <td rowspan=4><code> ?: </code></td><td rowspan=4>if / then / else (ternary operation) used in the form <code>a?b:c</code>. If the second operand is omitted (e.g. <code>a?:c</code>) the first operand will be used in its place.</td>
+      <td><code> < </code></td>
+      <td>less than</td>
+      <td style="background:gray"></td>
     </tr>
     <tr>
-      <td><code> <= </code></td><td>less than or equal</td>
+      <td><code> <= </code></td>
+      <td>less than or equal</td>
+      <td style="background:gray"></td>
     </tr>
     <tr>
-      <td><code> == </code></td><td>equal</td>
+      <td><code> == </code></td>
+      <td>equal</td>
+      <td style="background:gray"></td>
     </tr>
     <tr>
-      <td><code> != </code></td><td>not equal</td>
+      <td><code> != </code></td>
+      <td>not equal</td>
+      <td style="background:gray"></td>
+    </tr>
+    <tr>
+      <th colspan="3" style="background:#555555;color:white;">Bitwise operators</th>
+    </tr>
+    <tr>
+      <td><code> << </code></td>
+      <td>left bitshift</td>
+      <td><code> <<= </code></td>
+    </tr>
+    <tr>
+      <td><code> >> </code></td>
+      <td>right bitshift</td>
+      <td><code> >>= </code></td>
+    </tr>
+    <tr>
+      <td><code> & </code></td>
+      <td>bitwise AND</td>
+      <td><code> &= </code></td>
+    </tr>
+    <tr>
+      <td><code> | </code></td>
+      <td>bitwise OR</td>
+      <td><code> |= </code></td>
+    </tr>
+    <tr>
+      <td><code> ^ </code></td>
+      <td>bitwise XOR (exclusive OR)</td>
+      <td><code> ^= </code></td>
+    </tr>
+    <tr>
+      <th colspan="3" style="background:#555555;color:white;">Logical operators</th>
+    </tr>
+    <tr>
+      <td><code> ! </code></td>
+      <td>logical NOT</td>
+      <td style="background:gray"></td>
+    </tr>
+    <tr>
+      <td><code> && </code></td>
+      <td>logical AND</td>
+      <td><code> &&= </code></td>
+    </tr>
+    <tr>
+      <td><code> || </code></td>
+      <td>logical OR</td>
+      <td><code> ||= </code></td>
+    </tr>
+    <tr>
+      <th colspan="3" style="background:#555555;color:white;">Conditional operators</th>
+    </tr>
+    <tr>
+      <td><code> ?: </code></td>
+      <td>if / then / else (ternary operation) used in the form <code>a?b:c</code>. If the second operand is omitted (e.g. <code>a?:c</code>) the first operand will be used in its place</td>
+      <td style="background:gray"></td>
+    </tr>
+    <tr>
+      <td><code> ?? </code></td>
+      <td>null coalescing operator. Returns the left operand if it is not nullish (i.e. it has a value), otherwise return the right operand.</td>
+      <td style="background:gray"></td>
     </tr>
     <tr style="background:none;border:0px">
       <td colspan=2 style="background:none;border:0px"></td>
@@ -285,15 +358,15 @@ y = x + y{-1.5};
 
 Up to 16 additional variables can be declared as-needed in the expression.
 The variable names can be any string except for the reserved variable names `x` and `y` and reserved constant names `pi` and `e`.
-The values of these variables are stored with the map context, either per-instance (if assigned from an instanced signal) or per-signal (if assigned from a singleton signal), and can be accessed in subsequent calls to the evaluator.
-In the following example, the user-defined variable `ema` is used to keep track of the `exponential moving average` of the input signal value `x`, *independent* of the output value `y` which is set to give the difference between the current sample and the moving average:
+The values of these variables are stored with the map context, either per-instance (if assigned from an instanced signal) or per-signal (if assigned from a literal, a singleton signal, or another singleton variable), and can be accessed in subsequent calls to the evaluator.
+In the following example, the user-defined variable `ema` is used to keep track of the `exponential moving average` of the input signal value `x`, *independent* of the output value `y` which is set to give the difference between the current sample and the moving average (i.e. an exponential high-pass filter):
 
 <pre style="width:50%;margin:auto">
 ema = ema{-1} * 0.9 + x * 0.1;
 y = x - ema;
 </pre>
 
-Just like the output variable `y` we can initialize past values of user-defined variables before expression evaluation. **Initialization will always be performed first**, after which sub-expressions are evaluated **in the order they are written**. For example, the expression string `y=ema*2; ema=ema{-1}*0.9+x*0.1; ema{-1}=90` will be evaluated in the following order:
+As with the output variable `y`, we can initialize past values of user-defined variables before expression evaluation. **Initialization will always be performed first**, after which sub-expressions are evaluated **in the order they are written**. For example, the expression string `y=ema*2; ema=ema{-1}*0.9+x*0.1; ema{-1}=90` will be evaluated in the following order:
 
 1. `ema{-1} = 90` — initialize the past value of variable `ema` to `90`
 2. `y = ema * 2` — set output variable `y` to equal the **current** value of `ema` multiplied by `2`. The current value of `ema` is `0` since it has not yet been set.
@@ -317,7 +390,7 @@ mpr_obj_set_prop((mpr_obj)map, MPR_PROP_EXTRA, "var@mix", 1, MPR_FLT, &mix, 1);
 mpr_obj_push((mpr_obj)map);
 ~~~
 
-~~~C++
+~~~c++
 // C++ API
 // establish a map between previously-declared signals 'src' and 'dst'
 mpr.Map map(src, dst);
@@ -384,7 +457,7 @@ Convergent mapping—in which multiple source signals update a single destinatio
   </tr>
   </tr>
     <tr>
-    <td><strong>convergent maps</strong>: arbitrary combining functions can be defined by creating a single map with multiple sources. Libmapper will automatically reorder the sources alphabetically by name, and source values are referred to in the map expression by the string <code>x$</code>+<code>&lt;source index&gt;</code> as shown in the example to the right. When editing the expression it is crucial to use the correct signal indices which may have been reordered from the array provided to the map constructor; they can be retrieved using the function <code>mpr_map_get_sig_idx()</code> or you can use the special map constructor <code>mpr_map_new_from_str()</code> to have libmapper handle signal index lookup automatically. When a map is selected in the <a href="https://github.com/libmapper/webmapper">Webmapper</a> UI each source is labeled with its index. The most recently updated source can be referenced using <code>x.signal.newest()</code> or the shorthand <code>x$$</code></td>
+    <td><strong>convergent maps</strong>: arbitrary combining functions can be defined by creating a single map with multiple sources. Libmapper will automatically reorder the sources alphabetically by name, and source values are referred to in the map expression by the string <code>x$</code>+<code>&lt;source index&gt;</code> as shown in the example to the right. When editing the expression it is crucial to use the correct signal indices which may have been reordered from the array provided to the map constructor; they can be retrieved using the function <code>mpr_map_get_sig_idx()</code> or you can use the special map constructor <code>mpr_map_new_from_str()</code> to have libmapper handle signal index lookup automatically. When a map is selected in the <a href="https://github.com/libmapper/webmapper">Webmapper</a> UI each source is labeled with its index. The most recently updated source can be referenced using <code>x.signal.newest()</code> or the shorthand <code>x$$</code>.</td>
     <td>
         <img style="display:block;margin:auto;padding:0px;" src="./images/full_convergent.png">
     </td>
@@ -393,7 +466,7 @@ Convergent mapping—in which multiple source signals update a single destinatio
 
 <h2 id="propagation-management">Propagation Management</h2>
 
-By default, convergent maps will trigger expression evaluation when *any* of the source signals are updated. For example, the convergent map `y=x$0+x$1` will output a new value whenever `x$0` *or* `x$1` is updated. Evaluation can be disabled for a source signal by inserting an underscore `_` symbol before the source name, e.g. `y=x$0+_x$1` will be evaluated only when the source `x$0` is updated, while updates to source `x$1` will be stored but will not trigger evaluation or propagation to the destination signal.
+By default, convergent maps will trigger expression evaluation when *any* of the source signals are updated. For example, the convergent map `y=x$0+x$1` will output a new value whenever `x$0` is updated *and* whenever `x$1` is updated. Evaluation can be disabled for a source signal by inserting an underscore `_` symbol before the source name, e.g. `y=x$0+_x$1` will be evaluated only when the source `x$0` is updated, while updates to source `x$1` will be stored but will not trigger evaluation or propagation to the destination signal.
 
 If desired, the entire expression can be evaluated "silently" so that updates do not propagate to the destination. This is accomplished by manipulating a special variable named `muted`. For maps with singleton destination signals this has an identical effect to manipulating the `alive` variable, but for instanced destinations it enables filtering updates without releasing the associated instance.
 
