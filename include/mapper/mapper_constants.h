@@ -31,48 +31,48 @@ enum {
 
 /*! Symbolic representation of recognized properties. */
 typedef enum {
-    MPR_PROP_UNKNOWN        = 0x0000,
-    MPR_PROP_ALLOW_ORIGIN   = 0x0100,
-    MPR_PROP_BLOCK_ORIGIN   = 0x0200,
-    MPR_PROP_BUNDLE         = 0x0300,
-    MPR_PROP_DATA           = 0x0400,
-    MPR_PROP_DEV            = 0x0500,
-    MPR_PROP_DIR            = 0x0600,
-    MPR_PROP_EPHEM          = 0x0700,
-    MPR_PROP_EXPR           = 0x0800,
-    MPR_PROP_HOST           = 0x0900,
-    MPR_PROP_ID             = 0x0A00,
-    MPR_PROP_IS_LOCAL       = 0x0B00,
-    MPR_PROP_JITTER         = 0x0C00,
-    MPR_PROP_LEN            = 0x0D00,
-    MPR_PROP_LIBVER         = 0x0E00,
-    MPR_PROP_LINKED         = 0x0F00,
-    MPR_PROP_MAX            = 0x1000,
-    MPR_PROP_MIN            = 0x1100,
-    MPR_PROP_MUTED          = 0x1200,
-    MPR_PROP_NAME           = 0x1300,
-    MPR_PROP_NUM_INST       = 0x1400,
-    MPR_PROP_NUM_MAPS       = 0x1500,
-    MPR_PROP_NUM_MAPS_IN    = 0x1600,
-    MPR_PROP_NUM_MAPS_OUT   = 0x1700,
-    MPR_PROP_NUM_SIGS_IN    = 0x1800,
-    MPR_PROP_NUM_SIGS_OUT   = 0x1900,
-    MPR_PROP_ORDINAL        = 0x1A00,
-    MPR_PROP_PERIOD         = 0x1B00,
-    MPR_PROP_PORT           = 0x1C00,
-    MPR_PROP_PROCESS_LOC    = 0x1D00,
-    MPR_PROP_PROTOCOL       = 0x1E00,
-    MPR_PROP_RATE           = 0x1F00,
-    MPR_PROP_SIG            = 0x2000,
-    MPR_PROP_SLOT           = 0x2100,
-    MPR_PROP_STATUS         = 0x2200,
-    MPR_PROP_STEAL_MODE     = 0x2300,
-    MPR_PROP_SYNCED         = 0x2400,
-    MPR_PROP_TYPE           = 0x2500,
-    MPR_PROP_UNIT           = 0x2600,
-    MPR_PROP_USE_INST       = 0x2700,
-    MPR_PROP_VERSION        = 0x2800,
-    MPR_PROP_EXTRA          = 0x2900
+    MPR_PROP_UNKNOWN        = 0x0000,   /*!< Unknown property */
+    MPR_PROP_ALLOW_ORIGIN   = 0x0100,   /*!< Device origin scopes to allow */
+    MPR_PROP_BLOCK_ORIGIN   = 0x0200,   /*!< Device origin scopes to block */
+    MPR_PROP_BUNDLE         = 0x0300,   /*!< Whether message bundling is enabled */
+    MPR_PROP_DATA           = 0x0400,   /*!< User data */
+    MPR_PROP_DEV            = 0x0500,   /*!< Parent device */
+    MPR_PROP_DIR            = 0x0600,   /*!< Dataflow direction */
+    MPR_PROP_EPHEM          = 0x0700,   /*!< Ephemerality */
+    MPR_PROP_EXPR           = 0x0800,   /*!< Expression */
+    MPR_PROP_HOST           = 0x0900,   /*!< Network host */
+    MPR_PROP_ID             = 0x0A00,   /*!< Identifier */
+    MPR_PROP_IS_LOCAL       = 0x0B00,   /*!< Whether object is local or remote */
+    MPR_PROP_JITTER         = 0x0C00,   /*!< Update jitter */
+    MPR_PROP_LEN            = 0x0D00,   /*!< Vector length */
+    MPR_PROP_LIBVER         = 0x0E00,   /*!< Libmapper version */
+    MPR_PROP_LINKED         = 0x0F00,   /*!< Linked devices */
+    MPR_PROP_MAX            = 0x1000,   /*!< Value maxima */
+    MPR_PROP_MIN            = 0x1100,   /*!< Value minima */
+    MPR_PROP_MUTED          = 0x1200,   /*!< Whether map is muted */
+    MPR_PROP_NAME           = 0x1300,   /*!< Object name */
+    MPR_PROP_NUM_INST       = 0x1400,   /*!< Number of value instances */
+    MPR_PROP_NUM_MAPS       = 0x1500,   /*!< Number of associated maps */
+    MPR_PROP_NUM_MAPS_IN    = 0x1600,   /*!< Number of associated incoming maps */
+    MPR_PROP_NUM_MAPS_OUT   = 0x1700,   /*!< Number of associated outgoing maps */
+    MPR_PROP_NUM_SIGS_IN    = 0x1800,   /*!< Number of child input signals */
+    MPR_PROP_NUM_SIGS_OUT   = 0x1900,   /*!< Number of child output signals */
+    MPR_PROP_ORDINAL        = 0x1A00,   /*!< Ordinal value assigned to devices with the same name */
+    MPR_PROP_PERIOD         = 0x1B00,   /*!< Update period */
+    MPR_PROP_PORT           = 0x1C00,   /*!< Network port */
+    MPR_PROP_PROCESS_LOC    = 0x1D00,   /*!< Process location endpoint for a map */
+    MPR_PROP_PROTOCOL       = 0x1E00,   /*!< Network protocol for a map (UDP/TCP) */
+    MPR_PROP_RATE           = 0x1F00,   /*!< Update rate */
+    MPR_PROP_SIG            = 0x2000,   /*!< Signal object */
+    MPR_PROP_SLOT           = 0x2100,   /*!< Map Slot object */
+    MPR_PROP_STATUS         = 0x2200,   /*!< Object status */
+    MPR_PROP_STEAL_MODE     = 0x2300,   /*!< Resource stealing mode for maps */
+    MPR_PROP_SYNCED         = 0x2400,   /*!< Timestamp for last synchronization event */
+    MPR_PROP_TYPE           = 0x2500,   /*!< Data type */
+    MPR_PROP_UNIT           = 0x2600,   /*!< Value unit */
+    MPR_PROP_USE_INST       = 0x2700,   /*!< Use instances */
+    MPR_PROP_VERSION        = 0x2800,   /*!< Object version number */
+    MPR_PROP_EXTRA          = 0x2900    /*!< Used for defining extra named properties */
 } mpr_prop;
 
 /*! Possible operations for composing queries. */
@@ -90,7 +90,7 @@ typedef enum {
     MPR_OP_BOR          = 0x0A, /*!< Property value | query value (bitwise OR) */
     MPR_OP_ALL          = 0x10, /*!< Applies to all elements of value */
     MPR_OP_ANY          = 0x20, /*!< Applies to any element of value */
-    MPR_OP_NONE         = 0x40
+    MPR_OP_NONE         = 0x40  /*!< No op */
 } mpr_op;
 
 /*! Describes the possible endpoints of a map.
@@ -154,7 +154,7 @@ typedef enum {
 */
 
 typedef enum {
-    MPR_STATUS_UNDEFINED    = 0x0000,
+    MPR_STATUS_UNDEFINED    = 0x0000,   /*!< Not yet defined. */
 
     MPR_STATUS_NEW          = 0x0001,   /*!< New object. */
     MPR_STATUS_MODIFIED     = 0x0002,   /*!< Existing object has been modified. */
@@ -175,7 +175,7 @@ typedef enum {
 
     MPR_STATUS_OVERFLOW     = 0x1000,   /*!< No local objects available for activation. */
 
-    MPR_STATUS_ANY          = 0x1FFF
+    MPR_STATUS_ANY          = 0x1FFF    /*!< Match any Status. */
 } mpr_status;
 
 /* deprecated constants */

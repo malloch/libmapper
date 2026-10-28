@@ -69,7 +69,7 @@ namespace mapper {
         INT32       = MPR_INT32,    /*!< 32-bit integer. */
         STRING      = MPR_STR,      /*!< String. */
         TIME        = MPR_TIME,     /*!< 64-bit NTP timestamp. */
-        POINTER     = MPR_PTR       /*!< pointer. */
+        POINTER     = MPR_PTR       /*!< Pointer. */
     };
 
     /*! The set of possible directions for a signal. */
@@ -98,7 +98,7 @@ namespace mapper {
         BIT_OR                  = MPR_OP_BOR,   /*!< Property value | query value (bitwise OR) */
         ALL                     = MPR_OP_ALL,   /*!< Applies to all elements of value */
         ANY                     = MPR_OP_ANY,   /*!< Applies to any element of value */
-        NONE                    = MPR_OP_NONE
+        NONE                    = MPR_OP_NONE   /*!< No op */
     };
 
     /*! Symbolic identifiers for core object properties. */
@@ -541,7 +541,7 @@ namespace mapper {
         /*! The set of possible events, used to register and inform callbacks. */
         enum class Event
         {
-            NONE               = 0,
+            NONE               = 0,                     /*!< Not yet defined. */
             EXPIRED            = MPR_STATUS_EXPIRED,    /*!< Object record has expired. */
             NEW                = MPR_STATUS_NEW,        /*!< Object record is new. */
             MODIFIED           = MPR_STATUS_MODIFIED,   /*!< Object properties have changed. */
@@ -555,7 +555,7 @@ namespace mapper {
             UPSTREAM_RELEASE   = MPR_STATUS_REL_UPSTRM, /*!< Object instance was released upstream. */
             DOWNSTREAM_RELEASE = MPR_STATUS_REL_DNSTRM, /*!< Object instance was released downstream. */
             INSTANCE_OVERFLOW  = MPR_STATUS_OVERFLOW,   /*!< No local object instances left. */
-            ANY                = MPR_STATUS_ANY
+            ANY                = MPR_STATUS_ANY         /*!< Match any Event. */
         };
 
         /*! The set of possible statuses for an Object. */
@@ -575,7 +575,7 @@ namespace mapper {
             UPSTREAM_RELEASE   = MPR_STATUS_REL_UPSTRM, /*!< Object instance was released upstream. */
             DOWNSTREAM_RELEASE = MPR_STATUS_REL_DNSTRM, /*!< Object instance was released downstream. */
             INSTANCE_OVERFLOW  = MPR_STATUS_OVERFLOW,   /*!< No local object instances left. */
-            ANY                = MPR_STATUS_ANY
+            ANY                = MPR_STATUS_ANY         /*!< Match any Status. */
         };
 
     protected:
