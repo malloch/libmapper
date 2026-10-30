@@ -94,6 +94,28 @@ MPR_INLINE static int _max(int a, int b)
 #define SET_LEN(LEN)    \
     lens[dp] = LEN;
 
+#if TRACE_EVAL
+#define TYPE_ERROR(TYPE)                                \
+{                                                       \
+    printf("     illegal type %d/'%c'\n", TYPE, TYPE);  \
+    goto error;                                         \
+}
+#define OP_ERROR(OP)                    \
+{                                       \
+    printf("     illegal op %d\n", OP); \
+    goto error;                         \
+}
+#define VAR_IDX_ERROR(IDX)                          \
+{                                                   \
+    printf("     illegal variable idx %d\n", IDX);  \
+    goto error;                                     \
+}
+#else
+#define TYPE_ERROR goto error;
+#define OP_ERROR goto error;
+#define VAR_IDX_ERROR goto error;
+#endif
+
 MPR_INLINE static int _newest_val_idx(mpr_value *vals, int num_vals, int inst_idx)
 {
     int i, newest_idx = 0;
@@ -152,13 +174,13 @@ int mpr_expr_eval(mpr_expr expr, ebuffer buff, mpr_value *v_in, mpr_value *v_var
     }
 
     if (v_vars) {
-        if (expr->inst_ctl >= 0) {
+        if (expr->inst_ctl >= 0 && expr->inst_ctl < expr->num_vars) {
             /* recover instance state */
             mpr_value v = v_vars[expr->inst_ctl];
             int *vi = mpr_value_get_value(v, inst_idx, 0);
             alive = (0 != vi[0]);
         }
-        if (expr->mute_ctl >= 0) {
+        if (expr->mute_ctl >= 0 && expr->mute_ctl < expr->num_vars) {
             /* recover mute state */
             mpr_value v = v_vars[expr->mute_ctl];
             int *vi = mpr_value_get_value(v, inst_idx, 0);
@@ -252,7 +274,7 @@ int mpr_expr_eval(mpr_expr expr, ebuffer buff, mpr_value *v_in, mpr_value *v_var
                 TYPED_CASE(MPR_DBL, d)
 #undef TYPED_CASE
                 default:
-                    goto error;
+                    TYPE_ERROR(types[dp]);
             }
             mpr_time_set(&times[dp], MPR_TIME_0);
 #if TRACE_EVAL
@@ -331,7 +353,7 @@ int mpr_expr_eval(mpr_expr expr, ebuffer buff, mpr_value *v_in, mpr_value *v_var
 #endif
                     }
                     else
-                        goto error;
+                        TYPE_ERROR(types[idxp]);
                 }
 
                 /* If no instance idx is cached this means that this expression contains a
@@ -340,7 +362,8 @@ int mpr_expr_eval(mpr_expr expr, ebuffer buff, mpr_value *v_in, mpr_value *v_var
                 if (!cache)
                     status &= ~EXPR_EVAL_DONE;
             }
-            else if (v_vars) {
+            else if (tok->var.idx >= 0 && tok->var.idx < expr->num_vars) {
+                BAIL_UNLESS(v_vars);
                 v = v_vars[tok->var.idx];
 #if TRACE_EVAL
                 if (expr->vars && expr->vars[tok->var.idx].name)
@@ -350,7 +373,7 @@ int mpr_expr_eval(mpr_expr expr, ebuffer buff, mpr_value *v_in, mpr_value *v_var
 #endif
             }
             else
-                goto error;
+                VAR_IDX_ERROR(tok->var.idx);
 
             if (mpr_value_get_num_samps(v, inst_idx) <= 0) {
                 if (    tok->var.idx >= VAR_X_NEWEST
@@ -377,7 +400,7 @@ int mpr_expr_eval(mpr_expr expr, ebuffer buff, mpr_value *v_in, mpr_value *v_var
                     case MPR_INT32: hidx = vals[i].i;                                       break;
                     case MPR_FLT:   hwt = -modf(vals[i].f, &intpart); hidx = (int)intpart;  break;
                     case MPR_DBL:   hwt = -modf(vals[i].d, &intpart); hidx = (int)intpart;  break;
-                    default:        goto error;
+                    default:        TYPE_ERROR(types[idxp]);
                 }
                 --idxp;
             }
@@ -396,7 +419,7 @@ int mpr_expr_eval(mpr_expr expr, ebuffer buff, mpr_value *v_in, mpr_value *v_var
                     case MPR_INT32: vidx = vals[i].i;                                       break;
                     case MPR_FLT:   vwt = modf(vals[i].f, &intpart); vidx = (int)intpart;   break;
                     case MPR_DBL:   vwt = modf(vals[i].d, &intpart); vidx = (int)intpart;   break;
-                    default:        goto error;
+                    default:        TYPE_ERROR(types[idxp]);
                 }
                 if (vwt < 0) {
                     --vidx;
@@ -498,7 +521,7 @@ int mpr_expr_eval(mpr_expr expr, ebuffer buff, mpr_value *v_in, mpr_value *v_var
                     COPY_TYPED(MPR_DBL, double, d)
 #undef COPY_TYPED
                     default:
-                        goto error;
+                        TYPE_ERROR(mpr_value_get_type(v));
                 }
             }
             else {
@@ -533,10 +556,13 @@ int mpr_expr_eval(mpr_expr expr, ebuffer buff, mpr_value *v_in, mpr_value *v_var
                 else
                     vals[sp].i = mpr_value_get_num_active_inst(v_in[tok->var.idx - VAR_X]);
             }
-            else if (v_vars)
+            else if (tok->var.idx >= 0 && tok->var.idx < expr->num_vars) {
+                BAIL_UNLESS(v_vars);
                 vals[sp].i = mpr_value_get_num_active_inst(v_vars[tok->var.idx]);
+            }
             else
-                goto error;
+                VAR_IDX_ERROR(tok->var.idx);
+
             for (i = 1; i < tok->gen.vec_len; i++)
                 vals[sp + i].i = vals[sp].i;
 
@@ -609,7 +635,7 @@ int mpr_expr_eval(mpr_expr expr, ebuffer buff, mpr_value *v_in, mpr_value *v_var
                         BINARY_OP_CASE(OP_BITWISE_AND, &, i);
                         BINARY_OP_CASE(OP_BITWISE_OR, |, i);
                         BINARY_OP_CASE(OP_BITWISE_XOR, ^, i);
-                        default: goto error;
+                        default: OP_ERROR(tok->op.idx);
                     }
                     break;
                 }
@@ -623,7 +649,7 @@ int mpr_expr_eval(mpr_expr expr, ebuffer buff, mpr_value *v_in, mpr_value *v_var
                                 vals[sp + i].f = fmodf(vals[sp + i].f, vals[sp + vlen + i % rlen].f);
                             break;
                         }
-                        default: goto error;
+                        default: OP_ERROR(tok->op.idx);
                     }
                     break;
                 }
@@ -637,12 +663,12 @@ int mpr_expr_eval(mpr_expr expr, ebuffer buff, mpr_value *v_in, mpr_value *v_var
                                 vals[sp + i].d = fmod(vals[sp + i].d, vals[sp + vlen + i % rlen].d);
                             break;
                         }
-                        default: goto error;
+                        default: OP_ERROR(tok->op.idx);
                     }
                     break;
                 }
                 default:
-                    goto error;
+                    TYPE_ERROR(types[dp]);
             }
             SET_TYPE(tok->gen.datatype);
 #if TRACE_EVAL
@@ -717,7 +743,7 @@ int mpr_expr_eval(mpr_expr expr, ebuffer buff, mpr_value *v_in, mpr_value *v_var
             TYPED_CASE(MPR_DBL, fn_dbl, d)
 #undef TYPED_CASE
             default:
-                goto error;
+                TYPE_ERROR(types[dp]);
             }
 #if TRACE_EVAL
             evalue_print(vals + sp, times[dp], types[dp], lens[dp], dp);
@@ -802,6 +828,7 @@ int mpr_expr_eval(mpr_expr expr, ebuffer buff, mpr_value *v_in, mpr_value *v_var
                     printf("Vector idx = 0.\n");
                     break;
                 default:
+                    printf("Illegal reduce type\n");
                     goto error;
             }
 #endif
@@ -826,8 +853,20 @@ int mpr_expr_eval(mpr_expr expr, ebuffer buff, mpr_value *v_in, mpr_value *v_var
                             if (mpr_value_get_num_samps(x, i) >= expr->max_src_mlen)
                                 break;
                         }
-                        if (i >= mpr_value_get_num_inst(x))
-                            return status;
+                        if (i >= mpr_value_get_num_inst(x)) {
+                            /* no instances available */
+#if TRACE_EVAL
+                            printf("No instances available for instance reduce.\n");
+#endif
+                            if (alive) {
+                                if (status & EXPR_UPDATE)
+                                    status |= EXPR_RELEASE_AFTER_UPDATE;
+                                else
+                                    status |= EXPR_RELEASE_BEFORE_UPDATE;
+                            }
+                            /* advance to next subexpression */
+                            goto skip_assignment;
+                        }
                         inst_idx = i;
                     }
                     break;
@@ -890,8 +929,13 @@ int mpr_expr_eval(mpr_expr expr, ebuffer buff, mpr_value *v_in, mpr_value *v_var
                                      dp - tok->ctl.cache_offset);
 #endif
                         inst_idx = vals[sp - tok->ctl.cache_offset * vlen].i;
-                        if (x && inst_idx >= mpr_value_get_num_inst(x))
+                        if (x && inst_idx >= mpr_value_get_num_inst(x)) {
+#if TRACE_EVAL
+                            printf("Instance index %d/%d is out of bounds\n",
+                                   inst_idx, mpr_value_get_num_inst(x));
+#endif
                             goto error;
+                        }
                         if (tok->ctl.cache_offset > 0) {
                             int dp_temp = dp - tok->ctl.cache_offset;
                             for (dp_temp = dp - tok->ctl.cache_offset; dp_temp < dp; dp_temp++) {
@@ -957,6 +1001,9 @@ int mpr_expr_eval(mpr_expr expr, ebuffer buff, mpr_value *v_in, mpr_value *v_var
                     }
                     break;
                 default:
+#if TRACE_EVAL
+                    printf("Illegal reduce type.\n");
+#endif
                     goto error;
             }
             break;
@@ -1031,7 +1078,7 @@ int mpr_expr_eval(mpr_expr expr, ebuffer buff, mpr_value *v_in, mpr_value *v_var
                 BAIL_UNLESS(v_out);
                 v = v_out;
             }
-            else if (tok->var.idx >= 0 && tok->var.idx < N_USER_VARS) {
+            else if (tok->var.idx >= 0 && tok->var.idx < expr->num_vars) {
                 uint8_t flags = expr->vars[tok->var.idx].flags;
                 if (flags & VAR_SET_EXTERN) {
 #if TRACE_EVAL
@@ -1039,13 +1086,11 @@ int mpr_expr_eval(mpr_expr expr, ebuffer buff, mpr_value *v_in, mpr_value *v_var
 #endif
                     goto assign_done;
                 }
-                if (!v_vars)
-                    goto error;
-                /* passed the address of an array of mpr_value structs */
+                BAIL_UNLESS(v_vars);
                 v = v_vars[tok->var.idx];
             }
             else
-                goto error;
+                VAR_IDX_ERROR(tok->var.idx);
 
             if (vidx) {
                 switch (types[idxp]) {
@@ -1053,8 +1098,7 @@ int mpr_expr_eval(mpr_expr expr, ebuffer buff, mpr_value *v_in, mpr_value *v_var
                     case MPR_FLT:   vidx = (int)vals[sp + vlen].f;  break;
                     case MPR_DBL:   vidx = (int)vals[sp + vlen].d;  break;
                     default:
-                        printf("error: illegal type %d/'%c'\n", types[idxp], types[idxp]);
-                        goto error;
+                        TYPE_ERROR(types[idxp]);
                 }
                 ++idxp;
             }
@@ -1065,7 +1109,7 @@ int mpr_expr_eval(mpr_expr expr, ebuffer buff, mpr_value *v_in, mpr_value *v_var
             vidx = vidx % (int)mpr_value_get_vlen(v);
             if (hidx) {
                 if (MPR_INT32 != types[idxp])
-                    goto error;
+                    TYPE_ERROR(types[idxp]);
                 hidx = vals[idxp * vlen].i;
                 if (hidx > 0 || hidx < -mpr_value_get_mlen(v_out))
                     goto error;
@@ -1110,7 +1154,7 @@ int mpr_expr_eval(mpr_expr expr, ebuffer buff, mpr_value *v_in, mpr_value *v_var
                 TYPED_CASE(MPR_DBL, double, d);
 #undef TYPED_CASE
                 default:
-                    goto error;
+                    TYPE_ERROR(mpr_value_get_type(v));
             }
 
 #if TRACE_EVAL
@@ -1154,8 +1198,7 @@ int mpr_expr_eval(mpr_expr expr, ebuffer buff, mpr_value *v_in, mpr_value *v_var
 #if TRACE_EVAL
                 printf("\n\t\ttt[y]");
 #endif
-                if (!(tok->gen.flags & VAR_HIST_IDX))
-                    goto error;
+                BAIL_UNLESS((tok->gen.flags & VAR_HIST_IDX));
                 v = v_out;
             }
             else if (VAR_NEXT == tok->var.idx) {
@@ -1164,20 +1207,18 @@ int mpr_expr_eval(mpr_expr expr, ebuffer buff, mpr_value *v_in, mpr_value *v_var
 #endif
                 v = v_next;
             }
-            else if (tok->var.idx < N_USER_VARS) {
+            else if (tok->var.idx >= 0 && tok->var.idx < expr->num_vars) {
 #if TRACE_EVAL
                 if (expr->vars && expr->vars[tok->var.idx].name)
                     printf("\n\t\ttt[%d:%s]", tok->var.idx, expr->vars[tok->var.idx].name);
                 else
                     printf("\n\t\ttt[%d]", tok->var.idx);
 #endif
-                if (!v_vars)
-                    goto error;
-                /* passed the address of an array of mpr_value structs */
+                BAIL_UNLESS(v_vars);
                 v = v_vars[tok->var.idx];
             }
             else
-                goto error;
+                VAR_IDX_ERROR(tok->var.idx);
 
             if (hidx) {
                 assert(types[dp] == MPR_INT32 && types[dp - 1] == MPR_DBL);
@@ -1215,7 +1256,11 @@ int mpr_expr_eval(mpr_expr expr, ebuffer buff, mpr_value *v_in, mpr_value *v_var
             }
             break;
         }
-        default: goto error;
+        default:
+#if TRACE_EVAL
+    trace("Unexpected token in expression.");
+#endif
+            goto error;
         }
         if (tok->gen.casttype) {
             assert(dp >= 0);
@@ -1275,7 +1320,7 @@ int mpr_expr_eval(mpr_expr expr, ebuffer buff, mpr_value *v_in, mpr_value *v_var
             TYPED_CASE(MPR_DBL, double, d)
 #undef TYPED_CASE
             default:
-                goto error;
+                TYPE_ERROR(mpr_value_get_type(v_out));
         }
     }
     else if (!(status & (EXPR_UPDATE | EXPR_MUTED_UPDATE))) {
@@ -1297,7 +1342,7 @@ int mpr_expr_eval(mpr_expr expr, ebuffer buff, mpr_value *v_in, mpr_value *v_var
   skip_assignment:
     /* skip to after this assignment */
 #if TRACE_EVAL
-            printf("     error detected, skipping assignment\n");
+    printf("     skipping assignment\n");
 #endif
     while (tok < end && !((++tok)->toktype & TOK_ASSIGN)) {}
     while (tok < end && (tok)->toktype & TOK_ASSIGN) {
@@ -1308,14 +1353,11 @@ int mpr_expr_eval(mpr_expr expr, ebuffer buff, mpr_value *v_in, mpr_value *v_var
         ++tok;
     }
     if (tok >= end)
-        return 0;
+        return status;
     else
         goto repeat;
 
   error:
-#if TRACE_EVAL
-    trace("Unexpected token in expression.");
-#endif
     return 0;
 }
 
