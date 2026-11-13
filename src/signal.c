@@ -656,7 +656,7 @@ again:
             for (i = offset; i < offset + sig->len; i++) {
                 if (types[i] == MPR_NULL)
                     continue;
-                if (mpr_value_set_element(sig->value, si->idx, i, argv[i]))
+                if (mpr_value_set_element(sig->value, si->idx, i - offset, argv[i]))
                     status = MPR_STATUS_NEW_VALUE;
             }
             if (mpr_value_get_has_value(sig->value, si->idx)) {
