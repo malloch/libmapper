@@ -1964,7 +1964,8 @@ namespace mapper {
             { mpr_graph_stop_polling(_obj); RETURN_SELF }
 
         // subscriptions
-        /*! Subscribe to information about a specific Device.
+        /*! Subscribe to information about a specific Device. If an existing subscription exists for
+         * this device the `types` argument will override the previous value.
          *  \param dev      The Device of interest.
          *  \param types    Bitflags setting the type of information of interest. Can be a
          *                  combination of MPR_DEV, MPR_SIG_IN, MPR_SIG_OUT, MPR_SIG, MPR_MAP_IN,
@@ -1973,16 +1974,20 @@ namespace mapper {
          *                  the graph will automatically renew the subscription until it is
          *                  freed or this function is called again.
          *  \return         Self. */
-        const Graph& subscribe(const device_type& dev, Type types, int timeout)
+        const Graph& subscribe(const device_type& dev, Type types, int timeout=-1)
             { mpr_graph_subscribe(_obj, dev, static_cast<mpr_type>(types), timeout); RETURN_SELF }
 
-        /*! Subscribe to information about all discovered Devices.
+        /*! Subscribe to information about all discovered Devices. If an existing subscription exists
+         * the `types` argument will override the previous value.
          *  \param types    Bitflags setting the type of information of interest. Can be a
          *                  combination of MPR_DEV, MPR_SIG_IN, MPR_SIG_OUT, MPR_SIG, MPR_MAP_IN,
          *                  MPR_MAP_OUT, MPR_MAP, or simply MPR_OBJ for all information.
+         *  \param timeout  The desired duration in seconds for this subscription. If set to -1,
+         *                  the graph will automatically renew the subscriptions until it is
+         *                  freed or this function is called again.
          *  \return         Self. */
-        const Graph& subscribe(Type types)
-            { mpr_graph_subscribe(_obj, 0, static_cast<mpr_type>(types), -1); RETURN_SELF }
+        const Graph& subscribe(Type types, int timeout=-1)
+            { mpr_graph_subscribe(_obj, 0, static_cast<mpr_type>(types), timeout); RETURN_SELF }
 
         /*! Unsubscribe from information about a specific Device.
          *  \param dev      The Device of interest.

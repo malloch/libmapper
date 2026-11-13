@@ -720,7 +720,8 @@ int mpr_graph_stop_polling(mpr_graph graph);
  *  \param graph        The graph to free. */
 void mpr_graph_free(mpr_graph graph);
 
-/*! Subscribe to receive information from remote objects.
+/*! Subscribe to receive information from a specific device or all devices. If an existing subscription exists for
+ * the `types` argument will override the previous value.
  *  \param graph        The graph to use.
  *  \param device       The device of interest. If `NULL` the graph will automatically subscribe to
  *                      all discovered devices.
