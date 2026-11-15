@@ -1673,6 +1673,11 @@ namespace mapper {
         operator mpr_dev() const
             { return _obj; }
 
+        void release()
+        {
+            maybe_free();
+        }
+
         /*! Add a Signal to this Device.
          *  \param dir      Directionality of the signal to create. Must be either
          *                  Direction::INCOMING or Direction::OUTGOING.
