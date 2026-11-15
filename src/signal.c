@@ -1588,6 +1588,9 @@ void mpr_local_sig_release_inst_by_origin(mpr_local_sig lsig, mpr_dev origin)
             && id_map && (id_map->GID & 0xFFFFFFFF00000000) == id) {
             /* decrement the id_map's global refcount */
             mpr_dev_GID_decref(lsig->dev, lsig->group, id_map);
+            /* update instance and signal status */
+            si->status |= MPR_STATUS_REL_UPSTRM;
+            lsig->obj.status |= MPR_STATUS_REL_UPSTRM;
             mpr_sig_call_handler(lsig, MPR_STATUS_REL_UPSTRM, si->id, si->idx);
         }
     }
