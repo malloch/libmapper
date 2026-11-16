@@ -111,9 +111,18 @@ MPR_INLINE static int _max(int a, int b)
     goto error;                                     \
 }
 #else
-#define TYPE_ERROR goto error;
-#define OP_ERROR goto error;
-#define VAR_IDX_ERROR goto error;
+#define TYPE_ERROR(TYPE)    \
+{                           \
+    goto error;             \
+}
+#define OP_ERROR(OP)        \
+{                           \
+    goto error;             \
+}
+#define VAR_IDX_ERROR(IDX)  \
+{                           \
+    goto error;             \
+}
 #endif
 
 MPR_INLINE static int _newest_val_idx(mpr_value *vals, int num_vals, int inst_idx)
@@ -273,8 +282,9 @@ int mpr_expr_eval(mpr_expr expr, ebuffer buff, mpr_value *v_in, mpr_value *v_var
                 TYPED_CASE(MPR_FLT, f)
                 TYPED_CASE(MPR_DBL, d)
 #undef TYPED_CASE
-                default:
+                default: {
                     TYPE_ERROR(types[dp]);
+                }
             }
             mpr_time_set(&times[dp], MPR_TIME_0);
 #if TRACE_EVAL
@@ -352,8 +362,9 @@ int mpr_expr_eval(mpr_expr expr, ebuffer buff, mpr_value *v_in, mpr_value *v_var
                         printf("[x$%d]", sidx);
 #endif
                     }
-                    else
+                    else {
                         TYPE_ERROR(types[idxp]);
+                    }
                 }
 
                 /* If no instance idx is cached this means that this expression contains a
@@ -372,8 +383,9 @@ int mpr_expr_eval(mpr_expr expr, ebuffer buff, mpr_value *v_in, mpr_value *v_var
                     printf("[%d]", tok->var.idx);
 #endif
             }
-            else
+            else {
                 VAR_IDX_ERROR(tok->var.idx);
+            }
 
             if (mpr_value_get_num_samps(v, inst_idx) <= 0) {
                 if (    tok->var.idx >= VAR_X_NEWEST
@@ -400,7 +412,7 @@ int mpr_expr_eval(mpr_expr expr, ebuffer buff, mpr_value *v_in, mpr_value *v_var
                     case MPR_INT32: hidx = vals[i].i;                                       break;
                     case MPR_FLT:   hwt = -modf(vals[i].f, &intpart); hidx = (int)intpart;  break;
                     case MPR_DBL:   hwt = -modf(vals[i].d, &intpart); hidx = (int)intpart;  break;
-                    default:        TYPE_ERROR(types[idxp]);
+                    default:        { TYPE_ERROR(types[idxp]); }
                 }
                 --idxp;
             }
@@ -419,7 +431,7 @@ int mpr_expr_eval(mpr_expr expr, ebuffer buff, mpr_value *v_in, mpr_value *v_var
                     case MPR_INT32: vidx = vals[i].i;                                       break;
                     case MPR_FLT:   vwt = modf(vals[i].f, &intpart); vidx = (int)intpart;   break;
                     case MPR_DBL:   vwt = modf(vals[i].d, &intpart); vidx = (int)intpart;   break;
-                    default:        TYPE_ERROR(types[idxp]);
+                    default:        { TYPE_ERROR(types[idxp]); }
                 }
                 if (vwt < 0) {
                     --vidx;
@@ -520,8 +532,9 @@ int mpr_expr_eval(mpr_expr expr, ebuffer buff, mpr_value *v_in, mpr_value *v_var
                     COPY_TYPED(MPR_FLT, float, f)
                     COPY_TYPED(MPR_DBL, double, d)
 #undef COPY_TYPED
-                    default:
+                    default: {
                         TYPE_ERROR(mpr_value_get_type(v));
+                    }
                 }
             }
             else {
@@ -560,8 +573,9 @@ int mpr_expr_eval(mpr_expr expr, ebuffer buff, mpr_value *v_in, mpr_value *v_var
                 BAIL_UNLESS(v_vars);
                 vals[sp].i = mpr_value_get_num_active_inst(v_vars[tok->var.idx]);
             }
-            else
+            else {
                 VAR_IDX_ERROR(tok->var.idx);
+            }
 
             for (i = 1; i < tok->gen.vec_len; i++)
                 vals[sp + i].i = vals[sp].i;
@@ -624,7 +638,7 @@ int mpr_expr_eval(mpr_expr expr, ebuffer buff, mpr_value *v_in, mpr_value *v_var
 #if TRACE_EVAL
                                     printf("... integer divide-by-zero detected, skipping assignment.\n");
 #endif
-                                    goto skip_assignment;
+                                    goto skip_assignment_with_error;
                                 }
                             }
                             break;
@@ -635,7 +649,9 @@ int mpr_expr_eval(mpr_expr expr, ebuffer buff, mpr_value *v_in, mpr_value *v_var
                         BINARY_OP_CASE(OP_BITWISE_AND, &, i);
                         BINARY_OP_CASE(OP_BITWISE_OR, |, i);
                         BINARY_OP_CASE(OP_BITWISE_XOR, ^, i);
-                        default: OP_ERROR(tok->op.idx);
+                        default: {
+                            OP_ERROR(tok->op.idx);
+                        }
                     }
                     break;
                 }
@@ -649,7 +665,9 @@ int mpr_expr_eval(mpr_expr expr, ebuffer buff, mpr_value *v_in, mpr_value *v_var
                                 vals[sp + i].f = fmodf(vals[sp + i].f, vals[sp + vlen + i % rlen].f);
                             break;
                         }
-                        default: OP_ERROR(tok->op.idx);
+                        default: {
+                            OP_ERROR(tok->op.idx);
+                        }
                     }
                     break;
                 }
@@ -663,19 +681,22 @@ int mpr_expr_eval(mpr_expr expr, ebuffer buff, mpr_value *v_in, mpr_value *v_var
                                 vals[sp + i].d = fmod(vals[sp + i].d, vals[sp + vlen + i % rlen].d);
                             break;
                         }
-                        default: OP_ERROR(tok->op.idx);
+                        default: {
+                            OP_ERROR(tok->op.idx);
+                        }
                     }
                     break;
                 }
-                default:
+                default: {
                     TYPE_ERROR(types[dp]);
+                }
             }
             SET_TYPE(tok->gen.datatype);
 #if TRACE_EVAL
             evalue_print(vals + sp, times[dp], types[dp], lens[dp], dp);
 #endif
             if (errno || fetestexcept(FE_DIVBYZERO | FE_INVALID))
-                goto skip_assignment;
+                goto skip_assignment_with_error;
             break;
         }
         case TOK_FN: {
@@ -705,51 +726,52 @@ int mpr_expr_eval(mpr_expr expr, ebuffer buff, mpr_value *v_in, mpr_value *v_var
                 rlen = lens[dp + 1];
             SET_TYPE(tok->gen.datatype);
             switch (types[dp]) {
-#define TYPED_CASE(MTYPE, FN, T)                                                        \
-            case MTYPE:                                                                 \
-                switch (arity) {                                                        \
-                case 0:                                                                 \
-                    for (i = 0; i < llen; i++)                                          \
-                        vals[sp + i].T = ((FN##_arity0*)fn_tbl[tok->fn.idx].FN)();      \
-                    break;                                                              \
-                case 1:                                                                 \
-                    for (i = 0; i < llen; i++)                                          \
-                        vals[sp + i].T = (((FN##_arity1*)fn_tbl[tok->fn.idx].FN)        \
-                                          (vals[sp + i].T));                            \
-                    break;                                                              \
-                case 2:                                                                 \
-                    for (i = 0; i < llen; i++)                                          \
-                        vals[sp + i].T = (((FN##_arity2*)fn_tbl[tok->fn.idx].FN)        \
-                                          (vals[sp + i].T, vals[sp + vlen + i % rlen].T));\
-                    break;                                                              \
-                case 3:                                                                 \
-                    for (i = 0; i < llen; i++)                                          \
-                        vals[sp + i].T = (((FN##_arity3*)fn_tbl[tok->fn.idx].FN)        \
-                                          (vals[sp + i].T, vals[sp + vlen + i % rlen].T,\
-                                           vals[sp + 2 * vlen + i % lens[dp + 2]].T));  \
-                    break;                                                              \
-                case 4:                                                                 \
-                    for (i = 0; i < llen; i++)                                          \
-                        vals[sp + i].T = (((FN##_arity4*)fn_tbl[tok->fn.idx].FN)        \
-                                          (vals[sp + i].T, vals[sp + vlen + i % rlen].T,\
-                                           vals[sp + 2 * vlen + i % lens[dp + 2]].T,    \
-                                           vals[sp + 3 * vlen + i % lens[dp + 3]].T));  \
-                    break;                                                              \
-                default: goto error;                                                    \
-                }                                                                       \
+#define TYPED_CASE(MTYPE, FN, T)                                                                \
+                case MTYPE:                                                                     \
+                    switch (arity) {                                                            \
+                        case 0:                                                                 \
+                            for (i = 0; i < llen; i++)                                          \
+                                vals[sp + i].T = ((FN##_arity0*)fn_tbl[tok->fn.idx].FN)();      \
+                            break;                                                              \
+                        case 1:                                                                 \
+                            for (i = 0; i < llen; i++)                                          \
+                                vals[sp + i].T = (((FN##_arity1*)fn_tbl[tok->fn.idx].FN)        \
+                                                  (vals[sp + i].T));                            \
+                            break;                                                              \
+                        case 2:                                                                 \
+                            for (i = 0; i < llen; i++)                                          \
+                                vals[sp + i].T = (((FN##_arity2*)fn_tbl[tok->fn.idx].FN)        \
+                                                  (vals[sp + i].T, vals[sp + vlen + i % rlen].T));\
+                            break;                                                              \
+                        case 3:                                                                 \
+                            for (i = 0; i < llen; i++)                                          \
+                                vals[sp + i].T = (((FN##_arity3*)fn_tbl[tok->fn.idx].FN)        \
+                                                  (vals[sp + i].T, vals[sp + vlen + i % rlen].T,\
+                                                   vals[sp + 2 * vlen + i % lens[dp + 2]].T));  \
+                            break;                                                              \
+                        case 4:                                                                 \
+                            for (i = 0; i < llen; i++)                                          \
+                                vals[sp + i].T = (((FN##_arity4*)fn_tbl[tok->fn.idx].FN)        \
+                                                  (vals[sp + i].T, vals[sp + vlen + i % rlen].T,\
+                                                   vals[sp + 2 * vlen + i % lens[dp + 2]].T,    \
+                                                   vals[sp + 3 * vlen + i % lens[dp + 3]].T));  \
+                            break;                                                              \
+                        default: goto error;                                                    \
+                    }                                                                           \
                 break;
-            TYPED_CASE(MPR_INT32, fn_int, i)
-            TYPED_CASE(MPR_FLT, fn_flt, f)
-            TYPED_CASE(MPR_DBL, fn_dbl, d)
+                TYPED_CASE(MPR_INT32, fn_int, i)
+                TYPED_CASE(MPR_FLT, fn_flt, f)
+                TYPED_CASE(MPR_DBL, fn_dbl, d)
 #undef TYPED_CASE
-            default:
-                TYPE_ERROR(types[dp]);
+                default: {
+                    TYPE_ERROR(types[dp]);
+                }
             }
 #if TRACE_EVAL
             evalue_print(vals + sp, times[dp], types[dp], lens[dp], dp);
 #endif
             if (errno || fetestexcept(FE_DIVBYZERO | FE_INVALID))
-                goto skip_assignment;
+                goto skip_assignment_with_error;
             break;
         }
         case TOK_VFN: {
@@ -763,8 +785,7 @@ int mpr_expr_eval(mpr_expr expr, ebuffer buff, mpr_value *v_in, mpr_value *v_var
                 }
             }
 
-            if (VFN_CONCAT != tok->fn.idx
-                && (arity > 1 || VFN_DOT == tok->fn.idx)) {
+            if (VFN_CONCAT != tok->fn.idx && (arity > 1 || VFN_DOT == tok->fn.idx)) {
                 int max_len = tok->gen.vec_len;
                 for (i = 0; i < arity; i++)
                     max_len = max_len > lens[dp + i] ? max_len : lens[dp + i];
@@ -809,9 +830,9 @@ int mpr_expr_eval(mpr_expr expr, ebuffer buff, mpr_value *v_in, mpr_value *v_var
             }
 #endif
             if (errno == EDOM || fetestexcept(FE_DIVBYZERO | FE_INVALID))
-                goto skip_assignment;
-            }
+                goto skip_assignment_with_error;
             break;
+        }
         case TOK_LOOP_START:
 #if TRACE_EVAL
             switch (tok->ctl.flags & REDUCE_TYPE_MASK) {
@@ -1089,16 +1110,16 @@ int mpr_expr_eval(mpr_expr expr, ebuffer buff, mpr_value *v_in, mpr_value *v_var
                 BAIL_UNLESS(v_vars);
                 v = v_vars[tok->var.idx];
             }
-            else
+            else {
                 VAR_IDX_ERROR(tok->var.idx);
+            }
 
             if (vidx) {
                 switch (types[idxp]) {
                     case MPR_INT32: vidx = vals[sp + vlen].i;       break;
                     case MPR_FLT:   vidx = (int)vals[sp + vlen].f;  break;
                     case MPR_DBL:   vidx = (int)vals[sp + vlen].d;  break;
-                    default:
-                        TYPE_ERROR(types[idxp]);
+                    default: { TYPE_ERROR(types[idxp]); }
                 }
                 ++idxp;
             }
@@ -1108,8 +1129,9 @@ int mpr_expr_eval(mpr_expr expr, ebuffer buff, mpr_value *v_in, mpr_value *v_var
                 vidx += mpr_value_get_vlen(v);
             vidx = vidx % (int)mpr_value_get_vlen(v);
             if (hidx) {
-                if (MPR_INT32 != types[idxp])
+                if (MPR_INT32 != types[idxp]) {
                     TYPE_ERROR(types[idxp]);
+                }
                 hidx = vals[idxp * vlen].i;
                 if (hidx > 0 || hidx < -mpr_value_get_mlen(v_out))
                     goto error;
@@ -1153,8 +1175,9 @@ int mpr_expr_eval(mpr_expr expr, ebuffer buff, mpr_value *v_in, mpr_value *v_var
                 TYPED_CASE(MPR_FLT, float, f);
                 TYPED_CASE(MPR_DBL, double, d);
 #undef TYPED_CASE
-                default:
+                default: {
                     TYPE_ERROR(mpr_value_get_type(v));
+                }
             }
 
 #if TRACE_EVAL
@@ -1217,8 +1240,9 @@ int mpr_expr_eval(mpr_expr expr, ebuffer buff, mpr_value *v_in, mpr_value *v_var
                 BAIL_UNLESS(v_vars);
                 v = v_vars[tok->var.idx];
             }
-            else
+            else {
                 VAR_IDX_ERROR(tok->var.idx);
+            }
 
             if (hidx) {
                 assert(types[dp] == MPR_INT32 && types[dp - 1] == MPR_DBL);
@@ -1319,8 +1343,9 @@ int mpr_expr_eval(mpr_expr expr, ebuffer buff, mpr_value *v_in, mpr_value *v_var
             TYPED_CASE(MPR_FLT, float, f)
             TYPED_CASE(MPR_DBL, double, d)
 #undef TYPED_CASE
-            default:
+            default: {
                 TYPE_ERROR(mpr_value_get_type(v_out));
+            }
         }
     }
     else if (!(status & (EXPR_UPDATE | EXPR_MUTED_UPDATE))) {
@@ -1339,6 +1364,15 @@ int mpr_expr_eval(mpr_expr expr, ebuffer buff, mpr_value *v_in, mpr_value *v_var
 #endif
     return status;
 
+  skip_assignment_with_error:
+    if (0 == stk->num_subexpr) {
+        /* this evaluation run is a precomputation during parsing and should fail */
+#if TRACE_EVAL
+    printf("     precomputation failed\n");
+#endif
+        goto error;
+    }
+    /* else continue... */
   skip_assignment:
     /* skip to after this assignment */
 #if TRACE_EVAL

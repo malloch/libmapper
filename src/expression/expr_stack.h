@@ -447,7 +447,7 @@ static int precompute(estack stk, uint8_t num_tokens_to_compute)
     int i, ret = 0, vec_len = tok->gen.vec_len;
 
     if (estack_replace_special_constants(stk))
-        return 0;
+        return 1;
 
     /* temporarily set the stk 'offset' variable */
     stk->init_offset = stk->num_tokens - num_tokens_to_compute;
@@ -621,14 +621,16 @@ static etoken estack_check_type(estack stk, expr_var_t *vars, int enable_optimiz
         case TOK_OP:
             if (tokens[sp].op.idx == OP_IF) {
 #if TRACE_PARSE
-                trace("ternary operator is missing operand\n");
+                printf("ternary operator is missing operand\n");
 #endif
                 return 0;
             }
             if (tokens[sp].gen.flags & TYPE_LOCKED) {
                 /* check preceding token for type match */
                 if (tokens[sp].gen.datatype != tokens[sp - 1].gen.datatype) {
-                    trace("operator requires argument type '%c'\n", tokens[sp].gen.datatype);
+#if TRACE_PARSE
+                    printf("operator requires argument type '%c'\n", tokens[sp].gen.datatype);
+#endif
                     return 0;
                 }
             }
@@ -769,7 +771,7 @@ static etoken estack_check_type(estack stk, expr_var_t *vars, int enable_optimiz
             switch (optimize) {
                 case BAD_EXPR:
 #if TRACE_PARSE
-                    trace("operator '%s' cannot have zero operand\n", op_tbl[tokens[sp].op.idx].name);
+                    printf("operator '%s' cannot have zero operand\n", op_tbl[tokens[sp].op.idx].name);
 #endif
                     return 0;
                 case GET_ZERO:
@@ -926,7 +928,7 @@ static etoken estack_check_type(estack stk, expr_var_t *vars, int enable_optimiz
 #endif
         if (precompute(stk, arity + 1)) {
 #if TRACE_PARSE
-            trace("error precomputing subexpression\n");
+            printf("error precomputing subexpression\n");
 #endif
             return 0;
         }
@@ -957,7 +959,7 @@ static int estack_check_assign_type_and_len(estack stk, expr_var_t *vars)
 
     if (expr_len > sp + 1) {
 #if TRACE_PARSE
-        trace("error calculating subexpression length for type check\n");
+        printf("error calculating subexpression length for type check\n");
 #endif
         return -1;
     }

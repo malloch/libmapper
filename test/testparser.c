@@ -1870,13 +1870,13 @@ int run_tests()
     /* 142) Inverse trigonometric functions outside bounds: NOT precomputed */
     set_expr_str("y=sin(asin(x+20));");
     setup_test(MPR_FLT, 3, MPR_FLT, 3);
-    if (parse_and_eval(PARSE_SUCCESS | EVAL_FAILURE, 1, iterations, 1, 6))
+    if (parse_and_eval(PARSE_SUCCESS | EVAL_FAILURE, 1, 0, 1, 6))
         return 1;
 
     /* 143) Divide-by-zero: NOT precomputed */
     set_expr_str("y=x/(x-x);");
     setup_test(MPR_FLT, 3, MPR_FLT, 3);
-    if (parse_and_eval(PARSE_SUCCESS | EVAL_FAILURE, 1, iterations, 1, 6))
+    if (parse_and_eval(PARSE_SUCCESS | EVAL_FAILURE, 1, 0, 1, 6))
         return 1;
 
     /* 144) Round/Ceiling/Floor with integer operand (should call pass() function) */
