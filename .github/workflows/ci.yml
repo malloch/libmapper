@@ -20,7 +20,7 @@ jobs:
         cache: 'pip'
     - name: install dependencies
       run: |
-        sudo apt-get install g++-9 autoconf-archive curl zlib1g-dev doxygen
+        sudo apt-get install g++-15 autoconf-archive curl zlib1g-dev doxygen
         python3 -m pip install --upgrade pip
     - name: install liblo
       run: |
